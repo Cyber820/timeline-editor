@@ -1,0 +1,21 @@
+{
+  "name": "timeline-editor",
+  "version": "1.0.0",
+  "description": "A collaborative timeline editor with token-based authentication and Google Sheets backend.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "googleapis": "^133.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": ["timeline", "google sheets", "express", "editor"],
+  "author": "",
+  "license": "MIT"
+}

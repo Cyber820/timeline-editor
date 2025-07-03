@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>时间轴事件提交</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    label { display: block; margin-top: 10px; }
+    input, textarea, select { width: 100%; padding: 6px; margin-top: 4px; }
+    .preview { margin-top: 30px; }
+    .event { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-left: 6px solid #007acc; }
+    .status-filters label { margin-right: 12px; }
+  </style>
+</head>
+<body>
+  <h1>添加时间轴事件</h1>
+  <form id="eventForm">
+    <label>Token（可选）：<input type="text" id="token"></label>
+    <label>标题：<input type="text" id="title" required></label>
+    <label>起始时间：<input type="date" id="start"></label>
+    <label>结束时间：<input type="date" id="end"></label>
+    <label>地区：<input type="text" id="region"></label>
+    <label>平台类型：<input type="text" id="platform"></label>
+    <label>具体平台：<input type="text" id="consolePlatform"></label>
+    <label>事件类型：<input type="text" id="eventType"></label>
+    <label>相关公司：<input type="text" id="company"></label>
+    <label>描述：<textarea id="description"></textarea></label>
+    <label>标签（逗号分隔）：<input type="text" id="tag"></label>
+    <button type="submit">提交</button>
+  </form>
+
+  <div class="status-filters">
+    <h3>过滤状态：</h3>
+    <label><input type="checkbox" value="pending" checked> pending</label>
+    <label><input type="checkbox" value="unverified" checked> unverified</label>
+  </div>
+
+  <div class="preview">
+    <h2>预览提交事件</h2>
+    <div id="previewList"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById('eventForm');
+    const previewList = document.getElementById('previewList');
+    const filters = document.querySelectorAll('.status-filters input');
+    const localEvents = [];
+
+    function renderPreview() {
+      const activeStatus = Array.from(filters).filter(f => f.checked).map(f => f.value);
+      previewList.innerHTML = '';
+      localEvents.filter(e => activeStatus.includes(e.Status)).forEach(e => {
+        const div = document.createElement('div');
+        div.className = 'event';
+        div.innerHTML = `<strong>${e.Title}</strong><br>时间: ${e.Start} ~ ${e.End}<br>标签: ${e.Tag}`;
+        previewList.appendChild(div);
+      });
+    }
+
+    filters.forEach(f => f.addEventListener('change', renderPreview));
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        Title: document.getElementById('title').value,
+        Start: document.getElementById('start').value,
+        End: document.getElementById('end').value,
+        Region: document.getElementById('region').value,
+        Platform: document.getElementById('platform').value,
+        ConsolePlatform: document.getElementById('consolePlatform').value,
+        EventType: document.getElementById('eventType').value,
+        Company: document.getElementById('company').value,
+        Description: document.getElementById('description').value,
+        Tag: document.getElementById('tag').value.split(',').map(t => t.trim()),
+      };
+
+      const token = document.getElementById('token').value;
+      try {
+        await fetch(`/api/submit?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        data.Status = token ? 'pending' : 'unverified';
+        localEvents.push(data);
+        renderPreview();
+        form.reset();
+        alert('提交成功');
+      } catch (err) {
+        console.error(err);
+        alert('提交失败');
+      }
+    });
+  </script>
+</body>
+</html>
