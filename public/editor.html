@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8" />
+  <title>时间轴编辑器</title>
+  <script src="moment.min.js"></script>
+  <script src="moment-zh-cn.js"></script>
+  <script src="vis-timeline-graph2d.min.js"></script>
+  <link href="vis-timeline-graph2d.min.css" rel="stylesheet" />
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #timeline { height: 500px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h2>时间轴编辑器</h2>
+  <button onclick="addEvent()">添加事件</button>
+  <div id="timeline"></div>
+
+  <script>
+    moment.locale('zh-cn');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const isValidToken = token && token.length > 0;
+    const dataEndpoint = isValidToken
+      ? 'https://script.google.com/macros/s/YOUR_TOKEN_ENDPOINT/exec'
+      : 'https://script.google.com/macros/s/YOUR_ANONYMOUS_ENDPOINT/exec';
+
+    fetch(dataEndpoint)
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map(item => ({
+          id: item.ID,
+          content: item.Title,
+          start: item.Start,
+          end: item.End || null,
+          title: `起始时间：${item.Start}
+标签：${item.Tag || ''}`
+        }));
+        const container = document.getElementById('timeline');
+        const timeline = new vis.Timeline(container, items, { locale: 'zh' });
+      });
+
+    function addEvent() {
+      alert('添加事件功能待开发');
+    }
+  </script>
+</body>
+</html>
