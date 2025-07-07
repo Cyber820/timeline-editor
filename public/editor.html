@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>时间轴（匿名模式）</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
+  <style>
+    #timeline { width: 100%; height: 600px; border: 1px solid lightgray; }
+    .vis-tooltip { white-space: pre-line; }
+  </style>
+</head>
+<body>
+  <h2>匿名时间轴编辑器（只读预览）</h2>
+  <div id="timeline"></div>
+
+  <script>
+    moment.locale("zh-cn");
+
+    fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec")
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map(event => ({
+          id: event.ID,
+          content: event.Title || '(无标题)',
+          start: event.Start,
+          end: event.End || null,
+          title: 
+            `事件类型：${event.EventType || ''}
+` +
+            `起始时间：${event.Start || ''}
+` +
+            `结束时间：${event.End || ''}
+` +
+            `地区：${event.Region || ''}
+` +
+            `平台：${event.Platform || ''}
+` +
+            `主机类型：${event.ConsolePlatform || ''}
+` +
+            `公司：${event.Company || ''}
+` +
+            `描述：${event.Description || ''}
+` +
+            `标签：${event.Tag || ''}`
+        }));
+
+        const container = document.getElementById("timeline");
+        const timeline = new vis.Timeline(container);
+        timeline.setOptions({
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 5 },
+          tooltip: { followMouse: true, overflowMethod: 'cap' }
+        });
+        timeline.setItems(items);
+      });
+  </script>
+</body>
+</html>
