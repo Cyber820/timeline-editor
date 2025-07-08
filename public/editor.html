@@ -52,7 +52,7 @@
         content: event.content || '(无标题)',
         start: event.start,
         end: event.end || null,
-        title: event.title || ''
+        title: (event.title || '').replace(/\n/g, '<br>') // 这里替换为 HTML 换行
       }));
 
       const container = document.getElementById("timeline");
