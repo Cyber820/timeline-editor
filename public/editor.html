@@ -10,16 +10,20 @@
   <style>
     #timeline {
       width: 100%;
-      height: 800px; /* 增加时间轴高度 */
+      height: 800px;
       border: 1px solid lightgray;
     }
     .vis-tooltip {
-      white-space: normal;
-      max-width: 400px;
+      white-space: normal !important;
+      max-width: none !important;
+      width: auto !important;
       font-size: 14px;
-      line-height: 1.4;
-      padding: 8px;
-      overflow-wrap: break-word;
+      line-height: 1.6;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      z-index: 1000;
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
     }
   </style>
 </head>
@@ -43,21 +47,12 @@
       return res.json();
     })
     .then(data => {
-      const items = data.map(event => ({
-        id: event.id,
+      const items = data.map((event, index) => ({
+        id: event.id || `auto-${index + 1}`,
         content: event.content || '(无标题)',
         start: event.start,
         end: event.end || null,
-        title:
-          `事件类型：${event.EventType || ''}<br>` +
-          `起始时间：${event.Start || ''}<br>` +
-          `结束时间：${event.End || ''}<br>` +
-          `地区：${event.Region || ''}<br>` +
-          `平台：${event.Platform || ''}<br>` +
-          `主机类型：${event.ConsolePlatform || ''}<br>` +
-          `公司：${event.Company || ''}<br>` +
-          `描述：${event.Description || ''}<br>` +
-          `标签：${event.Tag || ''}`
+        title: event.title || ''
       }));
 
       const container = document.getElementById("timeline");
