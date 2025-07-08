@@ -10,23 +10,24 @@
   <style>
     /* ====== 可自由调整区域 BEGIN ====== */
 
-    /* 时间轴容器设置 */
+    /* 画布容器设置 */
     #timeline {
-      width: 100%;              /* ❖ 时间轴宽度（例：100%, 900px） */
-      height: 1200px;           /* ❖ 时间轴可视高度（可自由修改） */
+      width: 100%;              /* 时间轴宽度 */
+      height: 1000px;           /* 画布高度 */
+      position: relative;       /* ❖ 使 tooltip 可以在此范围内绝对定位 */
       border: 1px solid lightgray;
-      padding-top: 80px;        /* ❖ 时间轴向下偏移（控制轴线高度） */
     }
 
     /* 悬停提示框样式 */
     .vis-tooltip {
-      white-space: normal !important;      /* ❖ 保证换行正常显示 */
-      max-width: 700px !important;         /* ❖ 最大宽度（可设为 400px ~ 800px） */
+      position: absolute !important;       /* ❖ 允许脱离轴线显示 */
+      white-space: normal !important;
+      max-width: 700px !important;
       min-width: 300px;
       max-height: none !important;
       overflow: visible !important;
-      font-size: 14px;                     /* ❖ 字体大小 */
-      line-height: 1.5;
+      font-size: 14px;
+      line-height: 1.6;
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
@@ -69,7 +70,13 @@
       const timeline = new vis.Timeline(container, items, {
         locale: "zh-cn",
         editable: false,
-        margin: { item: 20, axis: 10 },
+
+        // ====== 关键设置：调整时间轴实际高度位置 ======
+        margin: {
+          axis: 300,     // ❖ 轴线距离顶部（轴线越往下，tooltip空间越大）
+          item: 50       // ❖ 事件离轴线距离
+        },
+
         tooltip: {
           followMouse: true,
           overflowMethod: 'flip'
