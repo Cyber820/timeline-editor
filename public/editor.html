@@ -12,20 +12,21 @@
 
     /* 时间轴容器设置 */
     #timeline {
-      width: 100%;            /* ❖ 时间轴宽度（例：100%, 900px） */
-      height: 3600px;         /* ❖ 时间轴高度（影响 tooltip 可视区域）推荐：800px ~ 1600px */
+      width: 100%;              /* ❖ 时间轴宽度（例：100%, 900px） */
+      height: 1200px;           /* ❖ 时间轴可视高度（可自由修改） */
       border: 1px solid lightgray;
+      padding-top: 80px;        /* ❖ 时间轴向下偏移（控制轴线高度） */
     }
 
     /* 悬停提示框样式 */
     .vis-tooltip {
       white-space: normal !important;      /* ❖ 保证换行正常显示 */
       max-width: 700px !important;         /* ❖ 最大宽度（可设为 400px ~ 800px） */
-      min-width: 300px;                    /* ❖ 最小宽度 */
-      max-height: none !important;         /* ❖ 取消高度限制 */
+      min-width: 300px;
+      max-height: none !important;
       overflow: visible !important;
-      font-size: 12px;                     /* ❖ 字体大小（建议 12px ~ 16px） */
-      line-height: 1.5;                    /* ❖ 行间距（建议 1.5 ~ 2.0） */
+      font-size: 14px;                     /* ❖ 字体大小 */
+      line-height: 1.6;
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
@@ -61,7 +62,7 @@
         content: event.content || '(无标题)',
         start: event.start,
         end: event.end || null,
-        title: (event.title || '').replace(/\n/g, '<br>') // ✅ 将换行符转换为 HTML 换行
+        title: (event.title || '').replace(/\n/g, '<br>')
       }));
 
       const container = document.getElementById("timeline");
@@ -71,10 +72,10 @@
         margin: { item: 20, axis: 10 },
         tooltip: {
           followMouse: true,
-          overflowMethod: 'flip' // ✅ 自动调整 tooltip 避免溢出
+          overflowMethod: 'flip'
         },
-        verticalScroll: true,     // ✅ 支持垂直滚动
-        zoomKey: "ctrlKey"        // ✅ 使用 Ctrl + 滚轮 缩放，防止误触
+        verticalScroll: true,
+        zoomKey: "ctrlKey"
       });
     })
     .catch(err => {
