@@ -13,19 +13,22 @@
       height: 800px;
       border: 1px solid lightgray;
     }
-.vis-tooltip {
-  white-space: normal !important;
-  max-width: 400px !important;
-  min-width: 250px;
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 10px;
-  background-color: #fff;
-  border: 1px solid #ccc;
-  z-index: 1000;
-  box-shadow: 0 0 8px rgba(0,0,0,0.2);
-}
 
+    /* 强化 vis-tooltip 样式 */
+    .vis-tooltip {
+      white-space: normal !important;
+      max-width: 600px !important;
+      min-width: 300px;
+      max-height: none !important;
+      overflow: visible !important;
+      font-size: 14px;
+      line-height: 1.8;
+      padding: 12px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      z-index: 1000;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    }
   </style>
 </head>
 <body>
@@ -53,23 +56,19 @@
         content: event.content || '(无标题)',
         start: event.start,
         end: event.end || null,
-        title: (event.title || '').replace(/\n/g, '<br>') // 这里替换为 HTML 换行
+        title: (event.title || '').replace(/\n/g, '<br>') // 关键换行
       }));
 
       const container = document.getElementById("timeline");
-      const timeline = new vis.Timeline(container);
-
-      timeline.setOptions({
+      const timeline = new vis.Timeline(container, items, {
         locale: "zh-cn",
         editable: false,
         margin: { item: 10, axis: 5 },
         tooltip: {
           followMouse: true,
-          overflowMethod: 'cap'
+          overflowMethod: 'cap'  // 如果还是不行，可以尝试 'flip'
         }
       });
-
-      timeline.setItems(items);
     })
     .catch(err => {
       document.getElementById("timeline").innerText = "加载失败：" + err.message;
