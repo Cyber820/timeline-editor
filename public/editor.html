@@ -19,44 +19,43 @@
   <script>
     moment.locale("zh-cn");
 
-    fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec")
-      .then(res => res.json())
-      .then(data => {
-        const items = data.map(event => ({
-          id: event.ID,
-          content: event.Title || '(无标题)',
-          start: event.Start,
-          end: event.End || null,
-          title: 
-            `事件类型：${event.EventType || ''}
-` +
-            `起始时间：${event.Start || ''}
-` +
-            `结束时间：${event.End || ''}
-` +
-            `地区：${event.Region || ''}
-` +
-            `平台：${event.Platform || ''}
-` +
-            `主机类型：${event.ConsolePlatform || ''}
-` +
-            `公司：${event.Company || ''}
-` +
-            `描述：${event.Description || ''}
-` +
-            `标签：${event.Tag || ''}`
-        }));
+    fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec", {
+      method: "GET",
+      mode: "cors",
+      redirect: "follow",
+      headers: {
+        "Accept": "application/json"
+      }
+    })
+    .then(res => {
+      if (!res.ok) throw new Error("网络请求失败: " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      const items = data.map(event => ({
+        id: event.id,
+        content: event.content || '(无标题)',
+        start: event.start,
+        end: event.end || null,
+        title: event.title || ''
+      }));
 
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container);
-        timeline.setOptions({
-          locale: "zh-cn",
-          editable: false,
-          margin: { item: 10, axis: 5 },
-          tooltip: { followMouse: true, overflowMethod: 'cap' }
-        });
-        timeline.setItems(items);
+      const container = document.getElementById("timeline");
+      const timeline = new vis.Timeline(container);
+
+      timeline.setOptions({
+        locale: "zh-cn",
+        editable: false,
+        margin: { item: 10, axis: 5 },
+        tooltip: { followMouse: true, overflowMethod: 'cap' }
       });
+
+      timeline.setItems(items);
+    })
+    .catch(err => {
+      document.getElementById("timeline").innerText = "加载失败：" + err.message;
+      console.error("加载失败", err);
+    });
   </script>
 </body>
 </html>
