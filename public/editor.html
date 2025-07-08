@@ -10,21 +10,19 @@
   <style>
     /* ====== 可自由调整区域 BEGIN ====== */
 
-    /* 画布容器设置 */
+    /* 时间轴容器设置 */
     #timeline {
-      width: 100%;              /* 时间轴宽度 */
-      height: 800px;           /* 画布高度 */
-      position: relative;       /* ❖ 使 tooltip 可以在此范围内绝对定位 */
+      width: 100%;             /* ❖ 时间轴宽度（例：100%, 900px） */
+      height: 1600px;          /* ❖ 整个画布高度，影响 tooltip 活动范围 */
       border: 1px solid lightgray;
     }
 
     /* 悬停提示框样式 */
     .vis-tooltip {
-      position: absolute !important;       /* ❖ 允许脱离轴线显示 */
-      white-space: normal !important;
-      max-width: 700px !important;
+      white-space: normal !important;      /* ❖ 保证换行正常显示 */
+      max-width: 700px !important;         /* ❖ 最大宽度 */
       min-width: 300px;
-      max-height: none !important;
+      max-height: none !important;         /* ❖ 不限制 tooltip 高度 */
       overflow: visible !important;
       font-size: 12px;
       line-height: 1.5;
@@ -70,19 +68,20 @@
       const timeline = new vis.Timeline(container, items, {
         locale: "zh-cn",
         editable: false,
-
-        // ====== 关键设置：调整时间轴实际高度位置 ======
         margin: {
-          axis: 250,     // ❖ 轴线距离顶部（轴线越往下，tooltip空间越大）
-          item: 10       // ❖ 事件离轴线距离
+          item: 20,       // ❖ 事件和轴线的垂直距离
+          axis: 100       // ❖ 时间轴距离画布顶部，减小以便往上移
         },
-
+        orientation: {
+          axis: 'top',    // ❖ 时间轴刻度显示在上方
+          item: 'top'     // ❖ 所有事件显示在时间轴上方
+        },
         tooltip: {
           followMouse: true,
           overflowMethod: 'flip'
         },
         verticalScroll: true,
-        zoomKey: "ctrlKey"
+        zoomKey: 'ctrlKey'
       });
     })
     .catch(err => {
