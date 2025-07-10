@@ -8,12 +8,19 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+
     #timeline {
       width: 100%;
-      height: 3600px;
+      height: 1600px;
       border: 1px solid lightgray;
       position: relative;
+      margin-top: 20px;
     }
+
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
@@ -28,6 +35,23 @@
       z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
+
+    #addEventForm {
+      display: none;
+      padding: 20px;
+      border: 1px solid #ccc;
+      margin-top: 20px;
+      background: #f9f9f9;
+    }
+
+    label {
+      display: block;
+      margin: 10px 0;
+    }
+
+    input, select, textarea {
+      width: 300px;
+    }
   </style>
 </head>
 <body>
@@ -35,19 +59,20 @@
   <button onclick="showAddEventForm()">➕ 增加事件</button>
   <div id="timeline"></div>
 
-  <div id="addEventForm" style="display:none; padding: 20px; border: 1px solid #ccc; margin-top: 20px;">
+  <div id="addEventForm">
     <h3>新增事件</h3>
     <form id="eventForm">
-      <label>事件名称（必填）：<input type="text" name="Title" required></label><br><br>
-      <label>事件类型（必填）：<select name="EventType" required></select></label><br><br>
-      <label>开始时间（必填）：<input type="date" name="Start" required></label><br><br>
-      <label>结束时间（选填）：<input type="date" name="End"></label><br><br>
-      <label>地区（必填）：<select name="Region" required></select></label><br><br>
-      <label>平台类型（选填）：<select name="Platform"></select></label><br><br>
-      <label>主机类型（选填）：<select name="ConsolePlatform" disabled></select></label><br><br>
-      <label>公司（选填）：<select name="Company"></select></label><br><br>
-      <label>描述（选填）：<textarea name="Description"></textarea></label><br><br>
-      <label>标签（选填）：<select name="Tag" multiple></select></label><br><br>
+      <label>事件名称（必填）：<input type="text" name="Title" required></label>
+      <label>事件类型（必填）：<select name="EventType" required></select></label>
+      <label>开始时间（必填）：<input type="date" name="Start" required></label>
+      <label>结束时间（选填）：<input type="date" name="End"></label>
+      <label>地区（必填）：<select name="Region" required></select></label>
+      <label>平台类型（选填）：<select name="Platform"></select></label>
+      <label>主机类型（选填）：<select name="ConsolePlatform" disabled></select></label>
+      <label>公司（选填）：<select name="Company"></select></label>
+      <label>描述（选填）：<textarea name="Description"></textarea></label>
+      <label>标签（选填）：<select name="Tag" multiple></select></label>
+      <br>
       <button type="submit">提交</button>
     </form>
   </div>
@@ -55,63 +80,75 @@
   <script>
     moment.locale("zh-cn");
 
+    let timeline;
+
     function showAddEventForm() {
       document.getElementById("addEventForm").style.display = "block";
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
-    // 加载时间轴数据
-    fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec")
-      .then(res => res.json())
-      .then(data => {
-        const items = data.map((event, index) => ({
-          id: event.id || `auto-${index + 1}`,
-          content: event.content || '(无标题)',
-          start: event.start,
-          end: event.end || null,
-          title: (event.title || '').replace(/\n/g, '<br>')
-        }));
+    function loadTimelineData() {
+      fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec")
+        .then(res => {
+          if (!res.ok) throw new Error("加载失败：" + res.status);
+          return res.json();
+        })
+        .then(data => {
+          const items = data.map((event, index) => ({
+            id: event.id || `auto-${index + 1}`,
+            content: event.content || event.Title || '(无标题)',
+            start: event.start,
+            end: event.end || null,
+            title: (event.title || '').replace(/\n/g, '<br>')
+          }));
 
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container, items, {
-          locale: "zh-cn",
-          editable: false,
-          margin: { item: 200, axis: 50 },
-          orientation: {
-            axis: 'bottom',
-            item: 'bottom'
-          },
-          tooltip: {
-            followMouse: true,
-            overflowMethod: 'flip'
-          },
-          verticalScroll: true,
-          zoomKey: "ctrlKey"
+          const container = document.getElementById("timeline");
+          timeline = new vis.Timeline(container, items, {
+            locale: "zh-cn",
+            editable: false,
+            margin: { item: 200, axis: 50 },
+            orientation: { axis: 'bottom', item: 'bottom' },
+            tooltip: {
+              followMouse: true,
+              overflowMethod: 'flip'
+            },
+            verticalScroll: true,
+            zoomKey: "ctrlKey"
+          });
+        })
+        .catch(err => {
+          document.getElementById("timeline").innerText = "加载失败：" + err.message;
+          console.error("加载数据失败", err);
         });
-      });
+    }
 
-    // 获取下拉框选项（doGetOptions）
-    fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec?action=options")
-      .then(res => res.json())
-      .then(options => {
-        const setOptions = (selectName, values) => {
-          const select = document.querySelector(`select[name="${selectName}"]`);
-          if (select) {
-            select.innerHTML = "";
-            values.forEach(v => {
-              const opt = document.createElement("option");
-              opt.value = v;
-              opt.textContent = v;
-              select.appendChild(opt);
-            });
-          }
-        };
+    function loadDropdownOptions() {
+      fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec?action=options")
+        .then(res => res.json())
+        .then(options => {
+          const setOptions = (selectName, values) => {
+            const select = document.querySelector(`select[name="${selectName}"]`);
+            if (select) {
+              select.innerHTML = "";
+              values.forEach(v => {
+                const opt = document.createElement("option");
+                opt.value = v;
+                opt.textContent = v;
+                select.appendChild(opt);
+              });
+            }
+          };
 
-        setOptions("EventType", options.EventType);
-        setOptions("Region", options.Region);
-        setOptions("Platform", options.Platform);
-        setOptions("Company", options.Company);
-        setOptions("Tag", options.Tag);
-      });
+          setOptions("EventType", options.EventType);
+          setOptions("Region", options.Region);
+          setOptions("Platform", options.Platform);
+          setOptions("Company", options.Company);
+          setOptions("Tag", options.Tag);
+        });
+    }
+
+    loadTimelineData();
+    loadDropdownOptions();
   </script>
 </body>
 </html>
