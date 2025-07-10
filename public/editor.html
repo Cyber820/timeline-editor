@@ -8,21 +8,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-    }
-
-    /* ❖ 时间轴画布高度（影响 tooltip 显示范围） */
     #timeline {
       width: 100%;
-      height: 1600px;
+      height: 1000px; /* ❖ 可根据需要自由调整画布高度 */
       border: 1px solid lightgray;
       position: relative;
-      margin-top: 20px;
     }
 
-    /* ❖ 鼠标悬停提示样式（可调整宽度/字体等） */
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
@@ -38,137 +30,113 @@
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
 
-    /* ❖ 新增事件表单浮动窗口样式 */
-    #addEventForm {
-      display: none;
-      position: fixed;
-      top: 50%;
+    #event-form {
+      position: absolute;
+      top: 20px;  /* ❖ 表单出现在时间轴上方 */
       left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 2000;
-      background: #f9f9f9;
+      transform: translateX(-50%);
+      background: #fff;
       padding: 20px;
       border: 1px solid #ccc;
-      max-width: 90%;
-      max-height: 90%;
-      overflow-y: auto;
-      box-shadow: 0 0 12px rgba(0,0,0,0.25);
-    }
-
-    label {
-      display: block;
-      margin: 10px 0;
-    }
-
-    input, select, textarea {
-      width: 300px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: none;
+      z-index: 2000;
     }
   </style>
 </head>
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
-  <button onclick="showAddEventForm()">➕ 增加事件</button>
+  <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
   <div id="timeline"></div>
 
-  <div id="addEventForm">
-    <button onclick="hideAddEventForm()" style="float: right;">关闭</button>
+  <div id="event-form">
     <h3>新增事件</h3>
-    <form id="eventForm">
-      <label>事件名称（必填）：<input type="text" name="Title" required></label>
-      <label>事件类型（必填）：<select name="EventType" required></select></label>
-      <label>开始时间（必填）：<input type="date" name="Start" required></label>
-      <label>结束时间（选填）：<input type="date" name="End"></label>
-      <label>地区（必填）：<select name="Region" required></select></label>
-      <label>平台类型（选填）：<select name="Platform"></select></label>
-      <label>主机类型（选填）：<select name="ConsolePlatform" disabled></select></label>
-      <label>公司（选填）：<select name="Company"></select></label>
-      <label>描述（选填）：<textarea name="Description"></textarea></label>
-      <label>标签（选填）：<select name="Tag" multiple></select></label>
-      <br>
-      <button type="submit">提交</button>
-    </form>
+    <label>事件名称（必填）：<input type="text" id="title"></label><br>
+    <label>事件类型（必填）：<select id="eventType"></select></label><br>
+    <label>开始时间（必填）：<input type="date" id="start"></label><br>
+    <label>结束时间：<input type="date" id="end"></label><br>
+    <label>地区（必填）：<select id="region"></select></label><br>
+    <label>平台类型：<select id="platform"></select></label><br>
+    <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
+    <label>公司：<select id="company"></select></label><br>
+    <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
+    <label>标签（多选）：<select id="tag" multiple size="4"></select></label><br>
+    <button onclick="submitEvent()">提交</button>
+    <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
   <script>
+    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+
     moment.locale("zh-cn");
-    let timeline;
 
-    function showAddEventForm() {
-      document.getElementById("addEventForm").style.display = "block";
-    }
+    fetch(ENDPOINT)
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map((event, index) => ({
+          id: event.id || `auto-${index + 1}`,
+          content: event.content || '(无标题)',
+          start: event.start,
+          end: event.end || null,
+          title: (event.title || '').replace(/\n/g, '<br>')
+        }));
 
-    function hideAddEventForm() {
-      document.getElementById("addEventForm").style.display = "none";
-    }
+        const container = document.getElementById("timeline");
+        const timeline = new vis.Timeline(container, items, {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 200, axis: 50 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey"
+        });
+      });
 
-    function loadTimelineData() {
-      fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec")
-        .then(res => {
-          if (!res.ok) throw new Error("加载失败：" + res.status);
-          return res.json();
-        })
-        .then(data => {
-          const items = data.map((event, index) => ({
-            id: event.id || `auto-${index + 1}`,
-            content: event.content || event.Title || '(无标题)',
-            start: event.start,
-            end: event.end || null,
-            title: (event.title || '').replace(/\n/g, '<br>') // ❖ 多行 tooltip 显示
-          }));
-
-          const container = document.getElementById("timeline");
-          timeline = new vis.Timeline(container, items, {
-            locale: "zh-cn",
-            editable: false,
-            margin: {
-              item: 200, // ❖ 事件框到画布边缘的距离
-              axis: 50   // ❖ 时间轴线和事件框之间的距离
-            },
-            orientation: {
-              axis: 'bottom',   // ❖ 时间轴在线下方
-              item: 'bottom'    // ❖ 事件框显示在线上方
-            },
-            tooltip: {
-              followMouse: true,
-              overflowMethod: 'flip'
-            },
-            verticalScroll: true,
-            zoomKey: "ctrlKey"
+    fetch(ENDPOINT + '?action=options')
+      .then(res => res.json())
+      .then(options => {
+        const fill = (id, list) => {
+          const select = document.getElementById(id);
+          select.innerHTML = '';
+          list.forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
           });
-        })
-        .catch(err => {
-          document.getElementById("timeline").innerText = "加载失败：" + err.message;
-          console.error("加载数据失败", err);
+        };
+
+        fill("eventType", options.EventType);
+        fill("region", options.Region);
+        fill("platform", options.Platform);
+        fill("company", options.Company);
+        fill("tag", options.Tag);
+
+        // 平台类型 -> 主机类型
+        document.getElementById("platform").addEventListener("change", function () {
+          const platform = this.value;
+          const consoleOptions = options.ConsolePlatform[platform] || [];
+          const consoleSelect = document.getElementById("console");
+          consoleSelect.innerHTML = '';
+
+          if (consoleOptions.length > 0) {
+            document.getElementById("consoleLabel").style.display = 'inline';
+            consoleOptions.forEach(opt => {
+              const option = document.createElement("option");
+              option.value = opt;
+              option.textContent = opt;
+              consoleSelect.appendChild(option);
+            });
+          } else {
+            document.getElementById("consoleLabel").style.display = 'none';
+          }
         });
+      });
+
+    function submitEvent() {
+      alert("提交功能开发中……");
     }
-
-    function loadDropdownOptions() {
-      fetch("https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec?action=options")
-        .then(res => res.json())
-        .then(options => {
-          const setOptions = (selectName, values) => {
-            const select = document.querySelector(`select[name="${selectName}"]`);
-            if (select) {
-              select.innerHTML = "";
-              values.forEach(v => {
-                const opt = document.createElement("option");
-                opt.value = v;
-                opt.textContent = v;
-                select.appendChild(opt);
-              });
-            }
-          };
-
-          setOptions("EventType", options.EventType);
-          setOptions("Region", options.Region);
-          setOptions("Platform", options.Platform);
-          setOptions("Company", options.Company);
-          setOptions("Tag", options.Tag);
-        });
-    }
-
-    loadTimelineData();
-    loadDropdownOptions();
   </script>
 </body>
 </html>
