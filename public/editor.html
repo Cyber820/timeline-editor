@@ -4,17 +4,18 @@
   <meta charset="UTF-8">
   <title>时间轴（匿名模式）</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
     #timeline {
       width: 100%;
-      height: 1000px; /* ❖ 可根据需要自由调整画布高度 */
+      height: 1000px;
       border: 1px solid lightgray;
       position: relative;
     }
-
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
@@ -29,10 +30,9 @@
       z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-
     #event-form {
       position: absolute;
-      top: 20px;  /* ❖ 表单出现在时间轴上方 */
+      top: 20px;
       left: 50%;
       transform: translateX(-50%);
       background: #fff;
@@ -60,7 +60,7 @@
     <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
     <label>公司：<select id="company"></select></label><br>
     <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
-    <label>标签（多选）：<select id="tag" multiple size="4"></select></label><br>
+    <label>标签（多选）：<select id="tag" multiple></select></label><br>
     <button onclick="submitEvent()">提交</button>
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
@@ -111,12 +111,21 @@
         fill("region", options.Region);
         fill("platform", options.Platform);
         fill("company", options.Company);
+
+        const tagSelect = document.getElementById("tag");
         fill("tag", options.Tag);
 
-        // 平台类型 -> 主机类型
+        new Choices(tagSelect, {
+          removeItemButton: true,
+          placeholderValue: '请选择标签...',
+          searchPlaceholderValue: '搜索标签...',
+          noResultsText: '无匹配标签',
+          maxItemCount: 10
+        });
+
         document.getElementById("platform").addEventListener("change", function () {
           const platform = this.value;
-          const consoleOptions = options.ConsolePlatform[platform] || [];
+          const consoleOptions = options.ConsolePlatform?.[platform] || [];
           const consoleSelect = document.getElementById("console");
           consoleSelect.innerHTML = '';
 
@@ -135,7 +144,8 @@
       });
 
     function submitEvent() {
-      alert("提交功能开发中……");
+      const selectedTags = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
+      alert("提交功能开发中，选中标签：" + selectedTags.join(", "));
     }
   </script>
 </body>
