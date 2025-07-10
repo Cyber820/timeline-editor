@@ -41,7 +41,7 @@
     /* ❖ 新增事件表单浮动窗口样式 */
     #addEventForm {
       display: none;
-      position: fixed; /* 固定在页面上层 */
+      position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -71,6 +71,7 @@
   <div id="timeline"></div>
 
   <div id="addEventForm">
+    <button onclick="hideAddEventForm()" style="float: right;">关闭</button>
     <h3>新增事件</h3>
     <form id="eventForm">
       <label>事件名称（必填）：<input type="text" name="Title" required></label>
@@ -94,6 +95,10 @@
 
     function showAddEventForm() {
       document.getElementById("addEventForm").style.display = "block";
+    }
+
+    function hideAddEventForm() {
+      document.getElementById("addEventForm").style.display = "none";
     }
 
     function loadTimelineData() {
