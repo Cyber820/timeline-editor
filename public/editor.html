@@ -13,14 +13,16 @@
       padding: 20px;
     }
 
+    /* ❖ 时间轴画布高度（影响 tooltip 显示范围） */
     #timeline {
       width: 100%;
-      height: 800px;
+      height: 1600px;
       border: 1px solid lightgray;
       position: relative;
       margin-top: 20px;
     }
 
+    /* ❖ 鼠标悬停提示样式（可调整宽度/字体等） */
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
@@ -36,12 +38,21 @@
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
 
+    /* ❖ 新增事件表单浮动窗口样式 */
     #addEventForm {
       display: none;
+      position: fixed; /* 固定在页面上层 */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2000;
+      background: #f9f9f9;
       padding: 20px;
       border: 1px solid #ccc;
-      margin-top: 20px;
-      background: #f9f9f9;
+      max-width: 90%;
+      max-height: 90%;
+      overflow-y: auto;
+      box-shadow: 0 0 12px rgba(0,0,0,0.25);
     }
 
     label {
@@ -79,12 +90,10 @@
 
   <script>
     moment.locale("zh-cn");
-
     let timeline;
 
     function showAddEventForm() {
       document.getElementById("addEventForm").style.display = "block";
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
     function loadTimelineData() {
@@ -99,15 +108,21 @@
             content: event.content || event.Title || '(无标题)',
             start: event.start,
             end: event.end || null,
-            title: (event.title || '').replace(/\n/g, '<br>')
+            title: (event.title || '').replace(/\n/g, '<br>') // ❖ 多行 tooltip 显示
           }));
 
           const container = document.getElementById("timeline");
           timeline = new vis.Timeline(container, items, {
             locale: "zh-cn",
             editable: false,
-            margin: { item: 200, axis: 50 },
-            orientation: { axis: 'bottom', item: 'bottom' },
+            margin: {
+              item: 200, // ❖ 事件框到画布边缘的距离
+              axis: 50   // ❖ 时间轴线和事件框之间的距离
+            },
+            orientation: {
+              axis: 'bottom',   // ❖ 时间轴在线下方
+              item: 'bottom'    // ❖ 事件框显示在线上方
+            },
             tooltip: {
               followMouse: true,
               overflowMethod: 'flip'
