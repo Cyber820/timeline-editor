@@ -84,6 +84,7 @@
         const container = document.getElementById("timeline");
         const timeline = new vis.Timeline(container, items, {
           locale: "zh-cn",
+          stack: false, // ❗取消堆叠
           editable: false,
           margin: { item: 200, axis: 50 },
           orientation: { axis: 'bottom', item: 'bottom' },
