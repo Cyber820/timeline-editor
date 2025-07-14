@@ -36,8 +36,8 @@
 
     /* 自定义事件框样式 */
     .vis-item {
-      font-size: 8px;                   /* ❖ 字体大小 */
-      padding: 1px 1px;                  /* ❖ 内容内边距，影响框大小 */
+      font-size: 14px;                   /* ❖ 字体大小 */
+      padding: 4px 8px;                  /* ❖ 内容内边距，影响框大小 */
       background-color: #f5f5f5;         /* ❖ 背景颜色 */
       border: 1px solid #aaa;            /* ❖ 边框颜色 */
       border-radius: 4px;                /* ❖ 圆角 */
@@ -76,6 +76,7 @@
     <label>公司：<select id="company"></select></label><br>
     <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
     <label>标签（多选）：<select id="tag" multiple></select></label><br>
+    <label>提交者昵称（选填）：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
     <button onclick="submitEvent()">提交</button>
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
@@ -101,12 +102,12 @@
           locale: "zh-cn",
           editable: false,
           margin: {
-            item: 10,  // ❖ 事件框距离画布顶部/底部距离和事件框之间的距离
-            axis: 50    // ❖ 时间轴线与事件框的距离
+            item: 200,
+            axis: 50
           },
           orientation: {
-            axis: 'bottom',   // ❖ 时间轴放在底部
-            item: 'bottom'    // ❖ 事件框出现在时间轴上方（如要显示在下方改为 'top'）
+            axis: 'bottom',
+            item: 'bottom'
           },
           tooltip: {
             followMouse: true,
@@ -114,7 +115,7 @@
           },
           verticalScroll: true,
           zoomKey: "ctrlKey",
-          stack: true // ❖ 是否自动堆叠事件框。若要允许重叠，请改为 false。
+          stack: true
         });
       });
 
@@ -168,7 +169,12 @@
 
     function submitEvent() {
       const selectedTags = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
-      alert("提交功能开发中，选中标签：" + selectedTags.join(", "));
+      const submitter = document.getElementById('submitter').value.trim();
+      if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
+        alert("提交者昵称仅限中文、英文、数字，最长12个字符");
+        return;
+      }
+      alert("提交功能开发中，选中标签：" + selectedTags.join(", ") + (submitter ? "\n提交者：" + submitter : ""));
     }
   </script>
 </body>
