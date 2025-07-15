@@ -12,7 +12,7 @@
   <style>
     #timeline {
       width: 100%;
-      height: 1000px;
+      height: 800px;
       border: 1px solid lightgray;
       position: relative;
     }
@@ -31,8 +31,8 @@
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
     .vis-item {
-      font-size: 14px;
-      padding: 4px 8px;
+      font-size: 12px;
+      padding: 1px 2px;
       background-color: #f5f5f5;
       border: 1px solid #aaa;
       border-radius: 4px;
@@ -94,7 +94,7 @@
         const timeline = new vis.Timeline(document.getElementById("timeline"), items, {
           locale: "zh-cn",
           editable: false,
-          margin: { item: 200, axis: 50 },
+          margin: { item: 10, axis: 200 },
           orientation: { axis: 'bottom', item: 'bottom' },
           tooltip: { followMouse: true, overflowMethod: 'flip' },
           verticalScroll: true,
