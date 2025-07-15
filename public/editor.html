@@ -10,23 +10,23 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
-    /* 时间轴容器样式 */
+    /* ===== 可调参数区域 BEGIN ===== */
+
     #timeline {
-      width: 100%;                       /* ❖ 时间轴宽度 */
-      height: 1000px;                    /* ❖ 画布整体高度 */
+      width: 100%;               /* 时间轴宽度 */
+      height: 800px;            /* 时间轴画布高度 */
       border: 1px solid lightgray;
       position: relative;
     }
 
-    /* 悬停提示框样式 */
     .vis-tooltip {
-      white-space: normal !important;    /* ❖ 支持换行 */
-      max-width: 700px !important;       /* ❖ 最大宽度限制 */
+      white-space: normal !important;
+      max-width: 700px !important;
       min-width: 300px;
-      max-height: none !important;       /* ❖ 不限制最大高度 */
+      max-height: none !important;
       overflow: visible !important;
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: 8px;           /* 悬停字体大小 */
+      line-height: 1px;         /* 悬停行间距 */
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
@@ -34,17 +34,15 @@
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
 
-    /* 自定义事件框样式 */
     .vis-item {
-      font-size: 14px;                   /* ❖ 字体大小 */
-      padding: 4px 8px;                  /* ❖ 内容内边距，影响框大小 */
-      background-color: #f5f5f5;         /* ❖ 背景颜色 */
-      border: 1px solid #aaa;            /* ❖ 边框颜色 */
-      border-radius: 4px;                /* ❖ 圆角 */
-      max-width: 300px;                  /* ❖ 最大宽度 */
+      font-size: 8px;           /* 事件框字体大小 */
+      padding: 1px 2px;         /* 事件框 padding（垂直 水平） */
+      background-color: #f5f5f5;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      max-width: 300px;
     }
 
-    /* 弹出表单样式 */
     #event-form {
       position: absolute;
       top: 20px;
@@ -55,8 +53,20 @@
       border: 1px solid #ccc;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: none;
-      z-index: 2000;
+      z-index: 3000 !important;
+      overflow: visible !important; /* 修复下拉列表遮挡问题 */
     }
+
+    .choices {
+      z-index: 4000 !important; /* 多选组件基础 z-index */
+    }
+
+    .choices__list--dropdown {
+      z-index: 5000 !important; /* 多选下拉 z-index */
+      position: absolute !important;
+    }
+
+    /* ===== 可调参数区域 END ===== */
   </style>
 </head>
 <body>
@@ -64,6 +74,7 @@
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
   <div id="timeline"></div>
 
+  <!-- 表单弹窗 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -86,11 +97,12 @@
 
     moment.locale("zh-cn");
 
+    // 初始化时间轴视图
     fetch(ENDPOINT)
       .then(res => res.json())
       .then(data => {
         const items = data.map((event, index) => ({
-          id: event.id || auto-${index + 1},
+          id: event.id || `auto-${index + 1}`,
           content: event.content || '(无标题)',
           start: event.start,
           end: event.end || null,
@@ -102,12 +114,12 @@
           locale: "zh-cn",
           editable: false,
           margin: {
-            item: 200,
-            axis: 50
+            item: 10,     // 事件框离顶端距离
+            axis: 200     // 时间轴线与事件框距离
           },
           orientation: {
-            axis: 'bottom',
-            item: 'bottom'
+            axis: 'bottom', // 时间轴线在底部
+            item: 'bottom'  // 事件框显示在时间轴上方
           },
           tooltip: {
             followMouse: true,
@@ -115,10 +127,11 @@
           },
           verticalScroll: true,
           zoomKey: "ctrlKey",
-          stack: true
+          stack: true // ❖ 若希望事件框允许重叠，可设为 false
         });
       });
 
+    // 获取下拉选项
     fetch(ENDPOINT + '?action=options')
       .then(res => res.json())
       .then(options => {
