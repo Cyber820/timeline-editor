@@ -10,41 +10,34 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
-    /* 时间轴容器样式 */
     #timeline {
-      width: 100%;                       /* ❖ 时间轴宽度 */
-      height: 800px;                    /* ❖ 画布整体高度 */
+      width: 100%;
+      height: 1000px;
       border: 1px solid lightgray;
       position: relative;
     }
-
-    /* 悬停提示框样式 */
     .vis-tooltip {
-      white-space: normal !important;    /* ❖ 支持换行 */
-      max-width: 700px !important;       /* ❖ 最大宽度限制 */
+      white-space: normal !important;
+      max-width: 700px !important;
       min-width: 300px;
-      max-height: none !important;       /* ❖ 不限制最大高度 */
+      max-height: none !important;
       overflow: visible !important;
-      font-size: 8px;
-      line-height: 1;
-      padding: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
       z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-
-    /* 自定义事件框样式 */
     .vis-item {
-      font-size: 8px;                   /* ❖ 字体大小 */
-      padding: 1px 2px;                  /* ❖ 内容内边距，影响框大小 */
-      background-color: #f5f5f5;         /* ❖ 背景颜色 */
-      border: 1px solid #aaa;            /* ❖ 边框颜色 */
-      border-radius: 4px;                /* ❖ 圆角 */
-      max-width: 300px;                  /* ❖ 最大宽度 */
+      font-size: 14px;
+      padding: 4px 8px;
+      background-color: #f5f5f5;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      max-width: 300px;
     }
-
-    /* 弹出表单样式 */
     #event-form {
       position: absolute;
       top: 20px;
@@ -66,23 +59,24 @@
 
   <div id="event-form">
     <h3>新增事件</h3>
-    <label>事件名称（必填）：<input type="text" id="title"></label><br>
-    <label>事件类型（必填）：<select id="eventType"></select></label><br>
-    <label>开始时间（必填）：<input type="date" id="start"></label><br>
+    <label>事件名称：<input type="text" id="title"></label><br>
+    <label>事件类型：<select id="eventType"></select></label><br>
+    <label>开始时间：<input type="date" id="start"></label><br>
     <label>结束时间：<input type="date" id="end"></label><br>
-    <label>地区（必填）：<select id="region"></select></label><br>
+    <label>地区：<select id="region"></select></label><br>
     <label>平台类型：<select id="platform"></select></label><br>
     <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
     <label>公司：<select id="company"></select></label><br>
     <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
-    <label>标签（多选）：<select id="tag" multiple></select></label><br>
-    <label>提交者昵称（选填）：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
+    <label>标签：<select id="tag" multiple></select></label><br>
+    <label>提交者昵称：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
     <button onclick="submitEvent()">提交</button>
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
   <script>
     const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+    const TOKEN = ""; // ✅ 你可以在这里设置测试用 token
 
     moment.locale("zh-cn");
 
@@ -97,25 +91,15 @@
           title: (event.title || '').replace(/\n/g, '<br>')
         }));
 
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container, items, {
+        const timeline = new vis.Timeline(document.getElementById("timeline"), items, {
           locale: "zh-cn",
           editable: false,
-          margin: {
-            item: 20,
-            axis: 100
-          },
-          orientation: {
-            axis: 'bottom',
-            item: 'bottom'
-          },
-          tooltip: {
-            followMouse: true,
-            overflowMethod: 'flip'
-          },
+          margin: { item: 200, axis: 50 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
           verticalScroll: true,
           zoomKey: "ctrlKey",
-          stack: true
+          stack: true // ❖ 是否允许垂直堆叠事件框（true: 禁止重叠）
         });
       });
 
@@ -132,7 +116,6 @@
             select.appendChild(option);
           });
         };
-
         fill("eventType", options.EventType);
         fill("region", options.Region);
         fill("platform", options.Platform);
@@ -168,13 +151,48 @@
       });
 
     function submitEvent() {
-      const selectedTags = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
-      const submitter = document.getElementById('submitter').value.trim();
-      if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
+      const body = {
+        Title: document.getElementById("title").value.trim(),
+        Start: document.getElementById("start").value,
+        End: document.getElementById("end").value,
+        Region: document.getElementById("region").value,
+        Platform: document.getElementById("platform").value,
+        ConsolePlatform: document.getElementById("console").value,
+        EventType: document.getElementById("eventType").value,
+        Company: document.getElementById("company").value,
+        Description: document.getElementById("description").value.trim(),
+        Tag: Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value),
+        Submitter: document.getElementById("submitter").value.trim()
+      };
+
+      if (!body.Title || !body.Start || !body.EventType || !body.Region) {
+        alert("请填写所有必填字段");
+        return;
+      }
+
+      if (body.Submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(body.Submitter)) {
         alert("提交者昵称仅限中文、英文、数字，最长12个字符");
         return;
       }
-      alert("提交功能开发中，选中标签：" + selectedTags.join(", ") + (submitter ? "\n提交者：" + submitter : ""));
+
+      const ip = "auto"; // ✅ 可以按需替换为真实 IP（前端 JS 无法获取 IP）
+      fetch(`${ENDPOINT}?token=${TOKEN}&ip=${ip}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      })
+        .then(res => res.json())
+        .then(resp => {
+          if (resp.success) {
+            alert("提交成功！页面将自动刷新。");
+            window.location.reload();
+          } else {
+            alert("提交失败");
+          }
+        })
+        .catch(err => {
+          alert("提交出错：" + err.message);
+        });
     }
   </script>
 </body>
