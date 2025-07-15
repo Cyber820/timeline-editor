@@ -44,8 +44,8 @@
     }
 
     #event-form {
-      position: fixed;          /* ⬅ 关键：从 absolute 改为 fixed */
-      top: 60px;
+      position: absolute;          /* ⬅ 恢复为 absolute 放置在画布上 */
+      top: 20px;
       left: 50%;
       transform: translateX(-50%);
       background: #fff;
@@ -53,25 +53,11 @@
       border: 1px solid #ccc;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: none;
-      z-index: 3000;
-      max-height: 80vh;         /* 可滚动，避免超出视窗 */
-      overflow-y: auto;
+      z-index: 2000;
     }
 
     .choices {
-      z-index: 4000 !important;
-    }
-
-    .choices__list--dropdown, 
-    .choices__list[aria-expanded] {
-      position: fixed !important;   /* ⬅ 关键：下拉脱离 form 限制 */
-      top: auto !important;
-      left: auto !important;
-      z-index: 5000 !important;
-      max-height: 200px;
-      overflow-y: auto;
-      background: white;
-      border: 1px solid #ccc;
+      z-index: 2001 !important;  /* 不强制调高 z-index，防止遮挡 */
     }
 
     /* ===== 可调参数区域 END ===== */
@@ -122,12 +108,12 @@
           locale: "zh-cn",
           editable: false,
           margin: {
-            item: 10,     // 事件框离顶端距离
-            axis: 200     // 时间轴线与事件框距离
+            item: 10,
+            axis: 200
           },
           orientation: {
-            axis: 'bottom', // 时间轴线在底部
-            item: 'bottom'  // 事件框显示在时间轴上方
+            axis: 'bottom',
+            item: 'bottom'
           },
           tooltip: {
             followMouse: true,
@@ -135,7 +121,7 @@
           },
           verticalScroll: true,
           zoomKey: "ctrlKey",
-          stack: true // ❖ 若希望事件框允许重叠，可设为 false
+          stack: true
         });
       });
 
