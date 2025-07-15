@@ -1,184 +1,163 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>时间轴（匿名模式）</title>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
+  <meta charset="UTF-8" />
+  <title>匿名时间轴编辑器</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
   <style>
+    body {
+      font-family: sans-serif;
+    }
+
     #timeline {
       width: 100%;
-      height: 800px;
+      height: 800px; /* ✅ 画布高度 */
       border: 1px solid lightgray;
-      position: relative;
     }
+
     .vis-tooltip {
+      font-size: 10px;         /* ✅ 悬停窗口字体大小 */
+      line-height: 1.2;        /* ✅ 悬停窗口行距 */
+      max-width: 600px;
       white-space: normal !important;
-      max-width: 700px !important;
-      min-width: 300px;
-      max-height: none !important;
-      overflow: visible !important;
-      font-size: 10px;
-      line-height: 1.2;
-      padding: 12px;
-      background-color: #fff;
-      border: 1px solid #ccc;
-      z-index: 1000;
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
+
     .vis-item {
-      font-size: 8px;
-      padding: 1px 2px;
-      background-color: #f5f5f5;
-      border: 1px solid #aaa;
-      border-radius: 4px;
-      max-width: 300px;
+      font-size: 8px;          /* ✅ 事件框字体大小 */
+      padding: 1px 2px;        /* ✅ 内边距 */
     }
+
     #event-form {
       position: absolute;
-      top: 20px;
+      top: 30px;
       left: 50%;
       transform: translateX(-50%);
-      background: #fff;
-      padding: 20px;
+      background: white;
       border: 1px solid #ccc;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      padding: 20px;
+      z-index: 999;
       display: none;
-      z-index: 2000;
     }
-    .choices {
-      z-index: 2001 !important;
+
+    label {
+      display: block;
+      margin: 5px 0;
     }
   </style>
 </head>
 <body>
-  <h2>匿名时间轴编辑器（只读预览）</h2>
-  <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
+  <h3>匿名时间轴编辑器</h3>
+  <button onclick="showForm()">➕ 增加事件</button>
   <div id="timeline"></div>
 
   <div id="event-form">
-    <h3>新增事件</h3>
-    <label>事件名称（必填）：<input type="text" id="title"></label><br>
-    <label>事件类型（必填）：<select id="eventType"></select></label><br>
-    <label>开始时间（必填）：<input type="date" id="start"></label><br>
-    <label>结束时间：<input type="date" id="end"></label><br>
-    <label>地区（必填）：<select id="region"></select></label><br>
-    <label>平台类型：<select id="platform"></select></label><br>
-    <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
-    <label>公司：<select id="company"></select></label><br>
-    <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
-    <label>标签（多选）：<select id="tag" multiple></select></label><br>
-    <label>提交者昵称（选填）：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
+    <h4>新增事件</h4>
+    <label>事件名称：<input type="text" id="title"></label>
+    <label>事件类型：<select id="eventType"></select></label>
+    <label>开始时间：<input type="date" id="start"></label>
+    <label>结束时间：<input type="date" id="end"></label>
+    <label>地区：<select id="region"></select></label>
+    <label>平台类型：<select id="platform"></select></label>
+    <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label>
+    <label>公司：<select id="company"></select></label>
+    <label>描述：<textarea id="description" rows="3" cols="30"></textarea></label>
+    <label>标签（多选）：<select id="tag" multiple></select></label>
+    <label>提交者昵称（可选）：<input type="text" id="submitter" maxlength="12"></label>
     <button onclick="submitEvent()">提交</button>
-    <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
+    <button onclick="hideForm()">关闭</button>
   </div>
 
   <script>
     const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
 
-    moment.locale("zh-cn");
+    function showForm() {
+      document.getElementById('event-form').style.display = 'block';
+    }
+    function hideForm() {
+      document.getElementById('event-form').style.display = 'none';
+    }
 
+    // 加载事件
     fetch(ENDPOINT)
       .then(res => res.json())
       .then(data => {
-        const items = data.map((event, index) => ({
-          id: event.id || `auto-${index + 1}`,
-          content: event.content || '(无标题)',
-          start: event.start,
-          end: event.end || null,
-          title: (event.title || '').replace(/\n/g, '<br>')
+        const items = data.map(ev => ({
+          id: ev.id,
+          content: ev.content,
+          start: ev.start,
+          end: ev.end,
+          title: (ev.title || '').replace(/\n/g, '<br>')
         }));
 
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container, items, {
-          locale: "zh-cn",
-          editable: false,
-          margin: {
-            item: 10,
-            axis: 200
-          },
-          orientation: {
-            axis: 'bottom',
-            item: 'bottom'
-          },
-          tooltip: {
-            followMouse: true,
-            overflowMethod: 'flip'
-          },
-          verticalScroll: true,
-          zoomKey: "ctrlKey",
-          stack: true
+        const timeline = new vis.Timeline(document.getElementById('timeline'), items, {
+          stack: true, // ✅ 是否堆叠事件框（可改成 false 测试重叠）
+          margin: { item: 10, axis: 200 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true },
+          zoomKey: 'ctrlKey'
         });
       });
 
+    // 加载下拉数据
     fetch(ENDPOINT + '?action=options')
       .then(res => res.json())
       .then(options => {
-        const fill = (id, list, config = {}) => {
-          const select = document.getElementById(id);
-          select.innerHTML = '';
-          list.forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
+        console.log("加载下拉数据成功：", options);
+        const fillSelect = (id, values) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.innerHTML = '';
+          values.forEach(v => {
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = v;
+            el.appendChild(opt);
           });
-          new Choices(select, Object.assign({
-            searchEnabled: true,
-            shouldSort: false,
-            itemSelectText: '',
-            placeholder: true
-          }, config));
         };
 
-        fill("eventType", options.EventType);
-        fill("region", options.Region);
-        fill("platform", options.Platform);
-        fill("company", options.Company);
-        fill("tag", options.Tag, {
+        fillSelect("eventType", options.EventType);
+        fillSelect("region", options.Region);
+        fillSelect("platform", options.Platform);
+        fillSelect("company", options.Company);
+        fillSelect("tag", options.Tag);
+
+        new Choices("#tag", {
           removeItemButton: true,
-          maxItemCount: 10,
-          placeholderValue: '请选择标签...',
-          searchPlaceholderValue: '搜索标签...',
-          noResultsText: '无匹配标签'
+          searchPlaceholderValue: "搜索标签...",
+          noResultsText: "无匹配项"
         });
 
         document.getElementById("platform").addEventListener("change", function () {
-          const platform = this.value;
-          const consoleOptions = options.ConsolePlatform?.[platform] || [];
-          const consoleSelect = document.getElementById("console");
-          consoleSelect.innerHTML = '';
+          const selected = this.value;
+          const optionsMap = options.ConsolePlatform || {};
+          const consoles = optionsMap[selected] || [];
 
-          if (consoleOptions.length > 0) {
-            document.getElementById("consoleLabel").style.display = 'inline';
-            consoleOptions.forEach(opt => {
-              const option = document.createElement("option");
-              option.value = opt;
-              option.textContent = opt;
-              consoleSelect.appendChild(option);
-            });
-            new Choices(consoleSelect, {
-              searchEnabled: true,
-              shouldSort: false
+          const consoleEl = document.getElementById("console");
+          consoleEl.innerHTML = '';
+          if (consoles.length > 0) {
+            document.getElementById("consoleLabel").style.display = 'block';
+            consoles.forEach(c => {
+              const opt = document.createElement("option");
+              opt.value = c;
+              opt.textContent = c;
+              consoleEl.appendChild(opt);
             });
           } else {
             document.getElementById("consoleLabel").style.display = 'none';
           }
         });
+      })
+      .catch(err => {
+        console.error("下拉数据加载失败", err);
+        alert("下拉数据加载失败，请检查接口和 CORS 设置");
       });
 
     function submitEvent() {
-      const selectedTags = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
-      const submitter = document.getElementById('submitter').value.trim();
-      if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
-        alert("提交者昵称仅限中文、英文、数字，最长12个字符");
-        return;
-      }
-      alert("提交功能开发中，选中标签：" + selectedTags.join(", ") + (submitter ? "\n提交者：" + submitter : ""));
+      alert("提交功能开发中...");
     }
   </script>
 </body>
