@@ -10,41 +10,36 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
-    /* ===== 可调参数区域 BEGIN ===== */
-
     #timeline {
-      width: 100%;               /* 时间轴宽度 */
-      height: 800px;            /* 时间轴画布高度 */
+      width: 100%;
+      height: 800px;
       border: 1px solid lightgray;
       position: relative;
     }
-
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
       min-width: 300px;
       max-height: none !important;
       overflow: visible !important;
-      font-size: 10px;           /* 悬停字体大小 */
-      line-height: 1.2;         /* 悬停行间距 */
+      font-size: 10px;
+      line-height: 1.2;
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
       z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-
     .vis-item {
-      font-size: 8px;           /* 事件框字体大小 */
-      padding: 1px 2px;         /* 事件框 padding（垂直 水平） */
+      font-size: 8px;
+      padding: 1px 2px;
       background-color: #f5f5f5;
       border: 1px solid #aaa;
       border-radius: 4px;
       max-width: 300px;
     }
-
     #event-form {
-      position: absolute;          /* ⬅ 恢复为 absolute 放置在画布上 */
+      position: absolute;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
@@ -55,12 +50,9 @@
       display: none;
       z-index: 2000;
     }
-
     .choices {
-      z-index: 2001 !important;  /* 不强制调高 z-index，防止遮挡 */
+      z-index: 2001 !important;
     }
-
-    /* ===== 可调参数区域 END ===== */
   </style>
 </head>
 <body>
@@ -68,7 +60,6 @@
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
   <div id="timeline"></div>
 
-  <!-- 表单弹窗 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -91,7 +82,6 @@
 
     moment.locale("zh-cn");
 
-    // 初始化时间轴视图
     fetch(ENDPOINT)
       .then(res => res.json())
       .then(data => {
@@ -125,11 +115,10 @@
         });
       });
 
-    // 获取下拉选项
     fetch(ENDPOINT + '?action=options')
       .then(res => res.json())
       .then(options => {
-        const fill = (id, list) => {
+        const fill = (id, list, config = {}) => {
           const select = document.getElementById(id);
           select.innerHTML = '';
           list.forEach(opt => {
@@ -138,20 +127,24 @@
             option.textContent = opt;
             select.appendChild(option);
           });
+          new Choices(select, Object.assign({
+            searchEnabled: true,
+            shouldSort: false,
+            itemSelectText: '',
+            placeholder: true
+          }, config));
         };
 
         fill("eventType", options.EventType);
         fill("region", options.Region);
         fill("platform", options.Platform);
         fill("company", options.Company);
-        fill("tag", options.Tag);
-
-        new Choices(document.getElementById("tag"), {
+        fill("tag", options.Tag, {
           removeItemButton: true,
+          maxItemCount: 10,
           placeholderValue: '请选择标签...',
           searchPlaceholderValue: '搜索标签...',
-          noResultsText: '无匹配标签',
-          maxItemCount: 10
+          noResultsText: '无匹配标签'
         });
 
         document.getElementById("platform").addEventListener("change", function () {
@@ -167,6 +160,10 @@
               option.value = opt;
               option.textContent = opt;
               consoleSelect.appendChild(option);
+            });
+            new Choices(consoleSelect, {
+              searchEnabled: true,
+              shouldSort: false
             });
           } else {
             document.getElementById("consoleLabel").style.display = 'none';
