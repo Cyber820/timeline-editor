@@ -44,8 +44,8 @@
     }
 
     #event-form {
-      position: absolute;
-      top: 20px;
+      position: fixed;          /* ⬅ 关键：从 absolute 改为 fixed */
+      top: 60px;
       left: 50%;
       transform: translateX(-50%);
       background: #fff;
@@ -53,17 +53,25 @@
       border: 1px solid #ccc;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: none;
-      z-index: 3000 !important;
-      overflow: visible !important; /* 修复下拉列表遮挡问题 */
+      z-index: 3000;
+      max-height: 80vh;         /* 可滚动，避免超出视窗 */
+      overflow-y: auto;
     }
 
     .choices {
-      z-index: 4000 !important; /* 多选组件基础 z-index */
+      z-index: 4000 !important;
     }
 
-    .choices__list--dropdown {
-      z-index: 5000 !important; /* 多选下拉 z-index */
-      position: absolute !important;
+    .choices__list--dropdown, 
+    .choices__list[aria-expanded] {
+      position: fixed !important;   /* ⬅ 关键：下拉脱离 form 限制 */
+      top: auto !important;
+      left: auto !important;
+      z-index: 5000 !important;
+      max-height: 200px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ccc;
     }
 
     /* ===== 可调参数区域 END ===== */
