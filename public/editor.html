@@ -155,49 +155,61 @@
       });
 
     function submitEvent() {
-      const data = {
-        Title: document.getElementById("title").value.trim(),
-        EventType: document.getElementById("eventType").value,
-        Start: document.getElementById("start").value,
-        End: document.getElementById("end").value,
-        Region: document.getElementById("region").value,
-        Platform: document.getElementById("platform").value,
-        ConsolePlatform: document.getElementById("console").value || '',
-        Company: document.getElementById("company").value,
-        Description: document.getElementById("description").value,
-        Tag: Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value),
-        Submitter: document.getElementById("submitter").value.trim()
-      };
+    const title = document.getElementById("title").value.trim();
+    const start = document.getElementById("start").value;
+    const end = document.getElementById("end").value;
+    const region = document.getElementById("region").value;
+    const platform = document.getElementById("platform").value;
+    const consolePlatform = document.getElementById("console").value;
+    const eventType = document.getElementById("eventType").value;
+    const company = document.getElementById("company").value;
+    const description = document.getElementById("description").value.trim();
+    const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
+    const submitter = document.getElementById('submitter').value.trim();
 
-      if (!data.Title || !data.EventType || !data.Start || !data.Region) {
-        alert("请填写所有必填项。");
-        return;
-      }
+    if (!title || !start || !region || !eventType) {
+      alert("请填写所有必填字段！");
+      return;
+    }
 
-      if (data.Submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(data.Submitter)) {
-        alert("提交者昵称仅限中文、英文、数字，最长12个字符");
-        return;
-      }
+    if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
+      alert("提交者昵称仅限中文、英文、数字，最长12个字符");
+      return;
+    }
 
-      fetch(ENDPOINT, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json"
+    const formData = new FormData();
+    formData.append("Title", title);
+    formData.append("Start", start);
+    formData.append("End", end);
+    formData.append("Region", region);
+    formData.append("Platform", platform);
+    formData.append("ConsolePlatform", consolePlatform);
+    formData.append("EventType", eventType);
+    formData.append("Company", company);
+    formData.append("Description", description);
+    formData.append("Submitter", submitter);
+    formData.append("Tag", tagList.join(','));
+
+    // 若支持 token 可拼接 "?token=xxx"，目前为匿名
+    fetch(ENDPOINT, {
+      method: "POST",
+      body: formData
+    })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          alert("提交成功！");
+          document.getElementById('event-form').style.display = 'none';
+          location.reload();
+        } else {
+          alert("提交失败，请稍后重试。");
         }
       })
-        .then(res => res.json())
-        .then(response => {
-          if (response.success) {
-            alert("提交成功！");
-            document.getElementById("event-form").style.display = 'none';
-            location.reload();
-          } else {
-            alert("提交失败，请稍后重试。");
-          }
-        })
-        .catch(() => alert("提交异常，请检查网络连接。"));
-    }
+      .catch(err => {
+        console.error("提交失败", err);
+        alert("提交异常，请检查网络连接。");
+      });
+  }
   </script>
 </body>
 </html>
