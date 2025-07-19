@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -42,7 +41,7 @@
       max-width: 300px;
     }
 
-    #event-form {
+    #event-form, #bulk-form {
       position: absolute;
       top: 20px;
       left: 50%;
@@ -53,14 +52,18 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: none;
       z-index: 2000;
+      max-height: 80vh;
+      overflow: auto;
     }
   </style>
 </head>
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
+  <button onclick="document.getElementById('bulk-form').style.display='block'">📋 批量增加事件</button>
   <div id="timeline"></div>
 
+  <!-- 单事件表单 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -78,47 +81,58 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
-  <button onclick="document.getElementById('bulk-form').style.display='block'">📋 批量增加事件</button>
-
-<div id="bulk-form" style="display:none; margin-top: 20px;">
-  <h3>批量新增事件</h3>
-  <textarea id="bulk-input" rows="10" cols="120" placeholder="每行一个事件，列顺序为：Title,Start,End,Region,Platform,ConsolePlatform,EventType,Company,Description,Tag(用逗号隔开),Submitter"></textarea><br>
-  <button onclick="submitBulkEvents()">提交批量事件</button>
-  <button onclick="document.getElementById('bulk-form').style.display='none'">关闭</button>
-</div>
+  <!-- 批量事件表单 -->
+  <div id="bulk-form">
+    <h3>批量增加事件</h3>
+    <table border="1" id="bulk-table">
+      <thead>
+        <tr>
+          <th>标题</th><th>事件类型</th><th>开始时间</th><th>结束时间</th><th>地区</th><th>平台类型</th><th>主机类型</th><th>公司</th><th>描述</th><th>标签（逗号分隔）</th><th>提交者</th>
+        </tr>
+      </thead>
+      <tbody id="bulk-body">
+        <tr>
+          <td><input></td><td><select class="eventType"></select></td><td><input type="date"></td><td><input type="date"></td><td><select class="region"></select></td><td><select class="platform"></select></td><td><select class="console"></select></td><td><select class="company"></select></td><td><input></td><td><input></td><td><input></td>
+        </tr>
+      </tbody>
+    </table>
+    <button onclick="addBulkRow()">➕ 增加一行</button>
+    <button onclick="submitBulkEvents()">提交所有</button>
+    <button onclick="document.getElementById('bulk-form').style.display='none'">关闭</button>
+  </div>
 
   <script>
     const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
-
     moment.locale("zh-cn");
 
-    fetch(ENDPOINT)
-      .then(res => res.json())
-      .then(data => {
-        const items = data.map((event, index) => ({
-          id: event.id || `auto-${index + 1}`,
-          content: event.content || '(无标题)',
-          start: event.start,
-          end: event.end || null,
-          title: (event.title || '').replace(/\n/g, '<br>')
-        }));
+    fetch(ENDPOINT).then(res => res.json()).then(data => {
+      const items = data.map((event, index) => ({
+        id: event.id || `auto-${index + 1}`,
+        content: event.content || '(无标题)',
+        start: event.start,
+        end: event.end || null,
+        title: (event.title || '').replace(/\n/g, '<br>')
+      }));
 
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container, items, {
-          locale: "zh-cn",
-          editable: false,
-          margin: { item: 10, axis: 200 },
-          orientation: { axis: 'bottom', item: 'bottom' },
-          tooltip: { followMouse: true, overflowMethod: 'flip' },
-          verticalScroll: true,
-          zoomKey: "ctrlKey",
-          stack: true // ❖ 如需允许事件重叠，可设为 false
-        });
+      const container = document.getElementById("timeline");
+      new vis.Timeline(container, items, {
+        locale: "zh-cn",
+        editable: false,
+        margin: { item: 10, axis: 200 },
+        orientation: { axis: 'bottom', item: 'bottom' },
+        tooltip: { followMouse: true, overflowMethod: 'flip' },
+        verticalScroll: true,
+        zoomKey: "ctrlKey",
+        stack: true
       });
+    });
+
+    let globalOptions = {};
 
     fetch(ENDPOINT + '?action=options')
       .then(res => res.json())
       .then(options => {
+        globalOptions = options;
         const fill = (id, list) => {
           const select = document.getElementById(id);
           select.innerHTML = '';
@@ -149,7 +163,6 @@
           const consoleOptions = options.ConsolePlatform?.[platform] || [];
           const consoleSelect = document.getElementById("console");
           consoleSelect.innerHTML = '';
-
           if (consoleOptions.length > 0) {
             document.getElementById("consoleLabel").style.display = 'inline';
             consoleOptions.forEach(opt => {
@@ -162,115 +175,99 @@
             document.getElementById("consoleLabel").style.display = 'none';
           }
         });
+
+        // 批量表格默认填充第一行
+        const firstRow = document.querySelector('#bulk-body tr');
+        ['eventType','region','platform','company'].forEach(cls => {
+          const cell = firstRow.querySelector(`.${cls}`);
+          options[cls.charAt(0).toUpperCase() + cls.slice(1)].forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            cell.appendChild(option);
+          });
+        });
       });
-
-    function submitBulkEvents() {
-  const raw = document.getElementById("bulk-input").value.trim();
-  if (!raw) {
-    alert("请输入内容");
-    return;
-  }
-
-  const rows = raw.split("\n");
-  let successCount = 0, failCount = 0;
-
-  const promises = rows.map(line => {
-    const fields = line.split("\t"); // 使用Tab分隔，或改为split(',')如使用CSV
-    if (fields.length < 12) {
-      failCount++;
-      return Promise.resolve();
-    }
-
-    const data = {
-      Title: fields[0].trim(),
-      Start: fields[1].trim(),
-      End: fields[2].trim(),
-      Region: fields[3].trim(),
-      Platform: fields[4].trim(),
-      ConsolePlatform: fields[5].trim(),
-      EventType: fields[6].trim(),
-      Company: fields[7].trim(),
-      Description: fields[8].trim(),
-      Tag: fields[9].split(",").map(s => s.trim()),
-      Submitter: fields[10].trim()
-    };
-
-    return fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    })
-      .then(res => res.json())
-      .then(result => {
-        if (result.success) successCount++;
-        else failCount++;
-      })
-      .catch(() => failCount++);
-  });
-
-  Promise.all(promises).then(() => {
-    alert(`提交完成：成功 ${successCount} 项，失败 ${failCount} 项`);
-    location.reload();
-  });
-}
 
     function submitEvent() {
-    const title = document.getElementById("title").value.trim();
-    const start = document.getElementById("start").value;
-    const end = document.getElementById("end").value;
-    const region = document.getElementById("region").value;
-    const platform = document.getElementById("platform").value;
-    const consolePlatform = document.getElementById("console").value;
-    const eventType = document.getElementById("eventType").value;
-    const company = document.getElementById("company").value;
-    const description = document.getElementById("description").value.trim();
-    const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
-    const submitter = document.getElementById('submitter').value.trim();
+      const data = {
+        Title: document.getElementById("title").value.trim(),
+        Start: document.getElementById("start").value,
+        End: document.getElementById("end").value,
+        Region: document.getElementById("region").value,
+        Platform: document.getElementById("platform").value,
+        ConsolePlatform: document.getElementById("console").value,
+        EventType: document.getElementById("eventType").value,
+        Company: document.getElementById("company").value,
+        Description: document.getElementById("description").value,
+        Tag: Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value),
+        Submitter: document.getElementById("submitter").value.trim()
+      };
 
-    if (!title || !start || !region || !eventType) {
-      alert("请填写所有必填字段！");
-      return;
-    }
+      if (!data.Title || !data.Start || !data.Region || !data.EventType) {
+        alert("请填写所有必填项。"); return;
+      }
 
-    if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
-      alert("提交者昵称仅限中文、英文、数字，最长12个字符");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("Title", title);
-    formData.append("Start", start);
-    formData.append("End", end);
-    formData.append("Region", region);
-    formData.append("Platform", platform);
-    formData.append("ConsolePlatform", consolePlatform);
-    formData.append("EventType", eventType);
-    formData.append("Company", company);
-    formData.append("Description", description);
-    formData.append("Submitter", submitter);
-    formData.append("Tag", tagList.join(','));
-
-    // 若支持 token 可拼接 "?token=xxx"，目前为匿名
-    fetch(ENDPOINT, {
-      method: "POST",
-      body: formData
-    })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          alert("提交成功！");
-          document.getElementById('event-form').style.display = 'none';
-          location.reload();
-        } else {
-          alert("提交失败，请稍后重试。");
-        }
+      fetch(ENDPOINT, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" }
       })
-      .catch(err => {
-        console.error("提交失败", err);
-        alert("提交异常，请检查网络连接。");
-      });
-  }
+        .then(res => res.json())
+        .then(response => {
+          if (response.success) {
+            alert("提交成功！"); document.getElementById("event-form").style.display = 'none'; location.reload();
+          } else {
+            alert("提交失败，请稍后重试。");
+          }
+        })
+        .catch(() => alert("提交异常，请检查网络连接。"));
+    }
+
+    function addBulkRow() {
+      const row = document.querySelector('#bulk-body tr');
+      const clone = row.cloneNode(true);
+      clone.querySelectorAll('input, select').forEach(el => el.value = '');
+      document.getElementById('bulk-body').appendChild(clone);
+    }
+
+    function submitBulkEvents() {
+      const rows = document.querySelectorAll('#bulk-body tr');
+      const allValid = [];
+
+      for (let row of rows) {
+        const inputs = row.querySelectorAll('input, select');
+        const [title, eventTypeSel, start, end, regionSel, platformSel, consoleSel, companySel, desc, tagInput, submitter] = inputs;
+        const data = {
+          Title: title.value.trim(),
+          Start: start.value,
+          End: end.value,
+          Region: regionSel.value,
+          Platform: platformSel.value,
+          ConsolePlatform: consoleSel.value,
+          EventType: eventTypeSel.value,
+          Company: companySel.value,
+          Description: desc.value.trim(),
+          Tag: tagInput.value.split(',').map(t => t.trim()).filter(Boolean),
+          Submitter: submitter.value.trim()
+        };
+        if (!data.Title || !data.Start || !data.Region || !data.EventType) {
+          alert("存在未填写的必填项，已取消提交。");
+          return;
+        }
+        allValid.push(data);
+      }
+
+      Promise.all(allValid.map(data => fetch(ENDPOINT, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" }
+      }))).then(() => {
+        alert("批量提交成功！");
+        document.getElementById('bulk-form').style.display = 'none';
+        location.reload();
+      }).catch(() => alert("提交失败，请检查网络连接"));
+    }
   </script>
 </body>
 </html>
-
