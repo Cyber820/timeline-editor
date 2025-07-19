@@ -78,6 +78,15 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
+  <button onclick="document.getElementById('bulk-form').style.display='block'">📋 批量增加事件</button>
+
+<div id="bulk-form" style="display:none; margin-top: 20px;">
+  <h3>批量新增事件</h3>
+  <textarea id="bulk-input" rows="10" cols="120" placeholder="每行一个事件，列顺序为：Title,Start,End,Region,Platform,ConsolePlatform,EventType,Company,Description,Tag(用逗号隔开),Submitter"></textarea><br>
+  <button onclick="submitBulkEvents()">提交批量事件</button>
+  <button onclick="document.getElementById('bulk-form').style.display='none'">关闭</button>
+</div>
+
   <script>
     const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
 
@@ -154,6 +163,56 @@
           }
         });
       });
+
+    function submitBulkEvents() {
+  const raw = document.getElementById("bulk-input").value.trim();
+  if (!raw) {
+    alert("请输入内容");
+    return;
+  }
+
+  const rows = raw.split("\n");
+  let successCount = 0, failCount = 0;
+
+  const promises = rows.map(line => {
+    const fields = line.split("\t"); // 使用Tab分隔，或改为split(',')如使用CSV
+    if (fields.length < 12) {
+      failCount++;
+      return Promise.resolve();
+    }
+
+    const data = {
+      Title: fields[0].trim(),
+      Start: fields[1].trim(),
+      End: fields[2].trim(),
+      Region: fields[3].trim(),
+      Platform: fields[4].trim(),
+      ConsolePlatform: fields[5].trim(),
+      EventType: fields[6].trim(),
+      Company: fields[7].trim(),
+      Description: fields[8].trim(),
+      Tag: fields[9].split(",").map(s => s.trim()),
+      Submitter: fields[10].trim()
+    };
+
+    return fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result.success) successCount++;
+        else failCount++;
+      })
+      .catch(() => failCount++);
+  });
+
+  Promise.all(promises).then(() => {
+    alert(`提交完成：成功 ${successCount} 项，失败 ${failCount} 项`);
+    location.reload();
+  });
+}
 
     function submitEvent() {
     const title = document.getElementById("title").value.trim();
