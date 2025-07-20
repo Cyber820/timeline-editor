@@ -73,7 +73,7 @@
 
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
-    <label>过滤属性：<select id="filter-attribute" onchange="updateFilterValues(true)"></select></label><br>
+    <label>过滤属性：<select id="filter-attribute"></select></label><br>
     <label>过滤选项：<select id="filter-values" multiple></select></label><br>
     <button onclick="confirmAddFilter()">确定</button>
     <button onclick="closeAddFilterWindow()">取消</button>
@@ -104,11 +104,23 @@
       closeFilterWindow();
     }
     function openAddFilterWindow() {
-      updateFilterValues(true);
       document.getElementById('add-filter-window').style.display = 'block';
+      updateFilterAttributeList();
     }
     function closeAddFilterWindow() {
       document.getElementById('add-filter-window').style.display = 'none';
+    }
+    function updateFilterAttributeList() {
+      const attrSelect = document.getElementById('filter-attribute');
+      attrSelect.innerHTML = '';
+      for (let key in FILTER_ATTRIBUTES) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = FILTER_ATTRIBUTES[key];
+        attrSelect.appendChild(option);
+      }
+      attrSelect.addEventListener('change', () => updateFilterValues(true));
+      updateFilterValues(true);
     }
     function updateFilterValues(reset = false) {
       const attrSelect = document.getElementById('filter-attribute');
@@ -172,58 +184,10 @@
     fetch(ENDPOINT + '?action=options')
       .then(res => res.json())
       .then(options => {
-        const fill = (id, list) => {
-          const select = document.getElementById(id);
-          select.innerHTML = '';
-          list.forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-          });
-        };
-
-        fill("eventType", options.EventType);
-        fill("region", options.Region);
-        fill("platform", options.Platform);
-        fill("company", options.Company);
-        fill("tag", options.Tag);
-
-        new Choices(document.getElementById("tag"), {
-          removeItemButton: true,
-          placeholderValue: '请选择标签...',
-          searchPlaceholderValue: '搜索标签...',
-          noResultsText: '无匹配标签',
-          maxItemCount: 10
-        });
-
         const filterAttr = document.getElementById('filter-attribute');
-        filterAttr.innerHTML = '';
         for (let key in FILTER_ATTRIBUTES) {
-          const option = document.createElement('option');
-          option.value = key;
-          option.textContent = FILTER_ATTRIBUTES[key];
-          filterAttr.appendChild(option);
           filterOptions[key] = options[key] || [];
         }
-
-        document.getElementById("platform").addEventListener("change", function () {
-          const platform = this.value;
-          const consoleOptions = options.ConsolePlatform?.[platform] || [];
-          const consoleSelect = document.getElementById("console");
-          consoleSelect.innerHTML = '';
-          if (consoleOptions.length > 0) {
-            document.getElementById("consoleLabel").style.display = 'inline';
-            consoleOptions.forEach(opt => {
-              const option = document.createElement("option");
-              option.value = opt;
-              option.textContent = opt;
-              consoleSelect.appendChild(option);
-            });
-          } else {
-            document.getElementById("consoleLabel").style.display = 'none';
-          }
-        });
       });
   </script>
 </body>
