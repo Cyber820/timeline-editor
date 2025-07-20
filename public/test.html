@@ -87,12 +87,7 @@
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
     <label>过滤属性：
-      <select id="filter-attribute">
-        <option value="EventType">事件类型</option>
-        <option value="Region">地区</option>
-        <option value="Platform">平台类型</option>
-        <option value="Company">公司</option>
-      </select>
+      <select id="filter-attribute"></select>
     </label><br>
     <label>过滤选项：
       <select id="filter-values" multiple></select>
@@ -102,10 +97,17 @@
   </div>
 
   <script>
+    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+    const FILTER_ATTRIBUTES = {
+      EventType: "事件类型",
+      Region: "地区",
+      Platform: "平台类型",
+      Company: "公司"
+    };
+    const filterOptions = {};
+
     function openFilterWindow(mode) {
-      if (mode === 'and') {
-        document.getElementById('filter-window').style.display = 'block';
-      }
+      if (mode === 'and') document.getElementById('filter-window').style.display = 'block';
     }
     function closeFilterWindow() {
       document.getElementById('filter-window').style.display = 'none';
@@ -118,25 +120,16 @@
       closeFilterWindow();
     }
     function openAddFilterWindow() {
-      const attr = document.getElementById('filter-attribute');
-      const values = document.getElementById('filter-values');
-      values.innerHTML = '';
-
-      const sourceMap = {
-        EventType: ["游戏发售", "主机发售", "社会事件"],
-        Region: ["日本", "美国", "中国"],
-        Platform: ["家用机游戏", "掌机游戏", "网络游戏"],
-        Company: ["任天堂", "索尼", "Bandai/万代", "其他"]
-      };
-
-      const selectedAttr = attr.value;
-      (sourceMap[selectedAttr] || []).forEach(val => {
+      const attrSelect = document.getElementById('filter-attribute');
+      const valueSelect = document.getElementById('filter-values');
+      const selected = attrSelect.value;
+      valueSelect.innerHTML = '';
+      (filterOptions[selected] || []).forEach(opt => {
         const option = document.createElement('option');
-        option.value = val;
-        option.textContent = val;
-        values.appendChild(option);
+        option.value = opt;
+        option.textContent = opt;
+        valueSelect.appendChild(option);
       });
-
       document.getElementById('add-filter-window').style.display = 'block';
     }
     function closeAddFilterWindow() {
@@ -145,8 +138,8 @@
     function confirmAddFilter() {
       const attr = document.getElementById('filter-attribute').value;
       const values = Array.from(document.getElementById('filter-values').selectedOptions).map(opt => opt.value);
-      const display = `${attr}：${values.join(', ')}`;
-
+      if (!attr || values.length === 0) return;
+      const display = `${FILTER_ATTRIBUTES[attr]}：${values.join(', ')}`;
       const entry = document.createElement('div');
       entry.textContent = display + ' ';
       const remove = document.createElement('button');
@@ -154,9 +147,89 @@
       remove.onclick = () => entry.remove();
       entry.appendChild(remove);
       document.getElementById('filter-list').appendChild(entry);
-
       closeAddFilterWindow();
     }
+
+    moment.locale("zh-cn");
+    fetch(ENDPOINT)
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map((event, index) => ({
+          id: event.id || `auto-${index + 1}`,
+          content: event.content || '(无标题)',
+          start: event.start,
+          end: event.end || null,
+          title: (event.title || '').replace(/\n/g, '<br>')
+        }));
+        const container = document.getElementById("timeline");
+        const timeline = new vis.Timeline(container, items, {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 200 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey",
+          stack: true
+        });
+      });
+
+    fetch(ENDPOINT + '?action=options')
+      .then(res => res.json())
+      .then(options => {
+        const fill = (id, list) => {
+          const select = document.getElementById(id);
+          select.innerHTML = '';
+          list.forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+          });
+        };
+
+        fill("eventType", options.EventType);
+        fill("region", options.Region);
+        fill("platform", options.Platform);
+        fill("company", options.Company);
+        fill("tag", options.Tag);
+
+        new Choices(document.getElementById("tag"), {
+          removeItemButton: true,
+          placeholderValue: '请选择标签...',
+          searchPlaceholderValue: '搜索标签...',
+          noResultsText: '无匹配标签',
+          maxItemCount: 10
+        });
+
+        const filterAttr = document.getElementById('filter-attribute');
+        filterAttr.innerHTML = '';
+        for (let key in FILTER_ATTRIBUTES) {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = FILTER_ATTRIBUTES[key];
+          filterAttr.appendChild(option);
+          filterOptions[key] = options[key] || [];
+        }
+
+        document.getElementById("platform").addEventListener("change", function () {
+          const platform = this.value;
+          const consoleOptions = options.ConsolePlatform?.[platform] || [];
+          const consoleSelect = document.getElementById("console");
+          consoleSelect.innerHTML = '';
+          if (consoleOptions.length > 0) {
+            document.getElementById("consoleLabel").style.display = 'inline';
+            consoleOptions.forEach(opt => {
+              const option = document.createElement("option");
+              option.value = opt;
+              option.textContent = opt;
+              consoleSelect.appendChild(option);
+            });
+          } else {
+            document.getElementById("consoleLabel").style.display = 'none';
+          }
+        });
+      });
   </script>
 </body>
 </html>
