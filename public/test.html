@@ -35,7 +35,6 @@
       border-radius: 4px;
       max-width: 300px;
     }
-
     /* 统一弹窗样式 */
     #event-form, #filter-window, #add-filter-window {
       position: absolute;
@@ -51,13 +50,11 @@
       max-height: 80vh;
       overflow: auto;
     }
-
     /* 设置“新增过滤标准”窗口的宽高 */
     #add-filter-window {
       width: 700px;
       height: 300px;
     }
-
     /* 设置“过滤标准”窗口宽度 */
     #filter-window {
       width: 700px;
@@ -67,10 +64,9 @@
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
-  <button onclick="document.getElementById('filter-window').style.display='block'">过滤标准（和逻辑）</button>
+  <button onclick="document.getElementById('filter-window').style.display='block'">🔍 过滤标准（和逻辑）</button>
   <div id="timeline"></div>
 
-  <!-- 新增事件表单 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -88,114 +84,33 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
-  <!-- 过滤标准弹窗 -->
   <div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="document.getElementById('add-filter-window').style.display='block'">增加过滤标准</button>
-    <button onclick="alert('功能待开发')">复原过滤标准</button>
-    <button onclick="alert('功能待开发')">确定</button>
+    <button>复原过滤标准</button>
+    <button>确定</button>
     <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
     <div id="current-filters"></div>
   </div>
 
-  <!-- 新增过滤标准弹窗 -->
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
-    <label>过滤属性：
-      <select id="filter-attribute">
-        <option value="EventType">事件类型</option>
-        <option value="Region">地区</option>
-        <option value="Platform">平台类型</option>
-        <option value="Company">公司</option>
-      </select>
-    </label>
+    <label>过滤属性：<select id="filter-attribute">
+      <option value="EventType">事件类型</option>
+      <option value="Region">地区</option>
+      <option value="Platform">平台类型</option>
+      <option value="Company">公司</option>
+    </select></label>
     <br>
-    <label>过滤选项：
-      <select id="filter-options" multiple></select>
-    </label>
+    <label>过滤选项：<select id="filter-options" multiple></select></label>
     <br>
-    <button onclick="confirmAddFilter()">确定</button>
+    <button>确定</button>
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-  <script>
-    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
-    let allOptions = {};
-
-    moment.locale("zh-cn");
-
-    fetch(ENDPOINT)
-      .then(res => res.json())
-      .then(data => {
-        const items = data.map((event, index) => ({
-          id: event.id || `auto-${index + 1}`,
-          content: event.content || '(无标题)',
-          start: event.start,
-          end: event.end || null,
-          title: (event.title || '').replace(/\n/g, '<br>')
-        }));
-
-        const container = document.getElementById("timeline");
-        const timeline = new vis.Timeline(container, items, {
-          locale: "zh-cn",
-          editable: false,
-          margin: { item: 10, axis: 50 },
-          orientation: { axis: 'bottom', item: 'bottom' },
-          tooltip: { followMouse: true, overflowMethod: 'flip' },
-          verticalScroll: true,
-          zoomKey: "ctrlKey",
-          stack: true
-        });
-      });
-
-    fetch(ENDPOINT + '?action=options')
-      .then(res => res.json())
-      .then(options => {
-        allOptions = options;
-
-        const fill = (id, list) => {
-          const select = document.getElementById(id);
-          select.innerHTML = '';
-          list.forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-          });
-        };
-
-        fill("eventType", options.EventType);
-        fill("region", options.Region);
-        fill("platform", options.Platform);
-        fill("company", options.Company);
-        fill("tag", options.Tag);
-
-        new Choices(document.getElementById("tag"), {
-          removeItemButton: true,
-          placeholderValue: '请选择标签...',
-          searchPlaceholderValue: '搜索标签...',
-          noResultsText: '无匹配标签',
-          maxItemCount: 10
-        });
-
-        document.getElementById("platform").addEventListener("change", function () {
-          const platform = this.value;
-          const consoleOptions = options.ConsolePlatform?.[platform] || [];
-          const consoleSelect = document.getElementById("console");
-          consoleSelect.innerHTML = '';
-
-          if (consoleOptions.length > 0) {
-            document.getElementById("consoleLabel").style.display = 'inline';
-            consoleOptions.forEach(opt => {
-              const option = document.createElement("option");
-              option.value = opt;
-              option.textContent = opt;
-              consoleSelect.appendChild(option);
-            });
-          } else {
-            document.getElementById("consoleLabel").style.display = 'none';
-          }
-        });
+<script>
+let filterOptionsChoices;
+const allOptions = {};
 
 document.getElementById("filter-attribute").addEventListener("change", () => {
   const attr = document.getElementById("filter-attribute").value;
@@ -220,63 +135,12 @@ document.getElementById("filter-attribute").addEventListener("change", () => {
   });
 });
 
-// 页面初始化后自动触发一次选项加载
 window.addEventListener("DOMContentLoaded", () => {
   const trigger = document.getElementById("filter-attribute");
   if (trigger) {
     trigger.dispatchEvent(new Event("change"));
   }
 });
-
-        // 默认触发一次
-        document.getElementById("filter-attribute").dispatchEvent(new Event("change"));
-      });
-
-    function submitEvent() {
-      const formData = new FormData();
-      formData.append("Title", document.getElementById("title").value.trim());
-      formData.append("Start", document.getElementById("start").value);
-      formData.append("End", document.getElementById("end").value);
-      formData.append("Region", document.getElementById("region").value);
-      formData.append("Platform", document.getElementById("platform").value);
-      formData.append("ConsolePlatform", document.getElementById("console").value);
-      formData.append("EventType", document.getElementById("eventType").value);
-      formData.append("Company", document.getElementById("company").value);
-      formData.append("Description", document.getElementById("description").value.trim());
-      formData.append("Submitter", document.getElementById("submitter").value.trim());
-      formData.append("Tag", Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value).join(','));
-
-      fetch(ENDPOINT, { method: "POST", body: formData })
-        .then(response => response.json())
-        .then(result => {
-          if (result.success) {
-            alert("提交成功！");
-            document.getElementById('event-form').style.display = 'none';
-            location.reload();
-          } else {
-            alert("提交失败，请稍后重试。");
-          }
-        })
-        .catch(err => {
-          console.error("提交失败", err);
-          alert("提交异常，请检查网络连接。");
-        });
-    }
-
-    function confirmAddFilter() {
-      const attr = document.getElementById("filter-attribute").value;
-      const options = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
-      if (!options.length) {
-        alert("请选择至少一个过滤选项！");
-        return;
-      }
-
-      const div = document.createElement("div");
-      div.innerHTML = `<strong>${attr}</strong>：${options.join(', ')} <button onclick="this.parentElement.remove()">✖</button>`;
-      document.getElementById("current-filters").appendChild(div);
-
-      document.getElementById("add-filter-window").style.display = "none";
-    }
-  </script>
+</script>
 </body>
 </html>
