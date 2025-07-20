@@ -16,17 +16,22 @@
       border: 1px solid lightgray;
       position: relative;
     }
+
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
       min-width: 300px;
+      max-height: none !important;
+      overflow: visible !important;
       font-size: 10px;
       line-height: 1.2;
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
+      z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
+
     .vis-item {
       font-size: 10px;
       padding: 1px 2px;
@@ -35,7 +40,8 @@
       border-radius: 4px;
       max-width: 300px;
     }
-    #event-form, #filter-window {
+
+    #event-form {
       position: absolute;
       top: 20px;
       left: 50%;
@@ -46,16 +52,12 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: none;
       z-index: 2000;
-      max-height: 80vh;
-      overflow: auto;
     }
   </style>
 </head>
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
-  <button onclick="openFilterWindow('and')">过滤标准（和逻辑）</button>
-  <button onclick="alert('暂未启用，请先使用“和逻辑”')">过滤标准（或逻辑）</button>
   <div id="timeline"></div>
 
   <div id="event-form">
@@ -74,7 +76,13 @@
     <button onclick="submitEvent()">提交</button>
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
+ <h2>匿名时间轴编辑器（只读预览）</h2>
+  <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
+  <button onclick="openFilterWindow('and')">过滤标准（和逻辑）</button>
+  <button onclick="alert('暂未启用，请先使用“和逻辑”')">过滤标准（或逻辑）</button>
+  <div id="timeline"></div>
 
+ 
   <div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="addFilterCriterion()">增加过滤标准</button>
@@ -83,9 +91,139 @@
     <button onclick="closeFilterWindow()">关闭</button>
     <div id="filter-list"></div>
   </div>
-
   <script>
-    // 示例逻辑填充，请根据后端结构后续补充
+    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+
+    moment.locale("zh-cn");
+
+    fetch(ENDPOINT)
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map((event, index) => ({
+          id: event.id || `auto-${index + 1}`,
+          content: event.content || '(无标题)',
+          start: event.start,
+          end: event.end || null,
+          title: (event.title || '').replace(/\n/g, '<br>')
+        }));
+
+        const container = document.getElementById("timeline");
+        const timeline = new vis.Timeline(container, items, {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 200 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey",
+          stack: true // ❖ 如需允许事件重叠，可设为 false
+        });
+      });
+
+    fetch(ENDPOINT + '?action=options')
+      .then(res => res.json())
+      .then(options => {
+        const fill = (id, list) => {
+          const select = document.getElementById(id);
+          select.innerHTML = '';
+          list.forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+          });
+        };
+
+        fill("eventType", options.EventType);
+        fill("region", options.Region);
+        fill("platform", options.Platform);
+        fill("company", options.Company);
+        fill("tag", options.Tag);
+
+        new Choices(document.getElementById("tag"), {
+          removeItemButton: true,
+          placeholderValue: '请选择标签...',
+          searchPlaceholderValue: '搜索标签...',
+          noResultsText: '无匹配标签',
+          maxItemCount: 10
+        });
+
+        document.getElementById("platform").addEventListener("change", function () {
+          const platform = this.value;
+          const consoleOptions = options.ConsolePlatform?.[platform] || [];
+          const consoleSelect = document.getElementById("console");
+          consoleSelect.innerHTML = '';
+
+          if (consoleOptions.length > 0) {
+            document.getElementById("consoleLabel").style.display = 'inline';
+            consoleOptions.forEach(opt => {
+              const option = document.createElement("option");
+              option.value = opt;
+              option.textContent = opt;
+              consoleSelect.appendChild(option);
+            });
+          } else {
+            document.getElementById("consoleLabel").style.display = 'none';
+          }
+        });
+      });
+
+    function submitEvent() {
+    const title = document.getElementById("title").value.trim();
+    const start = document.getElementById("start").value;
+    const end = document.getElementById("end").value;
+    const region = document.getElementById("region").value;
+    const platform = document.getElementById("platform").value;
+    const consolePlatform = document.getElementById("console").value;
+    const eventType = document.getElementById("eventType").value;
+    const company = document.getElementById("company").value;
+    const description = document.getElementById("description").value.trim();
+    const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
+    const submitter = document.getElementById('submitter').value.trim();
+
+    if (!title || !start || !region || !eventType) {
+      alert("请填写所有必填字段！");
+      return;
+    }
+
+    if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
+      alert("提交者昵称仅限中文、英文、数字，最长12个字符");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("Title", title);
+    formData.append("Start", start);
+    formData.append("End", end);
+    formData.append("Region", region);
+    formData.append("Platform", platform);
+    formData.append("ConsolePlatform", consolePlatform);
+    formData.append("EventType", eventType);
+    formData.append("Company", company);
+    formData.append("Description", description);
+    formData.append("Submitter", submitter);
+    formData.append("Tag", tagList.join(','));
+
+    // 若支持 token 可拼接 "?token=xxx"，目前为匿名
+    fetch(ENDPOINT, {
+      method: "POST",
+      body: formData
+    })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          alert("提交成功！");
+          document.getElementById('event-form').style.display = 'none';
+          location.reload();
+        } else {
+          alert("提交失败，请稍后重试。");
+        }
+      })
+      .catch(err => {
+        console.error("提交失败", err);
+        alert("提交异常，请检查网络连接。");
+      });
+  }
     function openFilterWindow(mode) {
       if (mode === 'and') {
         document.getElementById('filter-window').style.display = 'block';
