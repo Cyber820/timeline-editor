@@ -35,7 +35,6 @@
       border-radius: 4px;
       max-width: 300px;
     }
-    /* 统一弹窗样式 */
     #event-form, #filter-window, #add-filter-window {
       position: absolute;
       top: 20px;
@@ -50,12 +49,10 @@
       max-height: 80vh;
       overflow: auto;
     }
-    /* 设置“新增过滤标准”窗口的宽高 */
     #add-filter-window {
       width: 700px;
       height: 300px;
     }
-    /* 设置“过滤标准”窗口宽度 */
     #filter-window {
       width: 700px;
     }
@@ -109,8 +106,90 @@
   </div>
 
 <script>
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+
+moment.locale("zh-cn");
+
+fetch(ENDPOINT)
+  .then(res => res.json())
+  .then(data => {
+    const items = data.map((event, index) => ({
+      id: event.id || `auto-${index + 1}`,
+      content: event.content || '(无标题)',
+      start: event.start,
+      end: event.end || null,
+      title: (event.title || '').replace(/\n/g, '<br>')
+    }));
+    const container = document.getElementById("timeline");
+    const timeline = new vis.Timeline(container, items, {
+      locale: "zh-cn",
+      editable: false,
+      margin: { item: 10, axis: 50 },
+      orientation: { axis: 'bottom', item: 'bottom' },
+      tooltip: { followMouse: true, overflowMethod: 'flip' },
+      verticalScroll: true,
+      zoomKey: "ctrlKey",
+      stack: true
+    });
+  });
+
 let filterOptionsChoices;
 const allOptions = {};
+
+fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      list.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+      });
+    };
+
+    fill("eventType", options.EventType);
+    fill("region", options.Region);
+    fill("platform", options.Platform);
+    fill("company", options.Company);
+    fill("tag", options.Tag);
+
+    Object.assign(allOptions, options);
+
+    new Choices(document.getElementById("tag"), {
+      removeItemButton: true,
+      placeholderValue: '请选择标签...',
+      searchPlaceholderValue: '搜索标签...',
+      noResultsText: '无匹配标签',
+      maxItemCount: 10
+    });
+
+    document.getElementById("platform").addEventListener("change", function () {
+      const platform = this.value;
+      const consoleOptions = options.ConsolePlatform?.[platform] || [];
+      const consoleSelect = document.getElementById("console");
+      consoleSelect.innerHTML = '';
+
+      if (consoleOptions.length > 0) {
+        document.getElementById("consoleLabel").style.display = 'inline';
+        consoleOptions.forEach(opt => {
+          const option = document.createElement("option");
+          option.value = opt;
+          option.textContent = opt;
+          consoleSelect.appendChild(option);
+        });
+      } else {
+        document.getElementById("consoleLabel").style.display = 'none';
+      }
+    });
+
+    const trigger = document.getElementById("filter-attribute");
+    if (trigger) {
+      trigger.dispatchEvent(new Event("change"));
+    }
+  });
 
 document.getElementById("filter-attribute").addEventListener("change", () => {
   const attr = document.getElementById("filter-attribute").value;
@@ -135,12 +214,61 @@ document.getElementById("filter-attribute").addEventListener("change", () => {
   });
 });
 
-window.addEventListener("DOMContentLoaded", () => {
-  const trigger = document.getElementById("filter-attribute");
-  if (trigger) {
-    trigger.dispatchEvent(new Event("change"));
+function submitEvent() {
+  const title = document.getElementById("title").value.trim();
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  const region = document.getElementById("region").value;
+  const platform = document.getElementById("platform").value;
+  const consolePlatform = document.getElementById("console").value;
+  const eventType = document.getElementById("eventType").value;
+  const company = document.getElementById("company").value;
+  const description = document.getElementById("description").value.trim();
+  const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
+  const submitter = document.getElementById('submitter').value.trim();
+
+  if (!title || !start || !region || !eventType) {
+    alert("请填写所有必填字段！");
+    return;
   }
-});
+
+  if (submitter.length > 12 || /[^\u4e00-\u9fa5\w]/.test(submitter)) {
+    alert("提交者昵称仅限中文、英文、数字，最长12个字符");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("Title", title);
+  formData.append("Start", start);
+  formData.append("End", end);
+  formData.append("Region", region);
+  formData.append("Platform", platform);
+  formData.append("ConsolePlatform", consolePlatform);
+  formData.append("EventType", eventType);
+  formData.append("Company", company);
+  formData.append("Description", description);
+  formData.append("Submitter", submitter);
+  formData.append("Tag", tagList.join(','));
+
+  fetch(ENDPOINT, {
+    method: "POST",
+    body: formData
+  })
+    .then(response => response.json())
+    .then(result => {
+      if (result.success) {
+        alert("提交成功！");
+        document.getElementById('event-form').style.display = 'none';
+        location.reload();
+      } else {
+        alert("提交失败，请稍后重试。");
+      }
+    })
+    .catch(err => {
+      console.error("提交失败", err);
+      alert("提交异常，请检查网络连接。");
+    });
+}
 </script>
 </body>
 </html>
