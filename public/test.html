@@ -197,19 +197,36 @@
           }
         });
 
-        // 初始化过滤属性联动
-        document.getElementById("filter-attribute").addEventListener("change", () => {
-          const attr = document.getElementById("filter-attribute").value;
-          const list = allOptions[attr] || [];
-          const select = document.getElementById("filter-options");
-          select.innerHTML = '';
-          list.forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-          });
-        });
+document.getElementById("filter-attribute").addEventListener("change", () => {
+  const attr = document.getElementById("filter-attribute").value;
+  const list = allOptions[attr] || [];
+  const select = document.getElementById("filter-options");
+  select.innerHTML = '';
+  list.forEach(opt => {
+    const option = document.createElement("option");
+    option.value = opt;
+    option.textContent = opt;
+    select.appendChild(option);
+  });
+  if (filterOptionsChoices) filterOptionsChoices.destroy();
+  filterOptionsChoices = new Choices(select, {
+    removeItemButton: true,
+    shouldSort: false,
+    placeholder: true,
+    placeholderValue: '请选择...',
+    searchPlaceholderValue: '搜索选项...',
+    noResultsText: '无匹配项',
+    maxItemCount: 20
+  });
+});
+
+// 页面初始化后自动触发一次选项加载
+window.addEventListener("DOMContentLoaded", () => {
+  const trigger = document.getElementById("filter-attribute");
+  if (trigger) {
+    trigger.dispatchEvent(new Event("change"));
+  }
+});
 
         // 默认触发一次
         document.getElementById("filter-attribute").dispatchEvent(new Event("change"));
