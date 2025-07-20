@@ -86,12 +86,8 @@
 
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
-    <label>过滤属性：
-      <select id="filter-attribute"></select>
-    </label><br>
-    <label>过滤选项：
-      <select id="filter-values" multiple></select>
-    </label><br>
+    <label>过滤属性：<select id="filter-attribute" onchange="updateFilterValues()"></select></label><br>
+    <label>过滤选项：<select id="filter-values" multiple></select></label><br>
     <button onclick="confirmAddFilter()">确定</button>
     <button onclick="closeAddFilterWindow()">取消</button>
   </div>
@@ -120,6 +116,13 @@
       closeFilterWindow();
     }
     function openAddFilterWindow() {
+      updateFilterValues();
+      document.getElementById('add-filter-window').style.display = 'block';
+    }
+    function closeAddFilterWindow() {
+      document.getElementById('add-filter-window').style.display = 'none';
+    }
+    function updateFilterValues() {
       const attrSelect = document.getElementById('filter-attribute');
       const valueSelect = document.getElementById('filter-values');
       const selected = attrSelect.value;
@@ -130,10 +133,13 @@
         option.textContent = opt;
         valueSelect.appendChild(option);
       });
-      document.getElementById('add-filter-window').style.display = 'block';
-    }
-    function closeAddFilterWindow() {
-      document.getElementById('add-filter-window').style.display = 'none';
+      new Choices(valueSelect, {
+        removeItemButton: true,
+        placeholderValue: '请选择过滤值...',
+        searchPlaceholderValue: '搜索...',
+        noResultsText: '无匹配结果',
+        maxItemCount: 20
+      });
     }
     function confirmAddFilter() {
       const attr = document.getElementById('filter-attribute').value;
