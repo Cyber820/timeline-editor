@@ -147,11 +147,10 @@ fetch(ENDPOINT + '?action=options')
       });
     };
 
-    fill("eventType", options.EventType);
-    fill("region", options.Region);
-    fill("platform", options.Platform);
-    fill("company", options.Company);
-    fill("tag", options.Tag);
+    fill("事件类型", options.EventType);
+    fill("地区", options.Region);
+    fill("平台类型", options.Platform);
+    fill("公司", options.Company);
 
     new Choices(document.getElementById("tag"), {
       removeItemButton: true,
