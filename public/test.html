@@ -16,22 +16,17 @@
       border: 1px solid lightgray;
       position: relative;
     }
-
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
       min-width: 300px;
-      max-height: none !important;
-      overflow: visible !important;
       font-size: 10px;
       line-height: 1.2;
       padding: 12px;
       background-color: #fff;
       border: 1px solid #ccc;
-      z-index: 1000;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-
     .vis-item {
       font-size: 10px;
       padding: 1px 2px;
@@ -40,8 +35,7 @@
       border-radius: 4px;
       max-width: 300px;
     }
-
-    #event-form, #bulk-form {
+    #event-form, #filter-window {
       position: absolute;
       top: 20px;
       left: 50%;
@@ -60,10 +54,10 @@
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
-  <button onclick="document.getElementById('bulk-form').style.display='block'">📋 批量增加事件</button>
+  <button onclick="openFilterWindow('and')">过滤标准（和逻辑）</button>
+  <button onclick="alert('暂未启用，请先使用“和逻辑”')">过滤标准（或逻辑）</button>
   <div id="timeline"></div>
 
-  <!-- 单事件表单 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -81,192 +75,34 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
-  <!-- 批量事件表单 -->
-  <div id="bulk-form">
-    <h3>批量增加事件</h3>
-    <table border="1" id="bulk-table">
-      <thead>
-        <tr>
-          <th>标题</th><th>事件类型</th><th>开始时间</th><th>结束时间</th><th>地区</th><th>平台类型</th><th>主机类型</th><th>公司</th><th>描述</th><th>标签（逗号分隔）</th><th>提交者</th>
-        </tr>
-      </thead>
-      <tbody id="bulk-body">
-        <tr>
-          <td><input></td><td><select class="eventType"></select></td><td><input type="date"></td><td><input type="date"></td><td><select class="region"></select></td><td><select class="platform"></select></td><td><select class="console"></select></td><td><select class="company"></select></td><td><input></td><td><input></td><td><input></td>
-        </tr>
-      </tbody>
-    </table>
-    <button onclick="addBulkRow()">➕ 增加一行</button>
-    <button onclick="submitBulkEvents()">提交所有</button>
-    <button onclick="document.getElementById('bulk-form').style.display='none'">关闭</button>
+  <div id="filter-window">
+    <h3>过滤标准（和逻辑）</h3>
+    <button onclick="addFilterCriterion()">增加过滤标准</button>
+    <button onclick="resetFilter()">复原过滤标准</button>
+    <button onclick="applyFilter()">确定</button>
+    <button onclick="closeFilterWindow()">关闭</button>
+    <div id="filter-list"></div>
   </div>
 
   <script>
-    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
-    moment.locale("zh-cn");
-
-    fetch(ENDPOINT).then(res => res.json()).then(data => {
-      const items = data.map((event, index) => ({
-        id: event.id || `auto-${index + 1}`,
-        content: event.content || '(无标题)',
-        start: event.start,
-        end: event.end || null,
-        title: (event.title || '').replace(/\n/g, '<br>')
-      }));
-
-      const container = document.getElementById("timeline");
-      new vis.Timeline(container, items, {
-        locale: "zh-cn",
-        editable: false,
-        margin: { item: 10, axis: 200 },
-        orientation: { axis: 'bottom', item: 'bottom' },
-        tooltip: { followMouse: true, overflowMethod: 'flip' },
-        verticalScroll: true,
-        zoomKey: "ctrlKey",
-        stack: true
-      });
-    });
-
-    let globalOptions = {};
-
-    fetch(ENDPOINT + '?action=options')
-      .then(res => res.json())
-      .then(options => {
-        globalOptions = options;
-        const fill = (id, list) => {
-          const select = document.getElementById(id);
-          select.innerHTML = '';
-          list.forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-          });
-        };
-
-        fill("eventType", options.EventType);
-        fill("region", options.Region);
-        fill("platform", options.Platform);
-        fill("company", options.Company);
-        fill("tag", options.Tag);
-
-        new Choices(document.getElementById("tag"), {
-          removeItemButton: true,
-          placeholderValue: '请选择标签...',
-          searchPlaceholderValue: '搜索标签...',
-          noResultsText: '无匹配标签',
-          maxItemCount: 10
-        });
-
-        document.getElementById("platform").addEventListener("change", function () {
-          const platform = this.value;
-          const consoleOptions = options.ConsolePlatform?.[platform] || [];
-          const consoleSelect = document.getElementById("console");
-          consoleSelect.innerHTML = '';
-          if (consoleOptions.length > 0) {
-            document.getElementById("consoleLabel").style.display = 'inline';
-            consoleOptions.forEach(opt => {
-              const option = document.createElement("option");
-              option.value = opt;
-              option.textContent = opt;
-              consoleSelect.appendChild(option);
-            });
-          } else {
-            document.getElementById("consoleLabel").style.display = 'none';
-          }
-        });
-
-        // 批量表格默认填充第一行
-        const firstRow = document.querySelector('#bulk-body tr');
-        ['eventType','region','platform','company'].forEach(cls => {
-          const cell = firstRow.querySelector(`.${cls}`);
-          options[cls.charAt(0).toUpperCase() + cls.slice(1)].forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            cell.appendChild(option);
-          });
-        });
-      });
-
-    function submitEvent() {
-      const data = {
-        Title: document.getElementById("title").value.trim(),
-        Start: document.getElementById("start").value,
-        End: document.getElementById("end").value,
-        Region: document.getElementById("region").value,
-        Platform: document.getElementById("platform").value,
-        ConsolePlatform: document.getElementById("console").value,
-        EventType: document.getElementById("eventType").value,
-        Company: document.getElementById("company").value,
-        Description: document.getElementById("description").value,
-        Tag: Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value),
-        Submitter: document.getElementById("submitter").value.trim()
-      };
-
-      if (!data.Title || !data.Start || !data.Region || !data.EventType) {
-        alert("请填写所有必填项。"); return;
+    // 示例逻辑填充，请根据后端结构后续补充
+    function openFilterWindow(mode) {
+      if (mode === 'and') {
+        document.getElementById('filter-window').style.display = 'block';
       }
-
-      fetch(ENDPOINT, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" }
-      })
-        .then(res => res.json())
-        .then(response => {
-          if (response.success) {
-            alert("提交成功！"); document.getElementById("event-form").style.display = 'none'; location.reload();
-          } else {
-            alert("提交失败，请稍后重试。");
-          }
-        })
-        .catch(() => alert("提交异常，请检查网络连接。"));
     }
-
-    function addBulkRow() {
-      const row = document.querySelector('#bulk-body tr');
-      const clone = row.cloneNode(true);
-      clone.querySelectorAll('input, select').forEach(el => el.value = '');
-      document.getElementById('bulk-body').appendChild(clone);
+    function closeFilterWindow() {
+      document.getElementById('filter-window').style.display = 'none';
     }
-
-    function submitBulkEvents() {
-      const rows = document.querySelectorAll('#bulk-body tr');
-      const allValid = [];
-
-      for (let row of rows) {
-        const inputs = row.querySelectorAll('input, select');
-        const [title, eventTypeSel, start, end, regionSel, platformSel, consoleSel, companySel, desc, tagInput, submitter] = inputs;
-        const data = {
-          Title: title.value.trim(),
-          Start: start.value,
-          End: end.value,
-          Region: regionSel.value,
-          Platform: platformSel.value,
-          ConsolePlatform: consoleSel.value,
-          EventType: eventTypeSel.value,
-          Company: companySel.value,
-          Description: desc.value.trim(),
-          Tag: tagInput.value.split(',').map(t => t.trim()).filter(Boolean),
-          Submitter: submitter.value.trim()
-        };
-        if (!data.Title || !data.Start || !data.Region || !data.EventType) {
-          alert("存在未填写的必填项，已取消提交。");
-          return;
-        }
-        allValid.push(data);
-      }
-
-      Promise.all(allValid.map(data => fetch(ENDPOINT, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" }
-      }))).then(() => {
-        alert("批量提交成功！");
-        document.getElementById('bulk-form').style.display = 'none';
-        location.reload();
-      }).catch(() => alert("提交失败，请检查网络连接"));
+    function addFilterCriterion() {
+      alert('弹出新窗口设置过滤标准（开发中）');
+    }
+    function resetFilter() {
+      document.getElementById('filter-list').innerHTML = '';
+    }
+    function applyFilter() {
+      alert('应用过滤逻辑（开发中）');
+      closeFilterWindow();
     }
   </script>
 </body>
