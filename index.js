@@ -1,34 +1,28 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const cors = require('cors');
-const { appendEventToSheet, verifyToken, appendAnonymousSubmission } = require('./google-api');
 const app = express();
+const port = process.env.PORT || 3000;
 
+// ✅ 启用 CORS，允许所有来源访问（你也可以限制具体域名）
 app.use(cors());
-app.use(bodyParser.json());
-app.use(express.static('public'));
 
+// ✅ 处理表单提交（如果需要支持 POST 请求中的表单数据）
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// 示例 GET 路由（用于健康检查或测试）
+app.get('/', (req, res) => {
+  res.send('TimeLine API 正常运行中！');
 });
 
-
-app.post('/api/submit', async (req, res) => {
-  const token = req.query.token || '';
-  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  const now = new Date().toISOString();
-
-  const validToken = await verifyToken(token);
-
-  try {
-    if (validToken) {
-      await appendEventToSheet(req.body, token, now);
-    } else {
-      await appendAnonymousSubmission(req.body, '', now, ip);
-    }
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: '提交失败', detail: e.message });
-  }
+// 示例 POST 接口（用于接收表单数据提交）
+app.post('/submit', (req, res) => {
+  const body = req.body;
+  console.log('收到提交数据:', body);
+  res.json({ success: true, message: '提交成功！' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// 启动服务
+app.listen(port, () => {
+  console.log(`服务已启动，监听端口 ${port}`);
+});
