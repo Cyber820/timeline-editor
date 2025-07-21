@@ -266,6 +266,18 @@ function applyFilters() {
   console.log("将应用以下过滤标准：", activeFilters);
   document.getElementById("filter-window").style.display = 'none';
 }
+   document.addEventListener("DOMContentLoaded", () => {
+      const dropdownIds = ["eventType", "region", "platform", "company"];
+      dropdownIds.forEach(id => {
+        new Choices(document.getElementById(id), {
+          shouldSort: false,
+          searchEnabled: true,
+          placeholder: true,
+          searchPlaceholderValue: '搜索...',
+          noResultsText: '无匹配项'
+        });
+      });
+    });
 </script>
 </body>
 </html>
