@@ -61,7 +61,6 @@
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
-  <button onclick="document.getElementById('filter-window').style.display='block'">🔍 过滤标准（和逻辑）</button>
   <div id="timeline"></div>
 
   <div id="event-form">
@@ -81,203 +80,125 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
-  <div id="filter-window">
-    <h3>过滤标准（和逻辑）</h3>
-    <button onclick="openAddFilter()">增加过滤标准</button>
-    <button onclick="resetFilters()">复原过滤标准</button>
-    <button onclick="applyFilters()">确定</button>
-    <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
-    <div id="current-filters"></div>
-  </div>
+  <script>
+    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+    moment.locale("zh-cn");
 
-  <div id="add-filter-window">
-    <h3>新增过滤标准</h3>
-    <label>过滤属性：<select id="filter-attribute"></select></label>
-    <br>
-    <label>过滤选项：<select id="filter-options" multiple></select></label>
-    <br>
-    <button onclick="confirmAddFilter()">确定</button>
-    <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
-  </div>
-
-<script>
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
-let allOptions = {};
-let activeFilters = {};
-let filterOptionsChoices;
-
-moment.locale("zh-cn");
-
-fetch(ENDPOINT)
-  .then(res => res.json())
-  .then(data => {
-    const items = data.map((event, index) => ({
-      id: event.id || `auto-${index + 1}`,
-      content: event.content || '(无标题)',
-      start: event.start,
-      end: event.end || null,
-      title: (event.title || '').replace(/\n/g, '<br>')
-    }));
-    const container = document.getElementById("timeline");
-    new vis.Timeline(container, items, {
-      locale: "zh-cn",
-      editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      tooltip: { followMouse: true, overflowMethod: 'flip' },
-      verticalScroll: true,
-      zoomKey: "ctrlKey",
-      stack: true
-    });
-  });
-
-fetch(ENDPOINT + '?action=options')
-  .then(res => res.json())
-  .then(options => {
-    allOptions = options;
-    const fill = (id, list) => {
-      const select = document.getElementById(id);
-      if (!select) return;
-      select.innerHTML = '';
-      list.forEach(opt => {
-        const option = document.createElement("option");
-        option.value = opt;
-        option.textContent = opt;
-        select.appendChild(option);
-      });
-    };
-
-    fill("事件类型", options.EventType);
-    fill("地区", options.Region);
-    fill("平台类型", options.Platform);
-    fill("公司", options.Company);
-
-    new Choices(document.getElementById("tag"), {
-      removeItemButton: true,
-      placeholderValue: '请选择标签...',
-      searchPlaceholderValue: '搜索标签...',
-      noResultsText: '无匹配标签',
-      maxItemCount: 10
-    });
-
-    document.getElementById("platform").addEventListener("change", function () {
-      const platform = this.value;
-      const consoleOptions = options.ConsolePlatform?.[platform] || [];
-      const consoleSelect = document.getElementById("console");
-      consoleSelect.innerHTML = '';
-
-      if (consoleOptions.length > 0) {
-        document.getElementById("consoleLabel").style.display = 'inline';
-        consoleOptions.forEach(opt => {
-          const option = document.createElement("option");
-          option.value = opt;
-          option.textContent = opt;
-          consoleSelect.appendChild(option);
+    fetch(ENDPOINT)
+      .then(res => res.json())
+      .then(data => {
+        const items = data.map((event, index) => ({
+          id: event.id || `auto-${index + 1}`,
+          content: event.content || '(无标题)',
+          start: event.start,
+          end: event.end || null,
+          title: (event.title || '').replace(/\n/g, '<br>')
+        }));
+        const container = document.getElementById("timeline");
+        new vis.Timeline(container, items, {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 50 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey",
+          stack: true
         });
-      } else {
-        document.getElementById("consoleLabel").style.display = 'none';
-      }
-    });
+      });
 
-    // 初始化过滤属性下拉
-    const attrSelect = document.getElementById("filter-attribute");
-    attrSelect.innerHTML = '';
-    Object.keys(options).forEach(key => {
-      if (["EventType", "Region", "Platform", "Company"].includes(key)) {
-        const opt = document.createElement("option");
-        opt.value = key;
-        opt.textContent = key;
-        attrSelect.appendChild(opt);
-      }
-    });
-    attrSelect.dispatchEvent(new Event("change"));
-  });
+    fetch(ENDPOINT + '?action=options')
+      .then(res => res.json())
+      .then(options => {
+        const fill = (id, list) => {
+          const select = document.getElementById(id);
+          select.innerHTML = '';
+          list.forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+          });
+        };
 
-// 监听过滤属性切换并更新多选项
-const attrSelectEl = document.getElementById("filter-attribute");
-attrSelectEl.addEventListener("change", () => {
-  const attr = attrSelectEl.value;
-  const list = allOptions[attr] || [];
-  const select = document.getElementById("filter-options");
-  select.innerHTML = '';
-  list.forEach(opt => {
-    const option = document.createElement("option");
-    option.value = opt;
-    option.textContent = opt;
-    select.appendChild(option);
-  });
-  if (filterOptionsChoices) filterOptionsChoices.destroy();
-  filterOptionsChoices = new Choices(select, {
-    removeItemButton: true,
-    shouldSort: false,
-    placeholder: true,
-    placeholderValue: '请选择...',
-    searchPlaceholderValue: '搜索选项...',
-    noResultsText: '无匹配项',
-    maxItemCount: 20
-  });
-});
+        fill("eventType", options.EventType);
+        fill("region", options.Region);
+        fill("platform", options.Platform);
+        fill("company", options.Company);
+        fill("tag", options.Tag);
 
-function openAddFilter() {
-  document.getElementById("add-filter-window").style.display = 'block';
-  const attrSelect = document.getElementById("filter-attribute");
-  attrSelect.innerHTML = '';
-  Object.keys(allOptions).forEach(key => {
-    if (["EventType", "Region", "Platform", "Company"].includes(key) && !activeFilters[key]) {
-      const opt = document.createElement("option");
-      opt.value = key;
-      opt.textContent = key;
-      attrSelect.appendChild(opt);
+        new Choices(document.getElementById("tag"), {
+          removeItemButton: true,
+          placeholderValue: '请选择标签...',
+          searchPlaceholderValue: '搜索标签...',
+          noResultsText: '无匹配标签',
+          maxItemCount: 10
+        });
+
+        ["eventType", "region", "platform", "company"].forEach(id => {
+          new Choices(document.getElementById(id), {
+            shouldSort: false,
+            searchEnabled: true,
+            placeholder: true,
+            searchPlaceholderValue: '搜索...',
+            noResultsText: '无匹配项'
+          });
+        });
+
+        document.getElementById("platform").addEventListener("change", function () {
+          const platform = this.value;
+          const consoleOptions = options.ConsolePlatform?.[platform] || [];
+          const consoleSelect = document.getElementById("console");
+          consoleSelect.innerHTML = '';
+
+          if (consoleOptions.length > 0) {
+            document.getElementById("consoleLabel").style.display = 'inline';
+            consoleOptions.forEach(opt => {
+              const option = document.createElement("option");
+              option.value = opt;
+              option.textContent = opt;
+              consoleSelect.appendChild(option);
+            });
+          } else {
+            document.getElementById("consoleLabel").style.display = 'none';
+          }
+        });
+      });
+
+    function submitEvent() {
+      const formData = new FormData();
+      formData.append("Title", document.getElementById("title").value);
+      formData.append("Start", document.getElementById("start").value);
+      formData.append("End", document.getElementById("end").value);
+      formData.append("Region", document.getElementById("region").value);
+      formData.append("Platform", document.getElementById("platform").value);
+      formData.append("ConsolePlatform", document.getElementById("console").value);
+      formData.append("EventType", document.getElementById("eventType").value);
+      formData.append("Company", document.getElementById("company").value);
+      formData.append("Description", document.getElementById("description").value);
+      formData.append("Submitter", document.getElementById("submitter").value);
+      const tags = Array.from(document.querySelector('#tag').selectedOptions).map(opt => opt.value);
+      formData.append("Tag", tags.join(","));
+
+      fetch(ENDPOINT, {
+        method: "POST",
+        body: formData
+      })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            alert("提交成功！");
+            document.getElementById('event-form').style.display = 'none';
+            location.reload();
+          } else {
+            alert("提交失败，请稍后重试。");
+          }
+        })
+        .catch(err => {
+          console.error("提交失败", err);
+          alert("提交异常，请检查网络连接。");
+        });
     }
-  });
-  attrSelect.dispatchEvent(new Event("change"));
-}
-
-function confirmAddFilter() {
-  const attr = document.getElementById("filter-attribute").value;
-  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
-  if (attr && selected.length) {
-    activeFilters[attr] = selected;
-    updateFilterList();
-  }
-  document.getElementById("add-filter-window").style.display = 'none';
-}
-
-function updateFilterList() {
-  const container = document.getElementById("current-filters");
-  container.innerHTML = '';
-  Object.entries(activeFilters).forEach(([key, values]) => {
-    const div = document.createElement("div");
-    div.textContent = `${key}: ${values.join(', ')}`;
-    const btn = document.createElement("button");
-    btn.textContent = '❌';
-    btn.onclick = () => { delete activeFilters[key]; updateFilterList(); };
-    div.appendChild(btn);
-    container.appendChild(div);
-  });
-}
-
-function resetFilters() {
-  activeFilters = {};
-  updateFilterList();
-}
-
-function applyFilters() {
-  console.log("将应用以下过滤标准：", activeFilters);
-  document.getElementById("filter-window").style.display = 'none';
-}
-   document.addEventListener("DOMContentLoaded", () => {
-      const dropdownIds = ["eventType", "region", "platform", "company"];
-      dropdownIds.forEach(id => {
-        new Choices(document.getElementById(id), {
-          shouldSort: false,
-          searchEnabled: true,
-          placeholder: true,
-          searchPlaceholderValue: '搜索...',
-          noResultsText: '无匹配项'
-        });
-      });
-    });
-</script>
+  </script>
 </body>
 </html>
