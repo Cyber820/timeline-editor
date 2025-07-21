@@ -94,8 +94,15 @@
   </div>
 
 <script>
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
+const ENDPOINT = "https://script.google.com/macros/s/YOUR_DEPLOYED_ID/exec";
 let allOptions = {}, activeFilters = {}, filterOptionsChoices;
+
+const attributeLabels = {
+  EventType: "事件类型",
+  Region: "地区",
+  Platform: "平台类型",
+  Company: "公司"
+};
 
 moment.locale("zh-cn");
 
@@ -160,9 +167,10 @@ fetch(ENDPOINT + '?action=options')
 
     const attrSel = document.getElementById("filter-attribute");
     attrSel.innerHTML = '';
-    ["EventType", "Region", "Platform", "Company"].forEach(key => {
+    Object.keys(attributeLabels).forEach(key => {
       const o = document.createElement("option");
-      o.value = o.textContent = key;
+      o.value = key;
+      o.textContent = attributeLabels[key];
       attrSel.appendChild(o);
     });
     attrSel.addEventListener("change", () => {
@@ -226,7 +234,7 @@ function updateFilterList() {
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = `${key}: ${values.join(', ')}`;
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); };
