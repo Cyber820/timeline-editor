@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>时间轴（匿名模式）</title>
+  <!-- 引入所需样式和库 -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
@@ -10,12 +11,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
+    /* 时间轴样式 */
     #timeline {
-      width: 100%;
-      height: 800px;
+      width: 100%; height: 800px;
       border: 1px solid lightgray;
       position: relative;
     }
+    /* 鼠标悬停的提示样式 */
     .vis-tooltip {
       white-space: normal !important;
       max-width: 700px !important;
@@ -27,6 +29,7 @@
       border: 1px solid #ccc;
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
+    /* 事件条样式 */
     .vis-item {
       font-size: 10px;
       padding: 1px 2px;
@@ -35,11 +38,10 @@
       border-radius: 4px;
       max-width: 300px;
     }
+    /* 弹窗表单样式 */
     #event-form, #filter-window, #add-filter-window {
       position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 20px; left: 50%; transform: translateX(-50%);
       background: #fff;
       padding: 20px;
       border: 1px solid #ccc;
@@ -55,10 +57,12 @@
 </head>
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
+  <!-- 功能按钮 -->
   <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
   <button onclick="document.getElementById('filter-window').style.display='block'">🔍 过滤标准（和逻辑）</button>
   <div id="timeline"></div>
 
+  <!-- 新增事件表单 -->
   <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
@@ -76,6 +80,7 @@
     <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
   </div>
 
+  <!-- 过滤逻辑设置弹窗 -->
   <div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="openAddFilter()">增加过滤标准</button>
@@ -85,6 +90,7 @@
     <div id="current-filters"></div>
   </div>
 
+  <!-- 添加过滤标准弹窗 -->
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
     <label>过滤属性：<select id="filter-attribute"></select></label><br>
@@ -97,15 +103,19 @@
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
 let allOptions = {}, activeFilters = {}, filterOptionsChoices;
 
+// 中文标签映射
 const attributeLabels = {
   EventType: "事件类型",
   Region: "地区",
   Platform: "平台类型",
-  Company: "公司"
+  Company: "公司",
+  Status: "状态",
+  ConsolePlatform: "主机类型"
 };
 
 moment.locale("zh-cn");
 
+// 加载时间轴数据
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
@@ -113,7 +123,7 @@ fetch(ENDPOINT)
       id: event.id || `auto-${i+1}`,
       content: event.content || '(无标题)',
       start: event.start,
-      end: event.end || null,
+      end: event.end || undefined,
       title: (event.title || '').replace(/\n/g, '<br>')
     }));
     new vis.Timeline(document.getElementById("timeline"), items, {
@@ -128,6 +138,7 @@ fetch(ENDPOINT)
     });
   });
 
+// 加载选项（下拉）数据
 fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
@@ -146,8 +157,11 @@ fetch(ENDPOINT + '?action=options')
     fill("platform", options.Platform);
     fill("company", options.Company);
     fill("tag", options.Tag);
+
+    // 初始化标签为多选
     new Choices('#tag', { removeItemButton: true });
 
+    // 平台类型变化时联动主机类型
     document.getElementById("platform").addEventListener("change", function () {
       const val = this.value;
       const consoles = options.ConsolePlatform?.[val] || [];
@@ -165,6 +179,7 @@ fetch(ENDPOINT + '?action=options')
       }
     });
 
+    // 构建过滤属性下拉列表
     const attrSel = document.getElementById("filter-attribute");
     attrSel.innerHTML = '';
     Object.keys(attributeLabels).forEach(key => {
@@ -173,6 +188,8 @@ fetch(ENDPOINT + '?action=options')
       o.textContent = attributeLabels[key];
       attrSel.appendChild(o);
     });
+
+    // 当过滤属性改变时，更新选项下拉
     attrSel.addEventListener("change", () => {
       const key = attrSel.value;
       const opts = allOptions[key] || [];
@@ -189,6 +206,7 @@ fetch(ENDPOINT + '?action=options')
     attrSel.dispatchEvent(new Event("change"));
   });
 
+// 提交新增事件
 function submitEvent() {
   const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
   const fd = new FormData();
@@ -213,9 +231,12 @@ function submitEvent() {
     .catch(() => alert("提交失败，请检查网络"));
 }
 
+// 打开添加过滤器窗口
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
 }
+
+// 确认添加过滤条件
 function confirmAddFilter() {
   const attr = document.getElementById("filter-attribute").value;
   const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
@@ -225,10 +246,14 @@ function confirmAddFilter() {
   }
   document.getElementById("add-filter-window").style.display = 'none';
 }
+
+// 重置过滤器
 function resetFilters() {
   activeFilters = {};
   updateFilterList();
 }
+
+// 刷新当前过滤条件展示列表
 function updateFilterList() {
   const div = document.getElementById("current-filters");
   div.innerHTML = '';
@@ -242,6 +267,8 @@ function updateFilterList() {
     div.appendChild(d);
   }
 }
+
+// 应用过滤条件（当前仅控制台打印）
 function applyFilters() {
   console.log("应用过滤器：", activeFilters);
   document.getElementById("filter-window").style.display = 'none';
