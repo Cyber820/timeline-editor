@@ -145,6 +145,7 @@ fetch(ENDPOINT + '?action=options')
     allOptions = options;
     const fill = (id, list) => {
       const select = document.getElementById(id);
+      if (!select) return;
       select.innerHTML = '';
       list.forEach(opt => {
         const o = document.createElement('option');
@@ -158,10 +159,8 @@ fetch(ENDPOINT + '?action=options')
     fill("company", options.Company);
     fill("tag", options.Tag);
 
-    // 初始化标签为多选
     new Choices('#tag', { removeItemButton: true });
 
-    // 平台类型变化时联动主机类型
     document.getElementById("platform").addEventListener("change", function () {
       const val = this.value;
       const consoles = options.ConsolePlatform?.[val] || [];
@@ -179,7 +178,6 @@ fetch(ENDPOINT + '?action=options')
       }
     });
 
-    // 构建过滤属性下拉列表
     const attrSel = document.getElementById("filter-attribute");
     attrSel.innerHTML = '';
     Object.keys(attributeLabels).forEach(key => {
@@ -189,7 +187,6 @@ fetch(ENDPOINT + '?action=options')
       attrSel.appendChild(o);
     });
 
-    // 当过滤属性改变时，更新选项下拉
     attrSel.addEventListener("change", () => {
       const key = attrSel.value;
       const opts = allOptions[key] || [];
@@ -206,7 +203,6 @@ fetch(ENDPOINT + '?action=options')
     attrSel.dispatchEvent(new Event("change"));
   });
 
-// 提交新增事件
 function submitEvent() {
   const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
   const fd = new FormData();
@@ -231,12 +227,10 @@ function submitEvent() {
     .catch(() => alert("提交失败，请检查网络"));
 }
 
-// 打开添加过滤器窗口
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
 }
 
-// 确认添加过滤条件
 function confirmAddFilter() {
   const attr = document.getElementById("filter-attribute").value;
   const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
@@ -247,13 +241,11 @@ function confirmAddFilter() {
   document.getElementById("add-filter-window").style.display = 'none';
 }
 
-// 重置过滤器
 function resetFilters() {
   activeFilters = {};
   updateFilterList();
 }
 
-// 刷新当前过滤条件展示列表
 function updateFilterList() {
   const div = document.getElementById("current-filters");
   div.innerHTML = '';
@@ -268,7 +260,6 @@ function updateFilterList() {
   }
 }
 
-// 应用过滤条件（当前仅控制台打印）
 function applyFilters() {
   console.log("应用过滤器：", activeFilters);
   document.getElementById("filter-window").style.display = 'none';
