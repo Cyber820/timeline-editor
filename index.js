@@ -1,28 +1,29 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ✅ 启用 CORS，允许所有来源访问（你也可以限制具体域名）
+// ✅ 启用 CORS
 app.use(cors());
 
-// ✅ 处理表单提交（如果需要支持 POST 请求中的表单数据）
+// ✅ 接收 JSON 和表单数据
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// 示例 GET 路由（用于健康检查或测试）
-app.get('/', (req, res) => {
-  res.send('TimeLine API 正常运行中！');
+// ✅ 设置静态文件夹，比如 public 文件夹中放置 editor.html/test.html
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 示例接口
+app.get('/api/ping', (req, res) => {
+  res.json({ message: '服务器正常运行中' });
 });
 
-// 示例 POST 接口（用于接收表单数据提交）
 app.post('/submit', (req, res) => {
-  const body = req.body;
-  console.log('收到提交数据:', body);
+  console.log('接收到数据：', req.body);
   res.json({ success: true, message: '提交成功！' });
 });
 
-// 启动服务
 app.listen(port, () => {
-  console.log(`服务已启动，监听端口 ${port}`);
+  console.log(`服务运行在 http://localhost:${port}`);
 });
