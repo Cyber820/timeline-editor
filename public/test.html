@@ -266,7 +266,7 @@ function submitEvent() {
   fd.append("End", end.value);
   fd.append("Region", region.value);
   fd.append("Platform", platform.value);
-  fd.append("ConsolePlatform", console.value);
+  fd.append("ConsolePlatform", document.getElementById("console").value);
   fd.append("EventType", eventType.value);
   fd.append("Company", company.value);
   fd.append("Description", description.value);
