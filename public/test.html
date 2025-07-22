@@ -58,7 +58,7 @@
 <body>
   <h2>匿名时间轴编辑器（只读预览）</h2>
   <!-- 功能按钮 -->
-  <button onclick="document.getElementById('event-form').style.display='block'">➕ 增加事件</button>
+  <button onclick="openAddEventForm()">➕ 增加事件</button>
   <button onclick="document.getElementById('filter-window').style.display='block'">🔍 过滤标准（和逻辑）</button>
   <div id="timeline"></div>
 
@@ -208,7 +208,12 @@ fetch(ENDPOINT + '?action=options')
     });
     attrSel.dispatchEvent(new Event("change"));
   });
-
+  
+function openAddEventForm() {
+  document.getElementById('event-form').style.display = 'block';
+  document.getElementById("platform").dispatchEvent(new Event("change"));
+}
+  
 function submitEvent() {
   const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
   const fd = new FormData();
