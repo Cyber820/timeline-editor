@@ -37,6 +37,23 @@
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
+    <div id="event-form">
+    <h3>新增事件</h3>
+    <label>事件名称（必填）：<input type="text" id="title"></label><br>
+    <label>事件类型（必填）：<select id="eventType"></select></label><br>
+    <label>开始时间（必填）：<input type="date" id="start"></label><br>
+    <label>结束时间：<input type="date" id="end"></label><br>
+    <label>地区（必填）：<select id="region"></select></label><br>
+    <label>平台类型：<select id="platform"></select></label><br>
+    <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
+    <label>公司：<select id="company"></select></label><br>
+    <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
+    <label>标签（多选）：<select id="tag" multiple></select></label><br>
+    <label>提交者昵称（选填）：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
+    <button onclick="submitEvent()">提交</button>
+    <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
+  </div>
+
   <div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="openAddFilter()">增加过滤标准</button>
