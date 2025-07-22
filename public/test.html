@@ -240,6 +240,30 @@ fetch(ENDPOINT)
     });
     attrSel.dispatchEvent(new Event("change"));
   });
+  
+function submitEvent() {
+  const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
+  const fd = new FormData();
+  fd.append("Title", title.value);
+  fd.append("Start", start.value);
+  fd.append("End", end.value);
+  fd.append("Region", region.value);
+  fd.append("Platform", platform.value);
+  fd.append("ConsolePlatform", console.value);
+  fd.append("EventType", eventType.value);
+  fd.append("Company", company.value);
+  fd.append("Description", description.value);
+  fd.append("Submitter", submitter.value);
+  fd.append("Tag", tagList.join(","));
+
+  fetch(ENDPOINT, { method: "POST", body: fd })
+    .then(r => r.json())
+    .then(res => {
+      alert(res.message || "提交成功");
+      location.reload();
+    })
+    .catch(() => alert("提交失败，请检查网络"));
+}
 
 </script>
 </body>
