@@ -102,8 +102,8 @@
 
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
-let allOptions = {}, activeFilters = {}, filterOptionsChoices;
-
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let originalItems = [], timeline = null;
 // 中文标签映射
 const attributeLabels = {
   EventType: "事件类型",
@@ -116,6 +116,23 @@ const attributeLabels = {
 
 moment.locale("zh-cn");
 
+  function passesAndLogicFilters(item, filters) {
+  return Object.entries(filters).every(([key, values]) => values.includes(item[key]));
+}
+
+function passesOrLogicFilters(item, filters) {
+  return Object.entries(filters).some(([key, values]) => values.includes(item[key]));
+}
+
+function updateTimelineByFilter() {
+  if (!timeline || !originalItems) return;
+  const filtered = originalItems.filter(item => {
+    return filterLogic === 'and'
+      ? passesAndLogicFilters(item, activeFilters)
+      : passesOrLogicFilters(item, activeFilters);
+  });
+  timeline.setItems(filtered);
+}
 // 加载时间轴数据
 fetch(ENDPOINT)
   .then(res => res.json())
