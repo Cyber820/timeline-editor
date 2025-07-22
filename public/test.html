@@ -81,11 +81,12 @@
   </div>
 
   <!-- 过滤逻辑设置弹窗 -->
-  <div id="filter-window">
+<div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="openAddFilter()">增加过滤标准</button>
     <button onclick="resetFilters()">复原过滤标准</button>
-    <button onclick="applyFilters()">确定</button>
+    <button onclick="applyFilters()">应用和逻辑</button>
+    <button onclick="applyFiltersOr()">应用或逻辑</button>
     <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
     <div id="current-filters"></div>
   </div>
