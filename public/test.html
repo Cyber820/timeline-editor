@@ -180,6 +180,67 @@ fetch(ENDPOINT)
       stack: true
     });
   });
+  fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    allOptions = options;
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      list.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        select.appendChild(o);
+      });
+    };
+    fill("eventType", options.EventType);
+    fill("region", options.Region);
+    fill("platform", options.Platform);
+    fill("company", options.Company);
+    fill("tag", options.Tag);
+    new Choices('#tag', { removeItemButton: true });
+
+    document.getElementById("platform").addEventListener("change", function () {
+      const val = this.value;
+      const consoles = options.ConsolePlatform?.[val] || [];
+      const select = document.getElementById("console");
+      select.innerHTML = '';
+      if (consoles.length) {
+        document.getElementById("consoleLabel").style.display = 'inline';
+        consoles.forEach(c => {
+          const o = document.createElement("option");
+          o.value = o.textContent = c;
+          select.appendChild(o);
+        });
+      } else {
+        document.getElementById("consoleLabel").style.display = 'none';
+      }
+    });
+
+    const attrSel = document.getElementById("filter-attribute");
+    attrSel.innerHTML = '';
+    Object.keys(attributeLabels).forEach(key => {
+      const o = document.createElement("option");
+      o.value = key;
+      o.textContent = attributeLabels[key];
+      attrSel.appendChild(o);
+    });
+    attrSel.addEventListener("change", () => {
+      const key = attrSel.value;
+      const opts = allOptions[key] || [];
+      const sel = document.getElementById("filter-options");
+      sel.innerHTML = '';
+      opts.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = o.textContent = opt;
+        sel.appendChild(o);
+      });
+      if (filterOptionsChoices) filterOptionsChoices.destroy();
+      filterOptionsChoices = new Choices(sel, { removeItemButton: true });
+    });
+    attrSel.dispatchEvent(new Event("change"));
+  });
+
 </script>
 </body>
 </html>
