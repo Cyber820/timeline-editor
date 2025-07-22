@@ -60,7 +60,6 @@
   <!-- 功能按钮 -->
   <button onclick="openAddEventForm()">➕ 增加事件</button>
   <button onclick="document.getElementById('filter-window').style.display='block'">🔍 过滤标准（和逻辑）</button>
-  <button onclick="document.getElementById('filter-window-or').style.display='block'">🔍 过滤标准（或逻辑）</button>
   <div id="timeline"></div>
 
   <!-- 新增事件表单 -->
@@ -88,15 +87,6 @@
     <button onclick="resetFilters()">复原过滤标准</button>
     <button onclick="applyFilters()">确定</button>
     <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
-    <div id="current-filters"></div>
-  </div>
-
-   <div id="filter-window-or">
-    <h3>过滤标准（或逻辑）</h3>
-    <button onclick="openAddFilter()">增加过滤标准</button>
-    <button onclick="resetFilters()">复原过滤标准</button>
-    <button onclick="applyFilters()">确定（或逻辑）</button>
-    <button onclick="document.getElementById('filter-window-or').style.display='none'">关闭</button>
     <div id="current-filters"></div>
   </div>
 
