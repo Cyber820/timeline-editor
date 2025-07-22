@@ -178,13 +178,6 @@ fetch(ENDPOINT + '?action=options')
       }
     });
 
-    // ✅ 为过滤器准备 ConsolePlatform 内容（来自 ConsolePlatformFilter 表）
-if (options.ConsolePlatformFilter) {
-  options.ConsolePlatform = options.ConsolePlatformFilter;
-}
-
-// 填充 filter-attribute 下拉
-
     const attrSel = document.getElementById("filter-attribute");
     attrSel.innerHTML = '';
     Object.keys(attributeLabels).forEach(key => {
@@ -196,7 +189,13 @@ if (options.ConsolePlatformFilter) {
 
     attrSel.addEventListener("change", () => {
       const key = attrSel.value;
-      const opts = allOptions[key] || [];
+      let opts = [];
+      // ✅ 如果是 ConsolePlatform，使用 ConsolePlatformFilter 列表代替
+      if (key === "ConsolePlatform" && allOptions.ConsolePlatformFilter) {
+        opts = allOptions.ConsolePlatformFilter;
+      } else {
+        opts = allOptions[key] || [];
+      }
       const sel = document.getElementById("filter-options");
       sel.innerHTML = '';
       opts.forEach(opt => {
