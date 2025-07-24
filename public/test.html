@@ -150,19 +150,7 @@ function confirmAddFilter() {
   }
   document.getElementById("add-filter-window").style.display = 'none';
 }
-function applyFilters() {
-    filterLogic = 'and';
-  function applyFilters(logic) {
-    filterLogic = logic;
-    updateTimelineByFilter();
-    document.getElementById('filter-window').style.display = 'none';
-  }
 
-  function applyFiltersOr() {
-    filterLogic = 'or';
-    updateTimelineByFilter();
-    document.getElementById('filter-window').style.display = 'none';
-  }
 function passesAndLogicFilters(item, filters) {
   return Object.entries(filters).every(([key, values]) => values.includes(item[key]));
 }
