@@ -37,7 +37,7 @@
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
-    <div id="event-form">
+  <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
     <label>事件类型（必填）：<select id="eventType"></select></label><br>
@@ -159,6 +159,16 @@ function passesOrLogicFilters(item, filters) {
   return Object.entries(filters).some(([key, values]) => values.includes(item[key]));
 }
 
+function applyFilters() {
+  filterLogic = 'and';
+  updateTimelineByFilter();
+}
+
+function applyFiltersOr() {
+  filterLogic = 'or';
+  updateTimelineByFilter();
+}
+
 function updateTimelineByFilter() {
   if (!timeline || !originalItems) return;
   const filtered = originalItems.filter(item => {
@@ -172,18 +182,18 @@ function updateTimelineByFilter() {
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
- originalItems = data.map((event, i) => ({
-        id: event.id || `auto-${i+1}`,
-        content: event.content || '(无标题)',
-        start: event.start,
-        end: event.end || undefined,
-        title: (event.title || '').replace(/\n/g, '<br>'),
-        EventType: event.EventType || event.eventType,
-        Region: event.Region || event.region,
-        Platform: event.Platform || event.platform,
-        Company: event.Company || event.company,
-        Status: event.Status || event.status,
-        ConsolePlatform: event.ConsolePlatform || event.consolePlatform
+    originalItems = data.map((event, i) => ({
+      id: event.id || `auto-${i+1}`,
+      content: event.content || '(无标题)',
+      start: event.start,
+      end: event.end || undefined,
+      title: (event.title || '').replace(/\n/g, '<br>'),
+      EventType: event.EventType || event.eventType,
+      Region: event.Region || event.region,
+      Platform: event.Platform || event.platform,
+      Company: event.Company || event.company,
+      Status: event.Status || event.status,
+      ConsolePlatform: event.ConsolePlatform || event.consolePlatform
     }));
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
@@ -197,7 +207,8 @@ fetch(ENDPOINT)
       stack: true
     });
   });
-  fetch(ENDPOINT + '?action=options')
+
+fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
     allOptions = options;
@@ -257,7 +268,7 @@ fetch(ENDPOINT)
     });
     attrSel.dispatchEvent(new Event("change"));
   });
-  
+
 function submitEvent() {
   const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
   const fd = new FormData();
@@ -281,7 +292,6 @@ function submitEvent() {
     })
     .catch(() => alert("提交失败，请检查网络"));
 }
-
 </script>
 </body>
 </html>
