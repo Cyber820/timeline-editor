@@ -152,11 +152,17 @@ function confirmAddFilter() {
 }
 
 function passesAndLogicFilters(item, filters) {
-  return Object.entries(filters).every(([key, values]) => values.includes(item[key]));
+  return Object.entries(filters).every(([key, values]) => {
+    const val = item[key];
+    return val !== undefined && values.includes(val);
+  });
 }
 
 function passesOrLogicFilters(item, filters) {
-  return Object.entries(filters).some(([key, values]) => values.includes(item[key]));
+  return Object.entries(filters).some(([key, values]) => {
+    const val = item[key];
+    return val !== undefined && values.includes(val);
+  });
 }
 
 function applyFilters() {
