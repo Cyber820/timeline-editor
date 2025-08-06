@@ -169,11 +169,22 @@ function passesOrLogicFilters(item, filters) {
 
 function updateTimelineByFilter() {
   if (!timeline || !originalItems) return;
+
+  console.log("当前过滤逻辑:", filterLogic);
+  console.log("当前过滤条件:", activeFilters);
+  console.log("原始事件数量:", originalItems.length);
+
   const filtered = originalItems.filter(item => {
-    return filterLogic === 'and'
+    const result = filterLogic === 'and'
       ? passesAndLogicFilters(item, activeFilters)
       : passesOrLogicFilters(item, activeFilters);
+    if (!result) {
+      console.log("未通过过滤的事件：", item);
+    }
+    return result;
   });
+
+  console.log("通过过滤的事件数量:", filtered.length);
   timeline.setItems(filtered);
 }
 
