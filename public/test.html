@@ -202,20 +202,32 @@ function applyFiltersOr() {
 
 fetch(ENDPOINT)
   .then(res => res.json())
-.then(data => {
-    originalItems = data.map((event, i) => ({
-      id: event.id || `auto-${i+1}`,
-      content: event.title || '(无标题)',
-      start: event.start,
-      end: event.end || undefined,
-      title: (event.title || '').replace(/\n/g, '<br>'),
-      EventType: event.eventtype,
-      Region: event.region,
-      Platform: event.platform,
-      Company: event.company,
-      Status: event.status,
-      ConsolePlatform: event.consoleplatform
-    }));
+  .then(data => {
+    originalItems = data.map((event, i) => {
+      const tooltipContent = `
+        <strong>${event.Title || '(无标题)'}</strong><br>
+        地区：${event.Region || ''}<br>
+        平台类型：${event.Platform || ''}<br>
+        主机类型：${event.ConsolePlatform || ''}<br>
+        事件类型：${event.EventType || ''}<br>
+        公司：${event.Company || ''}<br>
+        状态：${event.Status || ''}<br>
+        描述：${event.Description || ''}`;
+
+      return {
+        id: event.id || `auto-${i+1}`,
+        content: event.Title || '(无标题)',  // 显示简要标题
+        start: event.Start,
+        end: event.End || undefined,
+        title: tooltipContent,               // 悬停显示详情信息
+        EventType: event.EventType,
+        Region: event.Region,
+        Platform: event.Platform,
+        Company: event.Company,
+        Status: event.Status,
+        ConsolePlatform: event.ConsolePlatform
+      };
+    });
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
