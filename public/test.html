@@ -154,15 +154,27 @@ function confirmAddFilter() {
 function passesAndLogicFilters(item, filters) {
   return Object.entries(filters).every(([key, values]) => {
     const val = item[key];
-    return val !== undefined && values.includes(val);
+    if (!val) return false;
+    return values.includes(val);
   });
 }
 
 function passesOrLogicFilters(item, filters) {
   return Object.entries(filters).some(([key, values]) => {
     const val = item[key];
-    return val !== undefined && values.includes(val);
+    if (!val) return false;
+    return values.includes(val);
   });
+}
+
+function updateTimelineByFilter() {
+  if (!timeline || !originalItems) return;
+  const filtered = originalItems.filter(item => {
+    return filterLogic === 'and'
+      ? passesAndLogicFilters(item, activeFilters)
+      : passesOrLogicFilters(item, activeFilters);
+  });
+  timeline.setItems(filtered);
 }
 
 function applyFilters() {
@@ -175,15 +187,7 @@ function applyFiltersOr() {
   updateTimelineByFilter();
 }
 
-function updateTimelineByFilter() {
-  if (!timeline || !originalItems) return;
-  const filtered = originalItems.filter(item => {
-    return filterLogic === 'and'
-      ? passesAndLogicFilters(item, activeFilters)
-      : passesOrLogicFilters(item, activeFilters);
-  });
-  timeline.setItems(filtered);
-}
+
 
 fetch(ENDPOINT)
   .then(res => res.json())
