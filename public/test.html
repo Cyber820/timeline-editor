@@ -202,19 +202,19 @@ function applyFiltersOr() {
 
 fetch(ENDPOINT)
   .then(res => res.json())
-  .then(data => {
+.then(data => {
     originalItems = data.map((event, i) => ({
       id: event.id || `auto-${i+1}`,
-      content: event.content || '(无标题)',
+      content: event.title || '(无标题)',
       start: event.start,
       end: event.end || undefined,
       title: (event.title || '').replace(/\n/g, '<br>'),
-      EventType: event.EventType || event.eventType,
-      Region: event.Region || event.region,
-      Platform: event.Platform || event.platform,
-      Company: event.Company || event.company,
-      Status: event.Status || event.status,
-      ConsolePlatform: event.ConsolePlatform || event.consolePlatform
+      EventType: event.eventtype,
+      Region: event.region,
+      Platform: event.platform,
+      Company: event.company,
+      Status: event.status,
+      ConsolePlatform: event.consoleplatform
     }));
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
