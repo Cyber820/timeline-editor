@@ -204,6 +204,7 @@ fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
     originalItems = data.map((event, i) => {
+      if (!event.Start) return null; // 跳过没有 start 的项目
       const tooltipContent = `
         <strong>${event.Title || '(无标题)'}</strong><br>
         地区：${event.Region || ''}<br>
@@ -216,10 +217,10 @@ fetch(ENDPOINT)
 
       return {
         id: event.id || `auto-${i+1}`,
-        content: event.Title || '(无标题)',  // 显示简要标题
+        content: event.Title || '(无标题)',
         start: event.Start,
         end: event.End || undefined,
-        title: tooltipContent,               // 悬停显示详情信息
+        title: tooltipContent,
         EventType: event.EventType,
         Region: event.Region,
         Platform: event.Platform,
@@ -227,7 +228,7 @@ fetch(ENDPOINT)
         Status: event.Status,
         ConsolePlatform: event.ConsolePlatform
       };
-    });
+    }).filter(item => item !== null);
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
