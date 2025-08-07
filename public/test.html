@@ -207,28 +207,32 @@ fetch(ENDPOINT)
       const startTime = event.Start || event.start;
       if (!startTime) return null;
 
-      const tooltipContent = `
-        <strong>${event.Title || '(无标题)'}</strong><br>
-        地区：${event.Region || ''}<br>
-        平台类型：${event.Platform || ''}<br>
-        主机类型：${event.ConsolePlatform || ''}<br>
-        事件类型：${event.EventType || ''}<br>
-        公司：${event.Company || ''}<br>
-        状态：${event.Status || ''}<br>
-        描述：${event.Description || ''}`;
+      const getVal = (key) => event[key] || event[key.toLowerCase()] || '';
+
+      const titleText = getVal('Title') || '(无标题)';
+      const tooltipParts = [
+        `<strong>${titleText}</strong>`,
+        getVal('Region') && `地区：${getVal('Region')}`,
+        getVal('Platform') && `平台类型：${getVal('Platform')}`,
+        getVal('ConsolePlatform') && `主机类型：${getVal('ConsolePlatform')}`,
+        getVal('EventType') && `事件类型：${getVal('EventType')}`,
+        getVal('Company') && `公司：${getVal('Company')}`,
+        getVal('Status') && `状态：${getVal('Status')}`,
+        getVal('Description') && `描述：${getVal('Description')}`
+      ].filter(Boolean).join('<br>');
 
       return {
         id: event.id || `auto-${i+1}`,
-        content: event.Title || '(无标题)',
+        content: titleText,
         start: startTime,
         end: event.End || event.end || undefined,
-        title: tooltipContent,
-        EventType: event.EventType || event.eventType,
-        Region: event.Region || event.region,
-        Platform: event.Platform || event.platform,
-        Company: event.Company || event.company,
-        Status: event.Status || event.status,
-        ConsolePlatform: event.ConsolePlatform || event.consolePlatform
+        title: tooltipParts,
+        EventType: getVal('EventType'),
+        Region: getVal('Region'),
+        Platform: getVal('Platform'),
+        Company: getVal('Company'),
+        Status: getVal('Status'),
+        ConsolePlatform: getVal('ConsolePlatform')
       };
     }).filter(item => item !== null);
 
