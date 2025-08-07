@@ -207,31 +207,33 @@ fetch(ENDPOINT)
       const startTime = event.Start || event.start;
       if (!startTime) return null;
 
-       const titleText = event.Title || event.title || '(无标题)';
-  const tooltipContent = `
-    <strong>${titleText}</strong><br>
-    地区：${event.Region || event.region || ''}<br>
-    平台类型：${event.Platform || event.platform || ''}<br>
-    主机类型：${event.ConsolePlatform || event.consolePlatform || ''}<br>
-    事件类型：${event.EventType || event.eventType || ''}<br>
-    公司：${event.Company || event.company || ''}<br>
-    状态：${event.Status || event.status || ''}<br>
-    描述：${event.Description || event.description || ''}`;
+             const titleText = event.Title || event.title || '(无标题)';
+      const tooltipContent = [
+        `<strong>${titleText}</strong>`,
+        `地区：${event.Region || event.region || ''}`,
+        `平台类型：${event.Platform || event.platform || ''}`,
+        `主机类型：${event.ConsolePlatform || event.consolePlatform || ''}`,
+        `事件类型：${event.EventType || event.eventType || ''}`,
+        `公司：${event.Company || event.company || ''}`,
+        `状态：${event.Status || event.status || ''}`,
+        `描述：${event.Description || event.description || ''}`
+      ].join('<br>');
 
-  return {
-    id: event.id || `auto-${i+1}`,
-    content: titleText,
-    start: startTime,
-    end: event.End || event.end || undefined,
-    title: tooltipContent,
-    EventType: event.EventType || event.eventType || '',
-    Region: event.Region || event.region || '',
-    Platform: event.Platform || event.platform || '',
-    Company: event.Company || event.company || '',
-    Status: event.Status || event.status || '',
-    ConsolePlatform: event.ConsolePlatform || event.consolePlatform || ''
-  };
-}).filter(item => item !== null);
+      return {
+        id: event.id || `auto-${i+1}`,
+        content: titleText,
+        start: startTime,
+        end: event.End || event.end || undefined,
+        title: tooltipContent,
+        EventType: event.EventType || event.eventType || '',
+        Region: event.Region || event.region || '',
+        Platform: event.Platform || event.platform || '',
+        Company: event.Company || event.company || '',
+        Status: event.Status || event.status || '',
+        ConsolePlatform: event.ConsolePlatform || event.consolePlatform || ''
+      };
+    }).filter(item => item !== null);
+
 
     console.log("解析后的 originalItems：", originalItems);
     console.log("时间轴加载的项目数量：", originalItems.length);
