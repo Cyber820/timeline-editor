@@ -204,7 +204,9 @@ fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
     originalItems = data.map((event, i) => {
-      if (!event.Start) return null; // 跳过没有 start 的项目
+      const startTime = event.Start || event.start;
+      if (!startTime) return null;
+
       const tooltipContent = `
         <strong>${event.Title || '(无标题)'}</strong><br>
         地区：${event.Region || ''}<br>
@@ -218,18 +220,21 @@ fetch(ENDPOINT)
       return {
         id: event.id || `auto-${i+1}`,
         content: event.Title || '(无标题)',
-        start: event.Start,
-        end: event.End || undefined,
+        start: startTime,
+        end: event.End || event.end || undefined,
         title: tooltipContent,
-        EventType: event.EventType,
-        Region: event.Region,
-        Platform: event.Platform,
-        Company: event.Company,
-        Status: event.Status,
-        ConsolePlatform: event.ConsolePlatform
+        EventType: event.EventType || event.eventType,
+        Region: event.Region || event.region,
+        Platform: event.Platform || event.platform,
+        Company: event.Company || event.company,
+        Status: event.Status || event.status,
+        ConsolePlatform: event.ConsolePlatform || event.consolePlatform
       };
     }).filter(item => item !== null);
 
+    console.log("解析后的 originalItems：", originalItems);
+    console.log("时间轴加载的项目数量：", originalItems.length);
+    
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
       editable: false,
