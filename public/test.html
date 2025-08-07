@@ -208,8 +208,8 @@ fetch(ENDPOINT)
       if (!startTime) return null;
 
              const titleText = event.Title || event.title || '(无标题)';
-      const tooltipContent = [
-        `<strong>${titleText}</strong>`,
+           const tooltipParts = [
+        `事件名称：${titleText}`,
         `地区：${event.Region || event.region || ''}`,
         `平台类型：${event.Platform || event.platform || ''}`,
         `主机类型：${event.ConsolePlatform || event.consolePlatform || ''}`,
@@ -217,14 +217,14 @@ fetch(ENDPOINT)
         `公司：${event.Company || event.company || ''}`,
         `状态：${event.Status || event.status || ''}`,
         `描述：${event.Description || event.description || ''}`
-      ].join('<br>');
+      ];
 
       return {
         id: event.id || `auto-${i+1}`,
-        content: titleText,
+        content: titleText, // 简略显示，只显示标题
         start: startTime,
         end: event.End || event.end || undefined,
-        title: tooltipContent,
+        title: tooltipParts.join("\n"), // 悬停信息，用换行符换行
         EventType: event.EventType || event.eventType || '',
         Region: event.Region || event.region || '',
         Platform: event.Platform || event.platform || '',
@@ -233,7 +233,6 @@ fetch(ENDPOINT)
         ConsolePlatform: event.ConsolePlatform || event.consolePlatform || ''
       };
     }).filter(item => item !== null);
-
 
     console.log("解析后的 originalItems：", originalItems);
     console.log("时间轴加载的项目数量：", originalItems.length);
