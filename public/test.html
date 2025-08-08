@@ -172,31 +172,45 @@ function updateTimelineByFilter() {
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
- originalItems = data.map((event, i) => ({
-        id: event.id || `auto-${i+1}`,
-        content: event.content || '(无标题)',
-        start: event.start,
-        end: event.end || undefined,
-        title: (event.title || '').replace(/\n/g, '<br>'),
-        EventType: event.EventType || event.eventType,
-        Region: event.Region || event.region,
-        Platform: event.Platform || event.platform,
-        Company: event.Company || event.company,
-        Status: event.Status || event.status,
-        ConsolePlatform: event.ConsolePlatform || event.consolePlatform
+    // 调试：看看原始数据
+    console.log("Fetched data:", data);
+
+    originalItems = data.map((event, i) => ({
+      id: event.id || `auto-${i+1}`,
+      content: event.title || '(无标题)', // 简介框只显示 Title
+      start: event.start,
+      end: event.end || undefined,
+      title: (event.Description || '').replace(/\n/g, '<br>'), // 悬停框显示 Description 并且支持换行
+      EventType: event.EventType || event.eventType,
+      Region: event.Region || event.region,
+      Platform: event.Platform || event.platform,
+      Company: event.Company || event.company,
+      Status: event.Status || event.status,
+      ConsolePlatform: event.ConsolePlatform || event.consolePlatform
     }));
 
-    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
-      locale: "zh-cn",
-      editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      tooltip: { followMouse: true, overflowMethod: 'flip' },
-      verticalScroll: true,
-      zoomKey: "ctrlKey",
-      stack: true
-    });
+    // 调试：看看处理后的 items
+    console.log("Processed items:", originalItems);
+
+    timeline = new vis.Timeline(
+      document.getElementById("timeline"),
+      originalItems,
+      {
+        locale: "zh-cn",
+        editable: false,
+        margin: { item: 10, axis: 50 },
+        orientation: { axis: 'bottom', item: 'bottom' },
+        tooltip: { followMouse: true, overflowMethod: 'flip' },
+        verticalScroll: true,
+        zoomKey: "ctrlKey",
+        stack: true
+      }
+    );
+  })
+  .catch(err => {
+    console.error("Error fetching data:", err);
   });
+
   fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
