@@ -37,7 +37,7 @@
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
-  <div id="event-form">
+    <div id="event-form">
     <h3>新增事件</h3>
     <label>事件名称（必填）：<input type="text" id="title"></label><br>
     <label>事件类型（必填）：<select id="eventType"></select></label><br>
@@ -152,91 +152,40 @@ function confirmAddFilter() {
 }
 
 function passesAndLogicFilters(item, filters) {
-  return Object.entries(filters).every(([key, values]) => {
-    const val = item[key];
-    if (!val) return false;
-    return values.includes(val);
-  });
+  return Object.entries(filters).every(([key, values]) => values.includes(item[key]));
 }
 
 function passesOrLogicFilters(item, filters) {
-  return Object.entries(filters).some(([key, values]) => {
-    const val = item[key];
-    if (!val) return false;
-    return values.includes(val);
-  });
+  return Object.entries(filters).some(([key, values]) => values.includes(item[key]));
 }
 
 function updateTimelineByFilter() {
   if (!timeline || !originalItems) return;
-
-  console.log("当前过滤逻辑:", filterLogic);
-  console.log("当前过滤条件:", activeFilters);
-  console.log("原始事件数量:", originalItems.length);
-
   const filtered = originalItems.filter(item => {
-    const result = filterLogic === 'and'
+    return filterLogic === 'and'
       ? passesAndLogicFilters(item, activeFilters)
       : passesOrLogicFilters(item, activeFilters);
-    if (!result) {
-      console.log("未通过过滤的事件：", item);
-    }
-    return result;
   });
-
-  console.log("通过过滤的事件数量:", filtered.length);
   timeline.setItems(filtered);
 }
-
-function applyFilters() {
-  filterLogic = 'and';
-  updateTimelineByFilter();
-}
-
-function applyFiltersOr() {
-  filterLogic = 'or';
-  updateTimelineByFilter();
-}
-
-
 
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
-    originalItems = data.map((event, i) => {
-      const startTime = event.Start || event.start;
-      if (!startTime) return null;
-
-             const titleText = event.Title || event.title || '(无标题)';
-           const tooltipParts = [
-        `事件名称：${titleText}`,
-        `地区：${event.Region || event.region || ''}`,
-        `平台类型：${event.Platform || event.platform || ''}`,
-        `主机类型：${event.ConsolePlatform || event.consolePlatform || ''}`,
-        `事件类型：${event.EventType || event.eventType || ''}`,
-        `公司：${event.Company || event.company || ''}`,
-        `状态：${event.Status || event.status || ''}`,
-        `描述：${event.Description || event.description || ''}`
-      ];
-
-      return {
+ originalItems = data.map((event, i) => ({
         id: event.id || `auto-${i+1}`,
-        content: titleText, // 简略显示，只显示标题
-        start: startTime,
-        end: event.End || event.end || undefined,
-        title: tooltipParts.join("\n"), // 悬停信息，用换行符换行
-        EventType: event.EventType || event.eventType || '',
-        Region: event.Region || event.region || '',
-        Platform: event.Platform || event.platform || '',
-        Company: event.Company || event.company || '',
-        Status: event.Status || event.status || '',
-        ConsolePlatform: event.ConsolePlatform || event.consolePlatform || ''
-      };
-    }).filter(item => item !== null);
+        content: event.content || '(无标题)',
+        start: event.start,
+        end: event.end || undefined,
+        title: (event.title || '').replace(/\n/g, '<br>'),
+        EventType: event.EventType || event.eventType,
+        Region: event.Region || event.region,
+        Platform: event.Platform || event.platform,
+        Company: event.Company || event.company,
+        Status: event.Status || event.status,
+        ConsolePlatform: event.ConsolePlatform || event.consolePlatform
+    }));
 
-    console.log("解析后的 originalItems：", originalItems);
-    console.log("时间轴加载的项目数量：", originalItems.length);
-    
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
       editable: false,
@@ -248,8 +197,7 @@ fetch(ENDPOINT)
       stack: true
     });
   });
-
-fetch(ENDPOINT + '?action=options')
+  fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
     allOptions = options;
@@ -309,7 +257,7 @@ fetch(ENDPOINT + '?action=options')
     });
     attrSel.dispatchEvent(new Event("change"));
   });
-
+  
 function submitEvent() {
   const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
   const fd = new FormData();
@@ -333,6 +281,7 @@ function submitEvent() {
     })
     .catch(() => alert("提交失败，请检查网络"));
 }
+
 </script>
 </body>
 </html>
