@@ -177,10 +177,10 @@ fetch(ENDPOINT)
 
     originalItems = data.map((event, i) => ({
       id: event.id || `auto-${i+1}`,
-      content: event.title || '(无标题)', // 简介框只显示 Title
+      title: event.title || '(无标题)', // 简介框只显示 Title
       start: event.start,
       end: event.end || undefined,
-      title: (event.Description || '').replace(/\n/g, '<br>'), // 悬停框显示 Description 并且支持换行
+      content: (event.Description || '').replace(/\n/g, '<br>'), // 悬停框显示 Description 并且支持换行
       EventType: event.EventType || event.eventType,
       Region: event.Region || event.region,
       Platform: event.Platform || event.platform,
