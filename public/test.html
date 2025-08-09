@@ -171,14 +171,41 @@ function passesOrLogicFilters(item, filters) {
 }
 function updateTimelineByFilter() {
   if (!timeline || !originalItems) return;
+
+  console.groupCollapsed('🧪DEBUG: 过滤执行');
+  console.log('filterLogic:', filterLogic);
+  console.log('activeFilters:', JSON.stringify(activeFilters));
+  console.log('原始事件数量:', originalItems.length);
+
   const hasFilters = Object.keys(activeFilters).length > 0;
   const filtered = hasFilters
-    ? originalItems.filter(item => (filterLogic === 'and'
-        ? passesAndLogicFilters(item, activeFilters)
-        : passesOrLogicFilters(item, activeFilters)))
+    ? originalItems.filter(item => {
+        const pass = (filterLogic === 'and')
+          ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
+          : Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
+
+        // 对前 50 条或全部进行打印（可按需调整）
+        console.debug('条目判定:', {
+          id: item.id,
+          content: item.content,
+          EventType: item.EventType,
+          Region: item.Region,
+          Platform: item.Platform,
+          Company: item.Company,
+          Status: item.Status,
+          ConsolePlatform: item.ConsolePlatform,
+          通过: pass
+        });
+        return pass;
+      })
     : originalItems;
+
+  console.log('通过过滤的事件数量:', filtered.length);
+  console.groupEnd();
+
   timeline.setItems(filtered);
 }
+
 function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
@@ -209,6 +236,15 @@ fetch(ENDPOINT)
         `公司：${Company}`
       ].join('<br>');
 
+       // ③ 仅对前 3 条逐条打印“统一字段 + tooltip 字符串”
+  if (i < 3) {
+    console.groupCollapsed(`🧪DEBUG: 映射中 #${i}`);
+    console.log('原始 event：', event);
+    console.log('统一后的字段：', { Title, Start, End, EventType, Region, Platform, Company, Status, ConsolePlatform });
+    console.log('tooltipHtml（应包含<br>）：', tooltipHtml);
+    console.groupEnd();
+  }
+      
       return {
         id: event.id || `auto-${i+1}`,
         content: Title,                 // 时间轴卡片只显示标题
@@ -223,6 +259,17 @@ fetch(ENDPOINT)
         ConsolePlatform
       };
     });
+
+    // ④ 映射完成后，再打印一个对比总览
+console.groupCollapsed('🧪DEBUG: 映射后条目快照');
+console.log('映射后示例 originalItems[0]:', originalItems?.[0]);
+console.log('映射后条目的键:', Object.keys(originalItems?.[0] || {}));
+console.table((originalItems || []).slice(0, 5).map(x => ({
+  id: x.id, content: x.content, start: x.start, end: x.end,
+  EventType: x.EventType, Region: x.Region, Platform: x.Platform,
+  Company: x.Company, Status: x.Status, ConsolePlatform: x.ConsolePlatform
+})));
+console.groupEnd();
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
