@@ -1,53 +1,246 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <title>时间轴（查看模式）</title>
+  <meta charset="UTF-8">
+  <title>时间轴（匿名模式）</title>
+  <!-- 引入所需样式和库 -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <style>
-    #timeline { width: 100%; height: 720px; border: 1px solid #ddd; }
+    #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
     .vis-tooltip {
-      white-space: normal !important;
-      max-width: 720px !important;
-      font-size: 12px; line-height: 1.4;
-      background: #fff; border: 1px solid #ccc; padding: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      white-space: normal !important; max-width: 700px !important; min-width: 300px;
+      font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff;
+      border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-    .vis-item { font-size: 12px; }
+    .vis-item {
+      font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
+      border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
+    }
+    #filter-window, #add-filter-window {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #fff; padding: 20px; border: 1px solid #ccc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
+      z-index: 2000; max-height: 80vh; overflow: auto;
+    }
+    #add-filter-window { width: 700px; height: 300px; }
+    #filter-window { width: 700px; }
   </style>
 </head>
 <body>
-  <h2>时间轴（查看模式）</h2>
+  <h2>匿名时间轴编辑器（只读预览）</h2>
+  <!-- 功能按钮 -->
+  <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
+  <!-- 过滤逻辑设置弹窗 -->
+  <div id="filter-window">
+    <h3>过滤标准（和逻辑）</h3>
+    <button onclick="openAddFilter()">增加过滤标准</button>
+    <button onclick="resetFilters()">复原过滤标准</button>
+    <button onclick="applyFilters()">应用和逻辑</button>
+    <button onclick="applyFiltersOr()">应用或逻辑</button>
+    <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
+    <div id="current-filters"></div>
+  </div>
+
+  <!-- 添加过滤标准弹窗 -->
+  <div id="add-filter-window">
+    <h3>新增过滤标准</h3>
+    <label>过滤属性：<select id="filter-attribute"></select></label><br>
+    <label>过滤选项：<select id="filter-options" multiple></select></label><br>
+    <button onclick="confirmAddFilter()">确定</button>
+    <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
+  </div>
+
 <script>
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
 
-moment.locale("zh-cn");
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let originalItems = [], timeline = null;
 
-// 小工具：把 \n 换成 <br> 用于悬停
-function nl2br(s) { return (s || '').toString().replace(/\n/g, '<br>'); }
+const attributeLabels = {
+  EventType: "事件类型",
+  Region: "地区",
+  Platform: "平台类型",
+  Company: "公司",
+  Status: "状态",
+  ConsolePlatform: "主机类型"
+};
+
+// 打开过滤窗口
+function openFilterWindow(logic) {
+  filterLogic = logic;
+  document.getElementById('filter-window').style.display = 'block';
+}
+
+// 重置过滤条件
+function resetFilters() {
+  activeFilters = {};
+  updateFilterList();
+  updateTimelineByFilter();
+}
+
+// 更新当前过滤条件显示
+function updateFilterList() {
+  const div = document.getElementById("current-filters");
+  div.innerHTML = '';
+  for (const [key, values] of Object.entries(activeFilters)) {
+    const d = document.createElement("div");
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
+    const btn = document.createElement("button");
+    btn.textContent = '❌';
+    btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
+    d.appendChild(btn);
+    div.appendChild(d);
+  }
+}
+
+// 应用“和”逻辑过滤
+function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
+
+// 应用“或”逻辑过滤
+function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
+
+// 过滤操作
+function updateTimelineByFilter() {
+  const filtered = originalItems.filter(item => {
+    const pass = (filterLogic === 'and')
+      ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
+      : Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
+    return pass;
+  });
+  timeline.setItems(filtered);
+}
+
+// 打开新增过滤标准的窗口
+function openAddFilter() {
+  document.getElementById("add-filter-window").style.display = 'block';
+  const attrSel = document.getElementById("filter-attribute");
+  attrSel.innerHTML = '';
+  // 这里需要添加您所有的过滤属性
+  const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform'];
+  attributes.forEach(key => {
+    const o = document.createElement("option");
+    o.value = key;
+    o.textContent = key;
+    attrSel.appendChild(o);
+  });
+  attrSel.onchange = () => {
+    const key = attrSel.value;
+    // 获取对应的过滤选项
+    const opts = getFilterOptionsForKey(key); 
+    const sel = document.getElementById("filter-options");
+    sel.innerHTML = '';
+    opts.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = o.textContent = opt;
+      sel.appendChild(o);
+    });
+  };
+  attrSel.dispatchEvent(new Event("change"));
+}
+
+// 确认添加过滤标准
+function confirmAddFilter() {
+  const attr = document.getElementById("filter-attribute").value;
+  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
+  if (attr && selected.length) {
+    activeFilters[attr] = selected;
+    updateFilterList();
+  }
+  document.getElementById("add-filter-window").style.display = 'none';
+}
+
+function normalizeToArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') return [raw];
+  if (raw && typeof raw === 'object') {
+    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
+    try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
+      var out = [];
+      Object.keys(raw).forEach(k => {
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
+        else if (v) out.push(v);
+      });
+      return out;
+    }
+  }
+  return [];
+}
+
+// 根据选择的过滤属性，返回对应的候选数组（已归一）
+function getFilterOptionsForKey(key) {
+  if (key === 'ConsolePlatform') {
+    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
+      return allOptions.ConsolePlatformFilter;
+    }
+    if (allOptions.ConsolePlatform) {
+      return normalizeToArray(allOptions.ConsolePlatform);
+    }
+  }
+  return normalizeToArray(allOptions[key]);
+}
 
 fetch(ENDPOINT)
-  .then(r => r.json())
+  .then(res => res.json())
   .then(data => {
-    // data 来自 TimelineApproved 的 getTimelineData()
-    // 其中 content=Title（用于时间轴短标题），title 为悬停长内容（包含“贡献者”）
-    console.log("Viewer events sample:", data[0]); // 调试：看一眼返回结构
+    originalItems = data.map((event, i) => {
+      const contentText = event.content ?? event.Title ?? '(无标题)';
+      const Start = event.Start ?? event.start ?? '';
+      const End   = event.End   ?? event.end   ?? '';
+      const blob = (event.title ?? '').toString();
 
-    const items = data.map((ev, i) => ({
-      id: ev.id || `auto-${i+1}`,
-      content: ev.content || '(无标题)',      // 时间轴上的短标题（Title）
-      start: ev.start,                        // 必填：开始日期 yyyy-MM-dd
-      end: ev.end || undefined,               // 可能为空
-      title: nl2br(ev.title || '')            // 悬停框内容：换行成 <br>
-    }));
+      const pick = (label) => {
+        if (!blob) return '';
+        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+        return m ? m[1].trim() : '';
+      };
 
-    const container = document.getElementById("timeline");
-    const timeline = new vis.Timeline(container, items, {
+      const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+      const Region          = event.Region          ?? event.region          ?? pick('地区');
+      const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+      const Company         = event.Company         ?? event.company         ?? pick('公司');
+      const Status          = event.Status          ?? event.status          ?? pick('状态');
+      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+
+      let tooltipHtml;
+      if (blob) {
+        tooltipHtml = blob.replace(/\n/g, '<br>');
+      } else {
+        tooltipHtml = [
+          `事件名称：${contentText}`,
+          `事件类型：${EventType || ''}`,
+          `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+          `状态：${Status || ''}`,
+          `地区：${Region || ''}`,
+          `平台类型：${Platform || ''}`,
+          `主机类型：${ConsolePlatform || ''}`,
+          `公司：${Company || ''}`
+        ].join('<br>');
+      }
+
+      return {
+        id: event.id || `auto-${i + 1}`,
+        content: contentText,
+        start: Start,
+        end: End || undefined,
+        title: tooltipHtml,
+        EventType,
+        Region,
+        Platform,
+        Company,
+        Status,
+        ConsolePlatform
+      };
+    });
+
+    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
       editable: false,
       margin: { item: 10, axis: 50 },
@@ -57,11 +250,29 @@ fetch(ENDPOINT)
       zoomKey: "ctrlKey",
       stack: true
     });
-  })
-  .catch(err => {
-    console.error("加载时间轴数据失败：", err);
-    alert("加载失败，请检查接口可用性（Console 查看详情）");
   });
+
+fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    allOptions = options;
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      (list || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        select.appendChild(o);
+      });
+    };
+    fill("eventType", options.EventType);
+    fill("region", options.Region);
+    fill("platform", options.Platform);
+    fill("company", options.Company);
+    fill("tag", options.Tag);
+    new Choices('#tag', { removeItemButton: true });
+  });
+
 </script>
 </body>
 </html>
