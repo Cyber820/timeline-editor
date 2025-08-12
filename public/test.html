@@ -69,7 +69,8 @@ const attributeLabels = {
   Platform: "平台类型",
   Company: "公司",
   Status: "状态",
-  ConsolePlatform: "主机类型"
+  ConsolePlatform: "主机类型",
+  Contributor: "贡献者"  // 新增贡献者标签
 };
 
 // 打开过滤窗口
@@ -123,11 +124,11 @@ function openAddFilter() {
   const attrSel = document.getElementById("filter-attribute");
   attrSel.innerHTML = '';
   // 这里需要添加您所有的过滤属性
-  const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform'];
+  const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform', 'Contributor'];
   attributes.forEach(key => {
     const o = document.createElement("option");
     o.value = key;
-    o.textContent = key;
+    o.textContent = attributeLabels[key];
     attrSel.appendChild(o);
   });
   attrSel.onchange = () => {
@@ -160,7 +161,6 @@ function normalizeToArray(raw) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string') return [raw];
   if (raw && typeof raw === 'object') {
-    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
     try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
       var out = [];
       Object.keys(raw).forEach(k => {
@@ -208,6 +208,7 @@ fetch(ENDPOINT)
       const Company         = event.Company         ?? event.company         ?? pick('公司');
       const Status          = event.Status          ?? event.status          ?? pick('状态');
       const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+      const Contributor     = event.Contributor    ?? event.contributor     ?? '';  // 获取贡献者
 
       let tooltipHtml;
       if (blob) {
@@ -221,7 +222,8 @@ fetch(ENDPOINT)
           `地区：${Region || ''}`,
           `平台类型：${Platform || ''}`,
           `主机类型：${ConsolePlatform || ''}`,
-          `公司：${Company || ''}`
+          `公司：${Company || ''}`,
+          `贡献者：${Contributor || ''}`  // 显示贡献者
         ].join('<br>');
       }
 
@@ -236,7 +238,8 @@ fetch(ENDPOINT)
         Platform,
         Company,
         Status,
-        ConsolePlatform
+        ConsolePlatform,
+        Contributor
       };
     });
 
