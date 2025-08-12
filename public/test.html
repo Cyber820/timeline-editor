@@ -49,6 +49,9 @@ const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7S
 
 moment.locale("zh-cn");
 
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let originalItems = [], timeline = null;
+
 // 小工具：把 \n 换成 <br> 用于悬停
 function nl2br(s) { return (s || '').toString().replace(/\n/g, '<br>'); }
 
