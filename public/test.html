@@ -52,6 +52,14 @@ moment.locale("zh-cn");
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
 
+  const attributeLabels = {
+  EventType: "事件类型",
+  Region: "地区",
+  Platform: "平台类型",
+  Company: "公司",
+  Status: "状态",
+  ConsolePlatform: "主机类型"
+};
 // 小工具：把 \n 换成 <br> 用于悬停
 function nl2br(s) { return (s || '').toString().replace(/\n/g, '<br>'); }
 
