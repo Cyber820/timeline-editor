@@ -92,7 +92,7 @@ function updateFilterList() {
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = ${attributeLabels[key] || key}: ${values.join(', ')};
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`; 
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
