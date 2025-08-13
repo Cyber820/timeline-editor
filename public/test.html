@@ -21,7 +21,7 @@
       font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
       border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
     }
-    #filter-window, #add-filter-window, #layout-window {
+    #filter-window, #add-filter-window {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: #fff; padding: 20px; border: 1px solid #ccc;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
@@ -29,16 +29,12 @@
     }
     #add-filter-window { width: 700px; height: 300px; }
     #filter-window { width: 700px; }
-    /* 🟢 布局自定义功能 */
-    #layout-window { width: 700px; height: 400px; }
-    #layout-rules-list div { margin: 5px 0; }
   </style>
 </head>
 <body>
   <h2>电子游戏时间轴</h2>
   <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
-  <button onclick="openLayoutWindow()">🎨 布局自定义</button>
   <div id="timeline"></div>
 
   <!-- 过滤逻辑设置弹窗 -->
@@ -59,25 +55,6 @@
     <label>过滤选项：<select id="filter-options" multiple></select></label><br>
     <button onclick="confirmAddFilter()">确定</button>
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
-  </div>
-
-  <!-- 🟢 布局自定义弹窗 -->
-  <div id="layout-window">
-    <h3>布局自定义</h3>
-    <label>属性：<select id="layout-attribute"></select></label><br>
-    <label>样式类型：
-      <select id="layout-style-type">
-        <option value="fontColor">字体颜色</option>
-        <option value="backgroundColor">边框颜色</option>
-        <option value="fillColor">填充颜色</option>
-      </select>
-    </label><br>
-    <label>具体属性值：<input id="layout-value-text" placeholder="例如：主机游戏"></label>
-    <label>样式值：<input id="layout-style-text" placeholder="例如：red 或 #ff0000"></label>
-    <button onclick="addLayoutRule()">添加规则</button>
-    <button onclick="resetLayoutRules()">重置规则</button>
-    <button onclick="document.getElementById('layout-window').style.display='none'">关闭</button>
-    <div id="layout-rules-list"></div>
   </div>
 
 <script>
@@ -115,7 +92,7 @@ function updateFilterList() {
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
+    d.textContent = ${attributeLabels[key] || key}: ${values.join(', ')};
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
@@ -132,7 +109,6 @@ function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 // 过滤操作
 function updateTimelineByFilter() {
-  if (!timeline) return;
   const filtered = originalItems.filter(item => {
     const pass = (filterLogic === 'and')
       ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
@@ -147,6 +123,7 @@ function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
   const attrSel = document.getElementById("filter-attribute");
   attrSel.innerHTML = '';
+  // 这里需要添加您所有的过滤属性
   const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform', 'Contributor'];
   attributes.forEach(key => {
     const o = document.createElement("option");
@@ -156,7 +133,8 @@ function openAddFilter() {
   });
   attrSel.onchange = () => {
     const key = attrSel.value;
-    const opts = getFilterOptionsForKey(key);
+    // 获取对应的过滤选项
+    const opts = getFilterOptionsForKey(key); 
     const sel = document.getElementById("filter-options");
     sel.innerHTML = '';
     opts.forEach(opt => {
@@ -184,9 +162,9 @@ function normalizeToArray(raw) {
   if (typeof raw === 'string') return [raw];
   if (raw && typeof raw === 'object') {
     try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
-      let out = [];
+      var out = [];
       Object.keys(raw).forEach(k => {
-        let v = raw[k];
+        var v = raw[k];
         if (Array.isArray(v)) out = out.concat(v);
         else if (v) out.push(v);
       });
@@ -196,49 +174,64 @@ function normalizeToArray(raw) {
   return [];
 }
 
+// 根据选择的过滤属性，返回对应的候选数组（已归一）
 function getFilterOptionsForKey(key) {
   if (key === 'ConsolePlatform') {
-    if (Array.isArray(allOptions.ConsolePlatformFilter)) return allOptions.ConsolePlatformFilter;
-    if (allOptions.ConsolePlatform) return normalizeToArray(allOptions.ConsolePlatform);
+    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
+      return allOptions.ConsolePlatformFilter;
+    }
+    if (allOptions.ConsolePlatform) {
+      return normalizeToArray(allOptions.ConsolePlatform);
+    }
   }
   return normalizeToArray(allOptions[key]);
 }
 
-// ✅ 安全初始化时间轴数据
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
     originalItems = data.map((event, i) => {
-      const startDate = event.Start || event.start || '1970-01-01';
-      const endDate   = event.End   || event.end   || undefined;
+      const contentText = event.content ?? event.Title ?? '(无标题)';
+      const Start = event.Start ?? event.start ?? '';
+      const End   = event.End   ?? event.end   ?? '';
+      const blob = (event.title ?? '').toString();
 
-      const EventType       = event.EventType       ?? event.eventType       ?? '';
-      const Region          = event.Region          ?? event.region          ?? '';
-      const Platform        = event.Platform        ?? event.platform        ?? '';
-      const Company         = event.Company         ?? event.company         ?? '';
-      const Status          = event.Status          ?? event.status          ?? '';
-      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? '';
-      const Contributor     = event.Contributor     ?? event.contributor     ?? '';
+      const pick = (label) => {
+        if (!blob) return '';
+        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+        return m ? m[1].trim() : '';
+      };
 
-      const contentText = event.Title || event.content || '(无标题)';
+      const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+      const Region          = event.Region          ?? event.region          ?? pick('地区');
+      const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+      const Company         = event.Company         ?? event.company         ?? pick('公司');
+      const Status          = event.Status          ?? event.status          ?? pick('状态');
+      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+      const Contributor     = event.Contributor    ?? event.contributor     ?? '';  // 获取贡献者
 
-      const tooltipHtml = [
-        `事件名称：${contentText}`,
-        `事件类型：${EventType}`,
-        `时间：${startDate}${endDate ? ' ~ ' + endDate : ''}`,
-        `状态：${Status}`,
-        `地区：${Region}`,
-        `平台类型：${Platform}`,
-        `主机类型：${ConsolePlatform}`,
-        `公司：${Company}`,
-        `贡献者：${Contributor}`
-      ].join('<br>');
+      let tooltipHtml;
+      if (blob) {
+        tooltipHtml = blob.replace(/\n/g, '<br>');
+      } else {
+        tooltipHtml = [
+          事件名称：${contentText},
+          事件类型：${EventType || ''},
+          时间：${Start || ''}${End ? ' ~ ' + End : ''},
+          状态：${Status || ''},
+          地区：${Region || ''},
+          平台类型：${Platform || ''},
+          主机类型：${ConsolePlatform || ''},
+          公司：${Company || ''},
+          贡献者：${Contributor || ''}  // 显示贡献者
+        ].join('<br>');
+      }
 
       return {
-        id: event.id || `auto-${i + 1}`,
+        id: event.id || auto-${i + 1},
         content: contentText,
-        start: startDate,
-        end: endDate,
+        start: Start,
+        end: End || undefined,
         title: tooltipHtml,
         EventType,
         Region,
@@ -246,8 +239,7 @@ fetch(ENDPOINT)
         Company,
         Status,
         ConsolePlatform,
-        Contributor,
-        style: ''
+        Contributor
       };
     });
 
@@ -263,7 +255,6 @@ fetch(ENDPOINT)
     });
   });
 
-// 获取可选项
 fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
@@ -284,7 +275,7 @@ fetch(ENDPOINT + '?action=options')
     fill("tag", options.Tag);
     new Choices('#tag', { removeItemButton: true });
   });
-</script>
 
+</script>
 </body>
 </html>
