@@ -21,7 +21,7 @@
       font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
       border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
     }
-    #filter-window, #add-filter-window {
+    #filter-window, #add-filter-window, #layout-window {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: #fff; padding: 20px; border: 1px solid #ccc;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
@@ -29,12 +29,16 @@
     }
     #add-filter-window { width: 700px; height: 300px; }
     #filter-window { width: 700px; }
+    /* 🟢 布局自定义功能 */
+    #layout-window { width: 700px; height: 400px; }
+    #layout-rules-list div { margin: 5px 0; }
   </style>
 </head>
 <body>
   <h2>电子游戏时间轴</h2>
   <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
+  <button onclick="openLayoutWindow()">🎨 布局自定义</button>
   <div id="timeline"></div>
 
   <!-- 过滤逻辑设置弹窗 -->
@@ -57,11 +61,33 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
+  <!-- 🟢 布局自定义弹窗 -->
+  <div id="layout-window">
+    <h3>布局自定义</h3>
+    <label>属性：<select id="layout-attribute"></select></label><br>
+    <label>样式类型：
+      <select id="layout-style-type">
+        <option value="fontColor">字体颜色</option>
+        <option value="backgroundColor">边框颜色</option>
+        <option value="fillColor">填充颜色</option>
+      </select>
+    </label><br>
+    <label>具体属性值：<input id="layout-value-text" placeholder="例如：主机游戏"></label>
+    <label>样式值：<input id="layout-style-text" placeholder="例如：red 或 #ff0000"></label>
+    <button onclick="addLayoutRule()">添加规则</button>
+    <button onclick="resetLayoutRules()">重置规则</button>
+    <button onclick="document.getElementById('layout-window').style.display='none'">关闭</button>
+    <div id="layout-rules-list"></div>
+  </div>
+
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
-let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let allOptions = {}, activeFilters = {}, filterLogic = 'and';
 let originalItems = [], timeline = null;
+
+/* 🟢 布局自定义功能 */
+let layoutRules = {}; // {属性: {styleType, values:{具体值:样式}}}
 
 const attributeLabels = {
   EventType: "事件类型",
@@ -70,29 +96,18 @@ const attributeLabels = {
   Company: "公司",
   Status: "状态",
   ConsolePlatform: "主机类型",
-  Contributor: "贡献者"  // 新增贡献者标签
+  Contributor: "贡献者"
 };
 
-// 打开过滤窗口
-function openFilterWindow(logic) {
-  filterLogic = logic;
-  document.getElementById('filter-window').style.display = 'block';
-}
-
-// 重置过滤条件
-function resetFilters() {
-  activeFilters = {};
-  updateFilterList();
-  updateTimelineByFilter();
-}
-
-// 更新当前过滤条件显示
+// ---------- 原有过滤功能 ----------
+function openFilterWindow(logic) { filterLogic = logic; document.getElementById('filter-window').style.display = 'block'; }
+function resetFilters() { activeFilters = {}; updateFilterList(); updateTimelineByFilter(); }
 function updateFilterList() {
   const div = document.getElementById("current-filters");
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = ${attributeLabels[key] || key}: ${values.join(', ')};
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
@@ -100,181 +115,107 @@ function updateFilterList() {
     div.appendChild(d);
   }
 }
-
-// 应用“和”逻辑过滤
 function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
-
-// 应用“或”逻辑过滤
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
-
-// 过滤操作
 function updateTimelineByFilter() {
   const filtered = originalItems.filter(item => {
-    const pass = (filterLogic === 'and')
+    const pass = (filterLogic==='and')
       ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
       : Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
     return pass;
   });
   timeline.setItems(filtered);
 }
-
-// 打开新增过滤标准的窗口
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
   const attrSel = document.getElementById("filter-attribute");
   attrSel.innerHTML = '';
-  // 这里需要添加您所有的过滤属性
-  const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform', 'Contributor'];
-  attributes.forEach(key => {
-    const o = document.createElement("option");
-    o.value = key;
-    o.textContent = attributeLabels[key];
-    attrSel.appendChild(o);
-  });
+  const attributes = ['EventType','Region','Platform','Company','Status','ConsolePlatform','Contributor'];
+  attributes.forEach(key => { const o=document.createElement("option"); o.value=o.textContent=key; attrSel.appendChild(o); });
   attrSel.onchange = () => {
     const key = attrSel.value;
-    // 获取对应的过滤选项
     const opts = getFilterOptionsForKey(key); 
     const sel = document.getElementById("filter-options");
     sel.innerHTML = '';
-    opts.forEach(opt => {
-      const o = document.createElement("option");
-      o.value = o.textContent = opt;
-      sel.appendChild(o);
-    });
+    opts.forEach(opt => { const o=document.createElement("option"); o.value=o.textContent=opt; sel.appendChild(o); });
   };
   attrSel.dispatchEvent(new Event("change"));
 }
-
-// 确认添加过滤标准
 function confirmAddFilter() {
   const attr = document.getElementById("filter-attribute").value;
-  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
-  if (attr && selected.length) {
-    activeFilters[attr] = selected;
-    updateFilterList();
-  }
-  document.getElementById("add-filter-window").style.display = 'none';
+  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o=>o.value);
+  if(attr && selected.length) { activeFilters[attr] = selected; updateFilterList(); }
+  document.getElementById("add-filter-window").style.display='none';
+}
+function normalizeToArray(raw) { if(Array.isArray(raw)) return raw; if(typeof raw==='string') return [raw]; if(raw && typeof raw==='object'){try{return Object.values(raw);}catch(e){return []}} return []; }
+function getFilterOptionsForKey(key){return [...new Set(originalItems.map(i=>i[key]).filter(Boolean))];}
+
+// ---------- 🟢 布局自定义功能 ----------
+function openLayoutWindow() {
+  const sel = document.getElementById("layout-attribute");
+  sel.innerHTML='';
+  const attributes = ['EventType','Region','Platform','Company','Status','ConsolePlatform','Contributor'];
+  attributes.forEach(k => { const o=document.createElement("option"); o.value=o.textContent=k; sel.appendChild(o); });
+  updateLayoutRulesList();
+  document.getElementById("layout-window").style.display = 'block';
 }
 
-function normalizeToArray(raw) {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === 'string') return [raw];
-  if (raw && typeof raw === 'object') {
-    try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
-      var out = [];
-      Object.keys(raw).forEach(k => {
-        var v = raw[k];
-        if (Array.isArray(v)) out = out.concat(v);
-        else if (v) out.push(v);
-      });
-      return out;
-    }
-  }
-  return [];
+function addLayoutRule() {
+  const attr = document.getElementById("layout-attribute").value;
+  const type = document.getElementById("layout-style-type").value;
+  const val = document.getElementById("layout-value-text").value.trim();
+  const styleVal = document.getElementById("layout-style-text").value.trim();
+  if(!attr || !type || !val || !styleVal) { alert('请完整填写'); return; }
+  if(!layoutRules[attr]) layoutRules[attr] = {styleType:type, values:{}};
+  layoutRules[attr].values[val] = styleVal;
+  applyLayoutRules();
+  updateLayoutRulesList();
 }
 
-// 根据选择的过滤属性，返回对应的候选数组（已归一）
-function getFilterOptionsForKey(key) {
-  if (key === 'ConsolePlatform') {
-    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
-      return allOptions.ConsolePlatformFilter;
-    }
-    if (allOptions.ConsolePlatform) {
-      return normalizeToArray(allOptions.ConsolePlatform);
-    }
-  }
-  return normalizeToArray(allOptions[key]);
-}
+function resetLayoutRules() { layoutRules={}; applyLayoutRules(); updateLayoutRulesList(); }
 
-fetch(ENDPOINT)
-  .then(res => res.json())
-  .then(data => {
-    originalItems = data.map((event, i) => {
-      const contentText = event.content ?? event.Title ?? '(无标题)';
-      const Start = event.Start ?? event.start ?? '';
-      const End   = event.End   ?? event.end   ?? '';
-      const blob = (event.title ?? '').toString();
-
-      const pick = (label) => {
-        if (!blob) return '';
-        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
-        return m ? m[1].trim() : '';
+function updateLayoutRulesList() {
+  const div = document.getElementById("layout-rules-list");
+  div.innerHTML='';
+  for(const [attr, rule] of Object.entries(layoutRules)){
+    for(const [val, styleVal] of Object.entries(rule.values)){
+      const d = document.createElement("div");
+      d.textContent = `${attributeLabels[attr] || attr}=${val} → ${rule.styleType}: ${styleVal}`;
+      const btn = document.createElement("button"); btn.textContent='❌';
+      btn.onclick=()=>{
+        delete layoutRules[attr].values[val];
+        if(Object.keys(layoutRules[attr].values).length===0) delete layoutRules[attr];
+        applyLayoutRules(); updateLayoutRulesList();
       };
+      d.appendChild(btn); div.appendChild(d);
+    }
+  }
+}
 
-      const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
-      const Region          = event.Region          ?? event.region          ?? pick('地区');
-      const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
-      const Company         = event.Company         ?? event.company         ?? pick('公司');
-      const Status          = event.Status          ?? event.status          ?? pick('状态');
-      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
-      const Contributor     = event.Contributor    ?? event.contributor     ?? '';  // 获取贡献者
-
-      let tooltipHtml;
-      if (blob) {
-        tooltipHtml = blob.replace(/\n/g, '<br>');
-      } else {
-        tooltipHtml = [
-          事件名称：${contentText},
-          事件类型：${EventType || ''},
-          时间：${Start || ''}${End ? ' ~ ' + End : ''},
-          状态：${Status || ''},
-          地区：${Region || ''},
-          平台类型：${Platform || ''},
-          主机类型：${ConsolePlatform || ''},
-          公司：${Company || ''},
-          贡献者：${Contributor || ''}  // 显示贡献者
-        ].join('<br>');
+function applyLayoutRules() {
+  if(!timeline) return;
+  timeline.setItems(originalItems.map(item=>{
+    let style='';
+    for(const [attr, rule] of Object.entries(layoutRules)){
+      const val = item[attr];
+      if(val && rule.values[val]){
+        if(rule.styleType==='fontColor') style+=`color:${rule.values[val]};`;
+        else if(rule.styleType==='backgroundColor') style+=`border-color:${rule.values[val]};`;
+        else if(rule.styleType==='fillColor') style+=`background-color:${rule.values[val]};`;
       }
+    }
+    return {...item, style};
+  }));
+}
 
-      return {
-        id: event.id || auto-${i + 1},
-        content: contentText,
-        start: Start,
-        end: End || undefined,
-        title: tooltipHtml,
-        EventType,
-        Region,
-        Platform,
-        Company,
-        Status,
-        ConsolePlatform,
-        Contributor
-      };
-    });
-
-    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
-      locale: "zh-cn",
-      editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      tooltip: { followMouse: true, overflowMethod: 'flip' },
-      verticalScroll: true,
-      zoomKey: "ctrlKey",
-      stack: true
-    });
-  });
-
-fetch(ENDPOINT + '?action=options')
-  .then(res => res.json())
-  .then(options => {
-    allOptions = options;
-    const fill = (id, list) => {
-      const select = document.getElementById(id);
-      select.innerHTML = '';
-      (list || []).forEach(opt => {
-        const o = document.createElement('option');
-        o.value = o.textContent = opt;
-        select.appendChild(o);
-      });
-    };
-    fill("eventType", options.EventType);
-    fill("region", options.Region);
-    fill("platform", options.Platform);
-    fill("company", options.Company);
-    fill("tag", options.Tag);
-    new Choices('#tag', { removeItemButton: true });
-  });
+// ---------- 初始化时间轴 ----------
+fetch(ENDPOINT).then(r=>r.json()).then(data=>{
+  originalItems = data.map((e,i)=>({id:i, content:e.Title, start:e.Start, end:e.End, EventType:e.EventType, Region:e.Region, Platform:e.Platform, Company:e.Company, Status:e.Status, ConsolePlatform:e.ConsolePlatform, Contributor:e.Contributor || '', style:''}));
+  const container = document.getElementById("timeline");
+  const items = new vis.DataSet(originalItems);
+  const options = {editable:false, stack:true, multiselect:true, orientation:'top', zoomable:true, margin:{item:10, axis:5}, tooltip:{followMouse:true}};
+  timeline = new vis.Timeline(container, items, options);
+});
 
 </script>
 </body>
