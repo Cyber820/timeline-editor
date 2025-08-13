@@ -35,7 +35,6 @@
   <h2>电子游戏时间轴</h2>
   <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
-  <button onclick="document.getElementById('style-panel').style.display='block'">🎨 自定义样式</button>
   <div id="timeline"></div>
 
   <!-- 过滤逻辑设置弹窗 -->
@@ -58,77 +57,6 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-  <div id="style-panel" style="display:none; position:absolute; top:50px; left:50%; transform:translateX(-50%);
-     width:800px; max-height:80vh; overflow:auto; background:#fff; border:1px solid #ccc; box-shadow:0 2px 8px rgba(0,0,0,0.3); z-index:2000; padding:20px;">
-  <h3>自定义样式</h3>
-  <button onclick="resetStyles()">重置样式</button>
-  <button onclick="document.getElementById('style-panel').style.display='none'">关闭</button>
-
-  <div class="style-attribute-block" data-attribute="EventType">
-    <h4>事件类型</h4>
-    <table border="1" width="100%" style="margin-bottom:10px;">
-      <thead>
-        <tr>
-          <th>属性内容</th>
-          <th>字体</th>
-          <th>文字颜色</th>
-          <th>事件框边框颜色</th>
-          <th>事件框填充色</th>
-          <th>连接线颜色</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>电子竞技</td>
-          <td><input type="text" placeholder="字体名称"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-        </tr>
-        <tr>
-          <td>主机游戏</td>
-          <td><input type="text"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-        </tr>
-        <!-- 可动态生成其他属性内容行 -->
-      </tbody>
-    </table>
-  </div>
-
-  <div class="style-attribute-block" data-attribute="Region">
-    <h4>地区</h4>
-    <table border="1" width="100%" style="margin-bottom:10px;">
-      <thead>
-        <tr>
-          <th>属性内容</th>
-          <th>字体</th>
-          <th>文字颜色</th>
-          <th>事件框边框颜色</th>
-          <th>事件框填充色</th>
-          <th>连接线颜色</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>日本</td>
-          <td><input type="text"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-          <td><input type="color"></td>
-        </tr>
-        <!-- 更多地区占位 -->
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 同理再生成 Platform、ConsolePlatform、Company 块 -->
-</div>
-  
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
@@ -164,7 +92,7 @@ function updateFilterList() {
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
+    d.textContent = ${attributeLabels[key] || key}: ${values.join(', ')};
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
@@ -287,20 +215,20 @@ fetch(ENDPOINT)
         tooltipHtml = blob.replace(/\n/g, '<br>');
       } else {
         tooltipHtml = [
-          `事件名称：${contentText}`,
-          `事件类型：${EventType || ''}`,
-          `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
-          `状态：${Status || ''}`,
-          `地区：${Region || ''}`,
-          `平台类型：${Platform || ''}`,
-          `主机类型：${ConsolePlatform || ''}`,
-          `公司：${Company || ''}`,
-          `贡献者：${Contributor || ''}`  // 显示贡献者
+          事件名称：${contentText},
+          事件类型：${EventType || ''},
+          时间：${Start || ''}${End ? ' ~ ' + End : ''},
+          状态：${Status || ''},
+          地区：${Region || ''},
+          平台类型：${Platform || ''},
+          主机类型：${ConsolePlatform || ''},
+          公司：${Company || ''},
+          贡献者：${Contributor || ''}  // 显示贡献者
         ].join('<br>');
       }
 
       return {
-        id: event.id || `auto-${i + 1}`,
+        id: event.id || auto-${i + 1},
         content: contentText,
         start: Start,
         end: End || undefined,
@@ -347,10 +275,7 @@ fetch(ENDPOINT + '?action=options')
     fill("tag", options.Tag);
     new Choices('#tag', { removeItemButton: true });
   });
-function resetStyles() {
-  // 清空所有输入框
-  document.querySelectorAll('#style-panel input').forEach(i => i.value = '');
-}
+
 </script>
 </body>
 </html>
