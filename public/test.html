@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>电子游戏时间轴</title>
-  <!-- 引入所需样式和库 -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
@@ -33,7 +32,6 @@
 </head>
 <body>
   <h2>电子游戏时间轴</h2>
-  <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
@@ -119,7 +117,7 @@ function updateTimelineByFilter() {
   timeline.setItems(filtered);
 }
 
-// 打开新增过滤标准的窗口
+// 打开新增过滤标准窗口
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
   const attrSel = document.getElementById("filter-attribute");
@@ -137,9 +135,9 @@ function openAddFilter() {
     const sel = document.getElementById("filter-options");
     sel.innerHTML = '';
     opts.forEach(opt => {
-      const optionEl = document.createElement("option");
-      optionEl.value = optionEl.textContent = opt;
-      sel.appendChild(optionEl);
+      const o = document.createElement("option");
+      o.value = o.textContent = opt;
+      sel.appendChild(o);
     });
   };
   attrSel.dispatchEvent(new Event("change"));
@@ -152,6 +150,7 @@ function confirmAddFilter() {
   if (attr && selected.length) {
     activeFilters[attr] = selected;
     updateFilterList();
+    updateTimelineByFilter();
   }
   document.getElementById("add-filter-window").style.display = 'none';
 }
@@ -161,10 +160,10 @@ function normalizeToArray(raw) {
   if (typeof raw === 'string') return [raw];
   if (raw && typeof raw === 'object') {
     try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
-      const out = [];
+      var out = [];
       Object.keys(raw).forEach(k => {
-        const v = raw[k];
-        if (Array.isArray(v)) out.push(...v);
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
         else if (v) out.push(v);
       });
       return out;
@@ -173,7 +172,6 @@ function normalizeToArray(raw) {
   return [];
 }
 
-// 根据选择的过滤属性，返回对应的候选数组
 function getFilterOptionsForKey(key) {
   if (key === 'ConsolePlatform') {
     if (Array.isArray(allOptions.ConsolePlatformFilter)) return allOptions.ConsolePlatformFilter;
@@ -182,7 +180,7 @@ function getFilterOptionsForKey(key) {
   return normalizeToArray(allOptions[key]);
 }
 
-// 获取事件数据并初始化 timeline
+// 获取事件数据并初始化时间轴
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
@@ -194,60 +192,49 @@ fetch(ENDPOINT)
 
       const pick = (label) => {
         if (!blob) return '';
-        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
-        return m ? m[1].trim() : '';
+        const m = new RegExp(label + '[:：]([^\\n]+)').exec(blob);
+        return m ? m[1].trim() : (event[label] ?? '');
       };
 
-      const EventType = event.EventType ?? pick('事件类型') ?? '';
-      const Region = event.Region ?? pick('地区') ?? '';
-      const Platform = event.Platform ?? pick('平台类型') ?? '';
-      const ConsolePlatform = event.ConsolePlatform ?? pick('主机类型') ?? '';
-      const Company = event.Company ?? pick('公司') ?? '';
-      const Status = event.Status ?? pick('状态') ?? '';
-      const Contributor = event.Contributor ?? pick('贡献者') ?? '';
-
-      // 收集全部过滤选项
-      ['EventType','Region','Platform','Company','Status','ConsolePlatform','Contributor'].forEach(k=>{
-        allOptions[k] = allOptions[k] ?? new Set();
-        allOptions[k].add(eval(k));
-      });
-
-      const tooltipHtml = [
-        `事件名称：${contentText}`,
-        `事件类型：${EventType}`,
-        `时间：${Start}${End ? ' ~ ' + End : ''}`,
-        `状态：${Status}`,
-        `地区：${Region}`,
-        `平台类型：${Platform}`,
-        `主机类型：${ConsolePlatform}`,
-        `公司：${Company}`,
-        `贡献者：${Contributor}`
-      ].join('<br>');
-
       return {
-        id: event.id ?? `auto-${i+1}`,
+        id: i,
         content: contentText,
         start: Start,
         end: End || undefined,
-        title: tooltipHtml,
-        EventType, Region, Platform, Company, Status, ConsolePlatform, Contributor
+        title: contentText + (event.Contributor ? ("\n贡献者：" + event.Contributor) : ""),
+        EventType: event.EventType || '',
+        Region: event.Region || '',
+        Platform: event.Platform || '',
+        ConsolePlatform: event.ConsolePlatform || '',
+        Company: event.Company || '',
+        Contributor: event.Contributor || ''
       };
     });
 
-    // 把 Set 转 Array
+    // 收集过滤选项
+    allOptions = {};
+    originalItems.forEach(it => {
+      Object.keys(attributeLabels).forEach(key => {
+        if (!allOptions[key]) allOptions[key] = new Set();
+        allOptions[key].add(it[key] ?? '');
+      });
+    });
     Object.keys(allOptions).forEach(k => {
-      allOptions[k] = Array.from(allOptions[k]);
+      allOptions[k] = Array.from(allOptions[k]).filter(v => v);
     });
 
-    const container = document.getElementById('timeline');
-    const items = new vis.DataSet(originalItems);
-    const options = {
-      tooltip: { followMouse: true, overflowMethod: 'cap' },
-      orientation: 'top'
-    };
-    timeline = new vis.Timeline(container, items, options);
-  })
-  .catch(err => console.error('加载时间轴数据失败:', err));
+    // 初始化时间轴
+    timeline = new vis.Timeline(document.getElementById("timeline"), new vis.DataSet(originalItems), {
+      locale: "zh-cn",
+      editable: false,
+      margin: { item: 10, axis: 50 },
+      orientation: { axis: 'bottom', item: 'bottom' },
+      tooltip: { followMouse: true, overflowMethod: 'flip' },
+      verticalScroll: true,
+      zoomKey: "ctrlKey",
+      stack: true
+    });
+  });
 </script>
 </body>
 </html>
