@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>电子游戏时间轴</title>
+  <title>时间轴</title>
   <!-- 引入所需样式和库 -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
@@ -58,7 +58,7 @@
   </div>
 
 <script>
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxcv6GqP5USv3zOn2pepoT3mke2fdZuWsoInq6qkDx-2LUMBQTcJpahOtRqUHqBYMjs/exec";
 
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
@@ -92,7 +92,7 @@ function updateFilterList() {
   div.innerHTML = '';
   for (const [key, values] of Object.entries(activeFilters)) {
     const d = document.createElement("div");
-    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`; 
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
     const btn = document.createElement("button");
     btn.textContent = '❌';
     btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
@@ -223,7 +223,7 @@ fetch(ENDPOINT)
           `平台类型：${Platform || ''}`,
           `主机类型：${ConsolePlatform || ''}`,
           `公司：${Company || ''}`,
-          `贡献者：${Contributor || ''}`
+          `贡献者：${Contributor || ''}`  // 显示贡献者
         ].join('<br>');
       }
 
