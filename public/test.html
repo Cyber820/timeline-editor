@@ -215,20 +215,20 @@ fetch(ENDPOINT)
         tooltipHtml = blob.replace(/\n/g, '<br>');
       } else {
         tooltipHtml = [
-          事件名称：${contentText},
-          事件类型：${EventType || ''},
-          时间：${Start || ''}${End ? ' ~ ' + End : ''},
-          状态：${Status || ''},
-          地区：${Region || ''},
-          平台类型：${Platform || ''},
-          主机类型：${ConsolePlatform || ''},
-          公司：${Company || ''},
-          贡献者：${Contributor || ''}  // 显示贡献者
+          `事件名称：${contentText}`,
+          `事件类型：${EventType || ''}`,
+          `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+          `状态：${Status || ''}`,
+          `地区：${Region || ''}`,
+          `平台类型：${Platform || ''}`,
+          `主机类型：${ConsolePlatform || ''}`,
+          `公司：${Company || ''}`,
+          `贡献者：${Contributor || ''}`
         ].join('<br>');
       }
 
       return {
-        id: event.id || auto-${i + 1},
+        id: event.id || `auto-${i + 1}`,
         content: contentText,
         start: Start,
         end: End || undefined,
