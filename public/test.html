@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <title>电子游戏时间轴</title>
-  <!-- 样式和库 -->
+  <!-- 引入所需样式和库 -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
@@ -17,23 +18,28 @@
       font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff;
       border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-    .vis-item { font-size: 10px; padding: 1px 2px; background-color: #f5f5f5; border: 1px solid #aaa; border-radius: 4px; max-width: 300px; }
-    #filter-window, #add-filter-window {
+    .vis-item {
+      font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
+      border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
+    }
+    #event-form, #filter-window, #add-filter-window {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: #fff; padding: 20px; border: 1px solid #ccc;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none; z-index: 2000;
-      max-height: 80vh; overflow: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
+      z-index: 2000; max-height: 80vh; overflow: auto;
     }
-    #filter-window { width: 700px; }
     #add-filter-window { width: 700px; height: 300px; }
+    #filter-window { width: 700px; }
   </style>
 </head>
 <body>
   <h2>电子游戏时间轴</h2>
+  <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
-  <!-- 过滤窗口 -->
+
+  <!-- 过滤逻辑设置弹窗 -->
   <div id="filter-window">
     <h3>过滤标准（和逻辑）</h3>
     <button onclick="openAddFilter()">增加过滤标准</button>
@@ -44,7 +50,7 @@
     <div id="current-filters"></div>
   </div>
 
-  <!-- 添加过滤标准窗口 -->
+  <!-- 添加过滤标准弹窗 -->
   <div id="add-filter-window">
     <h3>新增过滤标准</h3>
     <label>过滤属性：<select id="filter-attribute"></select></label><br>
@@ -54,7 +60,7 @@
   </div>
 
 <script>
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8sNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
@@ -68,13 +74,21 @@ const attributeLabels = {
   ConsolePlatform: "主机类型"
 };
 
-// ----------------- 过滤方法 -----------------
+function openAddEventForm() {
+  document.getElementById('event-form').style.display = 'block';
+  document.getElementById('platform')?.dispatchEvent(new Event('change'));
+}
+
 function openFilterWindow(logic) {
   filterLogic = logic;
   document.getElementById('filter-window').style.display = 'block';
 }
 
-function resetFilters() { activeFilters = {}; updateFilterList(); updateTimelineByFilter(); }
+function resetFilters() {
+  activeFilters = {};
+  updateFilterList();
+  updateTimelineByFilter();
+}
 
 function updateFilterList() {
   const div = document.getElementById("current-filters");
@@ -96,92 +110,249 @@ function openAddFilter() {
   attrSel.innerHTML = '';
   Object.keys(attributeLabels).forEach(key => {
     const o = document.createElement("option");
-    o.value = key; o.textContent = attributeLabels[key];
+    o.value = key;
+    o.textContent = attributeLabels[key];
     attrSel.appendChild(o);
   });
-
-  attrSel.onchange = () => {
-    const key = attrSel.value;
-    const opts = getFilterOptionsForKey(key); // 统一拿到数组
-    const sel = document.getElementById("filter-options");
-    sel.innerHTML = '';
-    opts.forEach(opt => { const o = document.createElement("option"); o.value = o.textContent = opt; sel.appendChild(o); });
-    if (filterOptionsChoices) filterOptionsChoices.destroy();
-    filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
-  };
+attrSel.onchange = () => {
+  const key = attrSel.value;
+  const opts = getFilterOptionsForKey(key);   // ✅ 统一拿到数组
+  const sel = document.getElementById("filter-options");
+  sel.innerHTML = '';
+  opts.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = o.textContent = opt;
+    sel.appendChild(o);
+  });
+  if (filterOptionsChoices) filterOptionsChoices.destroy();
+  filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
+};
   attrSel.dispatchEvent(new Event("change"));
 }
 
 function confirmAddFilter() {
   const attr = document.getElementById("filter-attribute").value;
   const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
-  if (attr && selected.length) { activeFilters[attr] = selected; updateFilterList(); }
+  if (attr && selected.length) {
+    activeFilters[attr] = selected;
+    updateFilterList();
+  }
   document.getElementById("add-filter-window").style.display = 'none';
 }
 
-// 统一获取数组
-function normalizeToArray(val) {
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  if (typeof val === 'string') return val.split(',').map(s=>s.trim());
-  if (typeof val === 'object') return Object.values(val).flat();
+function normalizeToArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') return [raw];
+  if (raw && typeof raw === 'object') {
+    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
+    try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
+      // .flat 不可用的极端环境：
+      var out = [];
+      Object.keys(raw).forEach(k => {
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
+        else if (v) out.push(v);
+      });
+      return out;
+    }
+  }
   return [];
 }
 
-// ✅ 关键修改：不再对 ConsolePlatform 做特殊处理
+// 根据选择的过滤属性，返回对应的候选数组（已归一）
 function getFilterOptionsForKey(key) {
-  return normalizeToArray(allOptions[key] || []);
+  if (key === 'ConsolePlatform') {
+    // 优先使用专门的 ConsolePlatformFilter（数组）
+    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
+      return allOptions.ConsolePlatformFilter;
+    }
+    // 兜底：从 ConsolePlatform 映射里把所有主机类型打平为数组
+    if (allOptions.ConsolePlatform) {
+      return normalizeToArray(allOptions.ConsolePlatform);
+    }
+  }
+  return normalizeToArray(allOptions[key]);
 }
-
-// ----------------- 过滤逻辑 -----------------
+  
+/* -------- 通用过滤判断（支持 6 个属性） -------- */
 function valueInSelected(val, selectedArr) {
   if (val == null) return false;
   const vArr = Array.isArray(val) ? val : [val];
   return vArr.some(v => selectedArr.includes(String(v)));
 }
+function passesAndLogicFilters(item, filters) {
+  return Object.entries(filters).every(([key, values]) => valueInSelected(item[key], values));
+}
+function passesOrLogicFilters(item, filters) {
+  return Object.entries(filters).some(([key, values]) => valueInSelected(item[key], values));
+}
 function updateTimelineByFilter() {
   if (!timeline || !originalItems) return;
-  const filtered = Object.keys(activeFilters).length
-    ? originalItems.filter(item => filterLogic==='and'
-        ? Object.entries(activeFilters).every(([k,v]) => valueInSelected(item[k],v))
-        : Object.entries(activeFilters).some(([k,v]) => valueInSelected(item[k],v)))
+
+  console.groupCollapsed('🧪DEBUG: 过滤执行');
+  console.log('filterLogic:', filterLogic);
+  console.log('activeFilters:', JSON.stringify(activeFilters));
+  console.log('原始事件数量:', originalItems.length);
+
+  const hasFilters = Object.keys(activeFilters).length > 0;
+  const filtered = hasFilters
+    ? originalItems.filter(item => {
+        const pass = (filterLogic === 'and')
+          ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
+          : Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
+
+        // 对前 50 条或全部进行打印（可按需调整）
+        console.debug('条目判定:', {
+          id: item.id,
+          content: item.content,
+          EventType: item.EventType,
+          Region: item.Region,
+          Platform: item.Platform,
+          Company: item.Company,
+          Status: item.Status,
+          ConsolePlatform: item.ConsolePlatform,
+          通过: pass
+        });
+        return pass;
+      })
     : originalItems;
+
+  console.log('通过过滤的事件数量:', filtered.length);
+  console.groupEnd();
+
   timeline.setItems(filtered);
 }
-function applyFilters() { filterLogic='and'; updateTimelineByFilter(); }
-function applyFiltersOr() { filterLogic='or'; updateTimelineByFilter(); }
 
-// ----------------- 获取事件并渲染 -----------------
-fetch(ENDPOINT).then(res=>res.json()).then(data=>{
-  originalItems = data.map((event,i)=>{
-    const contentText = event.content ?? event.Title ?? '(无标题)';
-    const Start = event.Start ?? event.start ?? '';
-    const End   = event.End   ?? event.end   ?? '';
-    const blob  = (event.title ?? '').toString();
-    const pick = label => blob ? (new RegExp(label+'：([^\\n]+)').exec(blob) || [])[1] : '';
-    const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
-    const Region          = event.Region          ?? event.region          ?? pick('地区');
-    const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
-    const Company         = event.Company         ?? event.company         ?? pick('公司');
-    const Status          = event.Status          ?? event.status          ?? pick('状态');
-    const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
-    return {id:i+1, content: contentText, start: Start, end: End,
-            EventType, Region, Platform, Company, Status, ConsolePlatform};
-  });
+function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
+function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
-  // 提取所有过滤选项
-  originalItems.forEach(item => {
-    Object.entries(item).forEach(([k,v])=>{
-      allOptions[k] = allOptions[k] || new Set();
-      (Array.isArray(v)?v:[v]).forEach(val => { if(val!=null) allOptions[k].add(val); });
+/* -------- 获取事件并渲染（关键替换区） -------- */
+fetch(ENDPOINT)
+  .then(res => res.json())
+  .then(data => {
+    originalItems = data.map((event, i) => {
+  // 1) 简介文本：优先后端的 event.content，其次 Title，最后占位
+  const contentText = event.content ?? event.Title ?? '(无标题)';
+
+  // 2) 时间
+  const Start = event.Start ?? event.start ?? '';
+  const End   = event.End   ?? event.end   ?? '';
+
+  // 3) 如果后端提供了整块说明(event.title)，先准备一份纯文本
+  const blob = (event.title ?? '').toString();
+
+  // 4) 小工具：从整块说明中提取“标签：值”
+  const pick = (label) => {
+    if (!blob) return '';
+    const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+    return m ? m[1].trim() : '';
+  };
+
+  // 5) 结构化字段（优先用后端字段；没有就从整块里抽取）
+  const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+  const Region          = event.Region          ?? event.region          ?? pick('地区');
+  const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+  const Company         = event.Company         ?? event.company         ?? pick('公司');
+  const Status          = event.Status          ?? event.status          ?? pick('状态');
+  const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+
+  // 6) 悬停 HTML：若后端已给整块(title)，只做换行；否则按字段拼
+  let tooltipHtml;
+  if (blob) {
+    tooltipHtml = blob.replace(/\n/g, '<br>');
+  } else {
+    tooltipHtml = [
+      `事件名称：${contentText}`,
+      `事件类型：${EventType || ''}`,
+      `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+      `状态：${Status || ''}`,
+      `地区：${Region || ''}`,
+      `平台类型：${Platform || ''}`,
+      `主机类型：${ConsolePlatform || ''}`,
+      `公司：${Company || ''}`
+    ].join('<br>');
+  }
+
+
+
+  // 8) 返回给 timeline & 过滤
+  return {
+    id: event.id || `auto-${i + 1}`,
+    content: contentText,    // ✅ 简介只显示标题
+    start: Start,            // ✅ 时间轴关键字段
+    end: End || undefined,
+    title: tooltipHtml,      // ✅ 悬停完整说明（含 <br>）
+    EventType,
+    Region,
+    Platform,
+    Company,
+    Status,
+    ConsolePlatform
+  };
+});
+
+
+
+
+    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
+      locale: "zh-cn",
+      editable: false,
+      margin: { item: 10, axis: 50 },
+      orientation: { axis: 'bottom', item: 'bottom' },
+      tooltip: { followMouse: true, overflowMethod: 'flip' },
+      verticalScroll: true,
+      zoomKey: "ctrlKey",
+      stack: true
     });
   });
-  Object.keys(allOptions).forEach(k => allOptions[k] = Array.from(allOptions[k]));
 
-  // 创建时间轴
-  const container = document.getElementById('timeline');
-  timeline = new vis.Timeline(container, new vis.DataSet(originalItems), {});
+/* -------- 获取下拉选项 -------- */
+fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    allOptions = options;
+
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      if (!select) return;   // 元素不存在就直接跳过
+      select.innerHTML = ''; // 清空原有内容
+      (list || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        select.appendChild(o);
+      });
+    };
+
+
+
+   
+
+    // 初始化“新增过滤标准”的属性下拉
+    const attrSel = document.getElementById("filter-attribute");
+    attrSel.innerHTML = '';
+    Object.keys(attributeLabels).forEach(key => {
+      const o = document.createElement("option");
+      o.value = key;
+      o.textContent = attributeLabels[key];
+      attrSel.appendChild(o);
+    });
+attrSel.addEventListener("change", () => {
+  const key = attrSel.value;
+  const opts = getFilterOptionsForKey(key);  // ✅ 统一拿到数组
+  const sel = document.getElementById("filter-options");
+  sel.innerHTML = '';
+  opts.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = o.textContent = opt;
+    sel.appendChild(o);
+  });
+  if (filterOptionsChoices) filterOptionsChoices.destroy();
+  filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
 });
+    attrSel.dispatchEvent(new Event("change"));
+  });
+
+
 </script>
 </body>
 </html>
