@@ -11,47 +11,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 <style>
-  #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
-  .vis-tooltip {
-    white-space: normal !important;
-    max-width: 700px !important;
-    min-width: 300px;
-    font-size: 10px;
-    line-height: 1.2;
-    padding: 12px;
-    background-color: #fff;
-    border: 1px solid #ccc;
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
-  }
-  .vis-item {
-    font-size: 10px;
-    padding: 1px 2px;
-    background-color: #f5f5f5;
-    border: 1px solid #aaa;
-    border-radius: 4px;
-    max-width: 300px;
-  }
-  #filter-window {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #fff;
-    padding: 20px;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    display: none;
-    z-index: 2000;
-    width: 700px;
-    max-height: 80vh;
-    overflow: auto;
-  }
-  #current-filters div {
-    margin: 4px 0;
-  }
-  #current-filters button {
-    margin-left: 8px;
-  }
+#timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
+.vis-tooltip { white-space: normal !important; max-width: 700px !important; min-width: 300px; font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff; border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); }
+.vis-item { font-size: 10px; padding: 1px 2px; background-color: #f5f5f5; border: 1px solid #aaa; border-radius: 4px; max-width: 300px; }
+#filter-window, #add-filter-window { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #fff; padding: 20px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none; z-index: 2000; max-height: 80vh; overflow: auto; }
+#add-filter-window { width: 700px; height: 300px; }
+#filter-window { width: 700px; }
 </style>
 </head>
 <body>
@@ -64,6 +29,7 @@
 <!-- 过滤逻辑设置弹窗 -->
 <div id="filter-window">
   <h3>过滤标准（和逻辑）</h3>
+  <button onclick="openAddFilter()">增加过滤标准</button>
   <button onclick="resetFilters()">复原过滤标准</button>
   <button onclick="applyFilters()">应用和逻辑</button>
   <button onclick="applyFiltersOr()">应用或逻辑</button>
@@ -71,12 +37,23 @@
   <div id="current-filters"></div>
 </div>
 
+<!-- 添加过滤标准弹窗 -->
+<div id="add-filter-window">
+  <h3>新增过滤标准</h3>
+  <label>过滤属性：
+    <select id="filter-attribute"></select>
+  </label><br>
+  <label>过滤选项：
+    <select id="filter-options" multiple></select>
+  </label><br>
+  <button onclick="confirmAddFilter()">确定</button>
+  <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
+</div>
+
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
-
-let allOptions = {}, activeFilters = {}, filterLogic = 'and';
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
-
 const attributeLabels = {
   EventType: "事件类型",
   Region: "地区",
@@ -134,7 +111,7 @@ function applyFiltersOr() {
 // 过滤操作
 function updateTimelineByFilter() {
   const filtered = originalItems.filter(item => {
-    const pass = (filterLogic === 'and') ? 
+    const pass = (filterLogic === 'and') ?
       Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? ''))) :
       Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
     return pass;
@@ -142,16 +119,53 @@ function updateTimelineByFilter() {
   timeline.setItems(filtered);
 }
 
-// 归一化数组
+// 打开新增过滤标准的窗口
+function openAddFilter() {
+  document.getElementById("add-filter-window").style.display = 'block';
+  const attrSel = document.getElementById("filter-attribute");
+  attrSel.innerHTML = '';
+  const attributes = ['EventType', 'Region', 'Platform', 'Company', 'Status', 'ConsolePlatform', 'Contributor'];
+  attributes.forEach(key => {
+    const o = document.createElement("option");
+    o.value = key;
+    o.textContent = attributeLabels[key];
+    attrSel.appendChild(o);
+  });
+  attrSel.onchange = () => {
+    const key = attrSel.value;
+    const opts = getFilterOptionsForKey(key);
+    const sel = document.getElementById("filter-options");
+    sel.innerHTML = '';
+    opts.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = o.textContent = opt;
+      sel.appendChild(o);
+    });
+  };
+  attrSel.dispatchEvent(new Event("change"));
+}
+
+// 确认添加过滤标准
+function confirmAddFilter() {
+  const attr = document.getElementById("filter-attribute").value;
+  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
+  if (attr && selected.length) {
+    activeFilters[attr] = selected;
+    updateFilterList();
+  }
+  document.getElementById("add-filter-window").style.display = 'none';
+}
+
 function normalizeToArray(raw) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string') return [raw];
   if (raw && typeof raw === 'object') {
-    try { return Object.values(raw).flat().filter(Boolean); } 
-    catch(e) {
-      let out = [];
+    try {
+      return Object.values(raw).flat().filter(Boolean);
+    } catch (e) {
+      var out = [];
       Object.keys(raw).forEach(k => {
-        let v = raw[k];
+        var v = raw[k];
         if (Array.isArray(v)) out = out.concat(v);
         else if (v) out.push(v);
       });
@@ -161,16 +175,20 @@ function normalizeToArray(raw) {
   return [];
 }
 
-// 返回候选数组
+// 根据选择的过滤属性，返回对应的候选数组（已归一）
 function getFilterOptionsForKey(key) {
   if (key === 'ConsolePlatform') {
-    if (Array.isArray(allOptions.ConsolePlatformFilter)) return allOptions.ConsolePlatformFilter;
-    if (allOptions.ConsolePlatform) return normalizeToArray(allOptions.ConsolePlatform);
+    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
+      return allOptions.ConsolePlatformFilter;
+    }
+    if (allOptions.ConsolePlatform) {
+      return normalizeToArray(allOptions.ConsolePlatform);
+    }
   }
   return normalizeToArray(allOptions[key]);
 }
 
-// 获取数据并初始化 timeline
+// 获取数据并渲染时间轴
 fetch(ENDPOINT)
 .then(res => res.json())
 .then(data => {
@@ -181,7 +199,7 @@ fetch(ENDPOINT)
     const blob = (event.title ?? '').toString();
     const pick = (label) => {
       if (!blob) return '';
-      const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+      const m = new RegExp(label + '：([^\n]+)').exec(blob);
       return m ? m[1].trim() : '';
     };
     const EventType = event.EventType ?? event.eventType ?? pick('事件类型');
@@ -191,10 +209,7 @@ fetch(ENDPOINT)
     const Status = event.Status ?? event.status ?? pick('状态');
     const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
     const Contributor = event.Contributor ?? event.contributor ?? '';
-
-    let tooltipHtml;
-    if (blob) tooltipHtml = blob.replace(/\n/g, '<br>');
-    else tooltipHtml = [
+    const tooltipHtml = blob ? blob.replace(/\n/g,'<br>') : [
       `事件名称：${contentText}`,
       `事件类型：${EventType || ''}`,
       `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
@@ -205,7 +220,6 @@ fetch(ENDPOINT)
       `公司：${Company || ''}`,
       `贡献者：${Contributor || ''}`
     ].join('<br>');
-
     return {
       id: event.id || `auto-${i+1}`,
       content: contentText,
@@ -215,7 +229,6 @@ fetch(ENDPOINT)
       EventType, Region, Platform, Company, Status, ConsolePlatform, Contributor
     };
   });
-
   timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
     locale: "zh-cn",
     editable: false,
