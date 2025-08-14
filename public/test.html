@@ -311,25 +311,17 @@ fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
     allOptions = options;
+
     const fill = (id, list) => {
       const select = document.getElementById(id);
-      select.innerHTML = '';
+      if (!select) return;   // 元素不存在就直接跳过
+      select.innerHTML = ''; // 清空原有内容
       (list || []).forEach(opt => {
         const o = document.createElement('option');
         o.value = o.textContent = opt;
         select.appendChild(o);
       });
     };
-const fill = (id, list) => {
-  const select = document.getElementById(id);
-  if (!select) return;   // 元素不存在就直接跳过
-  select.innerHTML = ''; // 清空原有内容
-  (list || []).forEach(opt => {
-    const o = document.createElement('option');
-    o.value = o.textContent = opt;
-    select.appendChild(o);
-  });
-};
 
     new Choices('#tag', { removeItemButton: true });
 
