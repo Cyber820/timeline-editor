@@ -306,6 +306,43 @@ fetch(ENDPOINT)
     });
   });
 
+/* -------- 获取下拉选项 -------- */
+fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    allOptions = options;
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      (list || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        select.appendChild(o);
+      });
+    };
+    fill("eventType", options.EventType);
+    fill("region", options.Region);
+    fill("platform", options.Platform);
+    fill("company", options.Company);
+    fill("tag", options.Tag);
+    new Choices('#tag', { removeItemButton: true });
+
+    document.getElementById("platform").addEventListener("change", function () {
+      const val = this.value;
+      const consoles = options.ConsolePlatform?.[val] || [];
+      const select = document.getElementById("console");
+      select.innerHTML = '';
+      if (consoles.length) {
+        document.getElementById("consoleLabel").style.display = 'inline';
+        consoles.forEach(c => {
+          const o = document.createElement("option");
+          o.value = o.textContent = c;
+          select.appendChild(o);
+        });
+      } else {
+        document.getElementById("consoleLabel").style.display = 'none';
+      }
+    });
 
     // 初始化“新增过滤标准”的属性下拉
     const attrSel = document.getElementById("filter-attribute");
