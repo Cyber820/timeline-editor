@@ -320,11 +320,17 @@ fetch(ENDPOINT + '?action=options')
         select.appendChild(o);
       });
     };
-    fill("eventType", options.EventType);
-    fill("region", options.Region);
-    fill("platform", options.Platform);
-    fill("company", options.Company);
-    fill("tag", options.Tag);
+const fill = (id, list) => {
+  const select = document.getElementById(id);
+  if (!select) return;   // 元素不存在就直接跳过
+  select.innerHTML = ''; // 清空原有内容
+  (list || []).forEach(opt => {
+    const o = document.createElement('option');
+    o.value = o.textContent = opt;
+    select.appendChild(o);
+  });
+};
+
     new Choices('#tag', { removeItemButton: true });
 
     document.getElementById("platform").addEventListener("change", function () {
