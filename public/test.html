@@ -338,7 +338,13 @@ fetch(ENDPOINT + '?action=options')
     });
 attrSel.addEventListener("change", () => {
   const key = attrSel.value;
-  const opts = getFilterOptionsForKey(key);  // ✅ 统一拿到数组
+  let opts = getFilterOptionsForKey(key); // ✅ 统一拿到数组
+
+  // 对 ConsolePlatform 做扁平化处理，确保每个选项都是字符串
+  if (key === 'ConsolePlatform' && opts && typeof opts === 'object') {
+    opts = normalizeToArray(opts);
+  }
+
   const sel = document.getElementById("filter-options");
   sel.innerHTML = '';
   opts.forEach(opt => {
@@ -346,12 +352,10 @@ attrSel.addEventListener("change", () => {
     o.value = o.textContent = opt;
     sel.appendChild(o);
   });
+
   if (filterOptionsChoices) filterOptionsChoices.destroy();
   filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
 });
-    attrSel.dispatchEvent(new Event("change"));
-  });
-
 
 </script>
 </body>
