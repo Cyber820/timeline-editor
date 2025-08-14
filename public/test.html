@@ -35,27 +35,9 @@
 <body>
   <h2>电子游戏时间轴</h2>
   <!-- 功能按钮 -->
-  <button onclick="openAddEventForm()">➕ 增加事件</button>
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
   <div id="timeline"></div>
 
-  <!-- 新增事件表单 -->
-  <div id="event-form">
-    <h3>新增事件</h3>
-    <label>事件名称（必填）：<input type="text" id="title"></label><br>
-    <label>事件类型（必填）：<select id="eventType"></select></label><br>
-    <label>开始时间（必填）：<input type="date" id="start"></label><br>
-    <label>结束时间：<input type="date" id="end"></label><br>
-    <label>地区（必填）：<select id="region"></select></label><br>
-    <label>平台类型：<select id="platform"></select></label><br>
-    <label id="consoleLabel" style="display:none">主机类型：<select id="console"></select></label><br>
-    <label>公司：<select id="company"></select></label><br>
-    <label>描述：<br><textarea id="description" rows="4" cols="40"></textarea></label><br>
-    <label>标签（多选）：<select id="tag" multiple></select></label><br>
-    <label>提交者昵称（选填）：<input type="text" id="submitter" maxlength="12" pattern="[\u4e00-\u9fa5\w]{0,12}" title="仅限中文、英文、数字，最多12字节"></label><br>
-    <button onclick="submitEvent()">提交</button>
-    <button onclick="document.getElementById('event-form').style.display='none'">关闭</button>
-  </div>
 
   <!-- 过滤逻辑设置弹窗 -->
   <div id="filter-window">
@@ -291,15 +273,7 @@ fetch(ENDPOINT)
     ].join('<br>');
   }
 
-  // 7) 调试：前 3 条打印看一下（你也可以保留你之前的 groupCollapsed）
-  if (i < 3) {
-    console.groupCollapsed(`🧪MAP #${i}`);
-    console.log('原始 event：', event);
-    console.log('contentText(简介)：', contentText);
-    console.log('提取字段：', { EventType, Region, Platform, Company, Status, ConsolePlatform });
-    console.log('tooltipHtml：', tooltipHtml);
-    console.groupEnd();
-  }
+
 
   // 8) 返回给 timeline & 过滤
   return {
@@ -317,16 +291,8 @@ fetch(ENDPOINT)
   };
 });
 
-    // ④ 映射完成后，再打印一个对比总览
-console.groupCollapsed('🧪DEBUG: 映射后条目快照');
-console.log('映射后示例 originalItems[0]:', originalItems?.[0]);
-console.log('映射后条目的键:', Object.keys(originalItems?.[0] || {}));
-console.table((originalItems || []).slice(0, 5).map(x => ({
-  id: x.id, content: x.content, start: x.start, end: x.end,
-  EventType: x.EventType, Region: x.Region, Platform: x.Platform,
-  Company: x.Company, Status: x.Status, ConsolePlatform: x.ConsolePlatform
-})));
-console.groupEnd();
+
+
 
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
@@ -403,30 +369,7 @@ attrSel.addEventListener("change", () => {
     attrSel.dispatchEvent(new Event("change"));
   });
 
-/* -------- 提交事件 -------- */
-function submitEvent() {
-  const tagList = Array.from(document.querySelector('#tag').selectedOptions).map(o => o.value);
-  const fd = new FormData();
-  fd.append("Title", title.value);
-  fd.append("Start", start.value);
-  fd.append("End", end.value);
-  fd.append("Region", region.value);
-  fd.append("Platform", platform.value);
-  fd.append("ConsolePlatform", document.getElementById("console").value);
-  fd.append("EventType", eventType.value);
-  fd.append("Company", company.value);
-  fd.append("Description", description.value);
-  fd.append("Submitter", submitter.value);
-  fd.append("Tag", tagList.join(","));
 
-  fetch(ENDPOINT, { method: "POST", body: fd })
-    .then(r => r.json())
-    .then(res => {
-      alert(res.message || "提交成功");
-      location.reload();
-    })
-    .catch(() => alert("提交失败，请检查网络"));
-}
 </script>
 </body>
 </html>
