@@ -82,6 +82,19 @@
         <option value="lineColor">连接线颜色</option>
       </select>
     </label>
+      <div id="fontSelectorDiv" style="display:none; margin-top:10px;">
+    <label>选择字体：
+      <select id="fontStyleSelect">
+        <option value="">请选择字体</option>
+        <option value="Roboto" style="font-family:'Roboto',sans-serif;">Roboto</option>
+        <option value="Montserrat" style="font-family:'Montserrat',sans-serif;">Montserrat</option>
+        <option value="Playfair Display" style="font-family:'Playfair Display',serif;">Playfair Display</option>
+      </select>
+    </label>
+    <button id="addFontStyleBtn">新增样式</button>
+  </div>
+      <!-- 第3行：显示已添加的样式 -->
+  <ul id="styleList"></ul>
   </div>
 
      <div>
@@ -459,10 +472,29 @@ function addStyleRow() {
 }
 
 // 确认按钮
+  
 function confirmStyle() {
   alert('样式设置完成（仅交互界面，未实际应用）');
   closeStyleWindow();
 }
+
+  document.getElementById('addFontStyleBtn').addEventListener('click', function() {
+  const select = document.getElementById('fontStyleSelect');
+  const font = select.value;
+  if (!font) return;
+
+  const list = document.getElementById('styleList'); // 样式列表容器
+  const li = document.createElement('li');
+  li.textContent = font;
+  li.style.fontFamily = font;  // 仅前端预览
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = '×';
+  deleteBtn.addEventListener('click', () => li.remove());
+  li.appendChild(deleteBtn);
+  list.appendChild(li);
+
+  select.value = '';
+});
 
 </script>
 </body>
