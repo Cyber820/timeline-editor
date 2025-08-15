@@ -162,18 +162,12 @@ function normalizeToArray(raw) {
 // 根据选择的过滤属性，返回对应的候选数组（已归一）
 function getFilterOptionsForKey(key) {
   if (key === 'ConsolePlatform') {
-    // 优先使用专门的 ConsolePlatformFilter（数组）
-    if (Array.isArray(allOptions.ConsolePlatformFilter)) {
-      return allOptions.ConsolePlatformFilter;
-    }
-    // 兜底：从 ConsolePlatform 映射里把所有主机类型打平为数组
-    if (allOptions.ConsolePlatform) {
-      return normalizeToArray(allOptions.ConsolePlatform);
-    }
+    // 直接返回主机类型数组，不依赖平台
+    return normalizeToArray(allOptions.ConsolePlatform);
   }
   return normalizeToArray(allOptions[key]);
 }
-  
+
 /* -------- 通用过滤判断（支持 6 个属性） -------- */
 function valueInSelected(val, selectedArr) {
   if (val == null) return false;
