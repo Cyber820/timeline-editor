@@ -36,6 +36,11 @@
   <h2>电子游戏时间轴</h2>
   <!-- 功能按钮 -->
   <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
+  <button onclick="openStyleWindow('EventType')">事件样式</button>
+  <button onclick="openStyleWindow('Platform')">平台样式</button>
+  <button onclick="openStyleWindow('ConsolePlatform')">主机样式</button>
+  <button onclick="openStyleWindow('Company')">公司样式</button>
+  <button onclick="openStyleWindow('Region')">地区样式</button>
   <div id="timeline"></div>
 
 
@@ -59,6 +64,47 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
+  <div id="style-window" style="
+  display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
+  width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
+  <h3 id="style-title">属性样式</h3>
+  <div style="margin-bottom:10px;">
+    <label>自定义样式：
+      <select id="style-type">
+        <option value="none">无</option>
+        <option value="font">字体</option>
+        <option value="fontColor">字体颜色</option>
+        <option value="borderColor">事件框颜色</option>
+        <option value="backgroundColor">事件框填充色</option>
+        <option value="lineColor">连接线颜色</option>
+      </select>
+    </label>
+  </div>
+
+     <div>
+    <button onclick="addStyleRow()">新增样式</button>
+  </div>
+
+  <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th>样式内容</th>
+        <th>应用属性</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- 动态添加行 -->
+    </tbody>
+  </table>
+
+  <div style="margin-top:10px; text-align:right;">
+    <button onclick="closeStyleWindow()">取消</button>
+    <button onclick="confirmStyle()">确定</button>
+  </div>
+</div>
+  
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
@@ -345,6 +391,76 @@ attrSel.addEventListener("change", () => {
     attrSel.dispatchEvent(new Event("change"));
   });
 
+  let currentStyleAttr = '';
+let styleTableBody = document.querySelector("#style-table tbody");
+let usedStyleTypes = {}; // 记录当前属性已经选择的样式类型
+
+function openStyleWindow(attr) {
+  currentStyleAttr = attr;
+  document.getElementById('style-title').textContent = attributeLabels[attr] + " 样式";
+  document.getElementById('style-window').style.display = 'block';
+
+  // 重置下拉和表格
+  document.getElementById('style-type').value = 'none';
+  styleTableBody.innerHTML = '';
+
+  // 初始化 usedStyleTypes
+  if (!usedStyleTypes[attr]) usedStyleTypes[attr] = [];
+}
+
+function closeStyleWindow() {
+  document.getElementById('style-window').style.display = 'none';
+}
+
+// 添加一行样式
+function addStyleRow() {
+  const styleType = document.getElementById('style-type').value;
+  if (styleType === 'none') {
+    alert('请选择样式类型');
+    return;
+  }
+  if (usedStyleTypes[currentStyleAttr].includes(styleType)) {
+    alert('此样式已被使用，请选择其他样式');
+    return;
+  }
+  usedStyleTypes[currentStyleAttr].push(styleType);
+
+  const tr = document.createElement('tr');
+  // 样式内容占位
+  const tdContent = document.createElement('td');
+  tdContent.textContent = styleType + " (待填写)";
+
+  // 应用属性多选
+  const tdAttr = document.createElement('td');
+  const select = document.createElement('select');
+  select.multiple = true;
+  // 将当前属性下的可用子属性填充（这里只显示单个属性，后续可扩展）
+  select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
+  tdAttr.appendChild(select);
+
+  // 删除按钮
+  const tdAction = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '×';
+  delBtn.onclick = () => {
+    tr.remove();
+    // 移除 usedStyleTypes
+    const idx = usedStyleTypes[currentStyleAttr].indexOf(styleType);
+    if (idx >= 0) usedStyleTypes[currentStyleAttr].splice(idx, 1);
+  };
+  tdAction.appendChild(delBtn);
+
+  tr.appendChild(tdContent);
+  tr.appendChild(tdAttr);
+  tr.appendChild(tdAction);
+  styleTableBody.appendChild(tr);
+}
+
+// 确认按钮
+function confirmStyle() {
+  alert('样式设置完成（仅交互界面，未实际应用）');
+  closeStyleWindow();
+}
 
 </script>
 </body>
