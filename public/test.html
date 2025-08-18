@@ -86,9 +86,13 @@
     <label>选择字体：
       <select id="fontStyleSelect">
         <option value="">请选择字体</option>
-        <option value="Roboto" style="font-family:'Roboto',sans-serif;">Roboto</option>
-        <option value="Montserrat" style="font-family:'Montserrat',sans-serif;">Montserrat</option>
-        <option value="Playfair Display" style="font-family:'Playfair Display',serif;">Playfair Display</option>
+      <option value="Arial">Arial</option>
+      <option value="SimSun">宋体</option>
+      <option value="SimHei">黑体</option>
+      <option value="Microsoft YaHei">微软雅黑</option>
+      <option value="KaiTi">楷体</option>
+      <option value="STFangsong">仿宋</option>
+      <option value="Courier New">Courier New</option>
       </select>
     </label>
     <button id="addFontStyleBtn">新增样式</button>
@@ -423,6 +427,17 @@ function openStyleWindow(attr) {
   if (!usedStyleTypes[attr]) usedStyleTypes[attr] = [];
 }
 
+  function onStyleTypeChange() {
+  const styleType = document.getElementById("style-type").value;
+  const fontDiv = document.getElementById("fontSelectorDiv");
+
+  if(styleType === "fontFamily") {
+    fontDiv.style.display = "block"; // 显示字体选择框
+  } else {
+    fontDiv.style.display = "none";
+  }
+}
+  
 function closeStyleWindow() {
   document.getElementById('style-window').style.display = 'none';
 }
@@ -441,11 +456,24 @@ function addStyleRow() {
   usedStyleTypes[currentStyleAttr].push(styleType);
 
   const tr = document.createElement('tr');
-  // 样式内容占位
-  const tdContent = document.createElement('td');
-  tdContent.textContent = styleType + " (待填写)";
 
-  // 应用属性多选
+  // 样式内容 td
+  const tdContent = document.createElement('td');
+
+  let styleValue = styleType; // 默认内容
+  // 如果是字体类型，从 font 下拉框获取
+  if (styleType === 'fontFamily') {
+    const fontSelect = document.getElementById('fontFamilySelect');
+    if (fontSelect) {
+      styleValue = fontSelect.value;
+    } else {
+      styleValue = '(未选择字体)';
+    }
+  }
+
+  tdContent.textContent = styleValue;
+
+  // 应用属性多选 td
   const tdAttr = document.createElement('td');
   const select = document.createElement('select');
   select.multiple = true;
@@ -453,7 +481,7 @@ function addStyleRow() {
   select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
   tdAttr.appendChild(select);
 
-  // 删除按钮
+  // 删除按钮 td
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.textContent = '×';
@@ -470,7 +498,6 @@ function addStyleRow() {
   tr.appendChild(tdAction);
   styleTableBody.appendChild(tr);
 }
-
 // 确认按钮
   
 function confirmStyle() {
