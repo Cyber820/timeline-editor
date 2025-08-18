@@ -464,13 +464,20 @@ function addStyleRow() {
 
   let styleValue = styleType; // 默认内容
   // 如果是字体类型，从 font 下拉框获取
-  if (styleType === 'fontFamily') {
-    const fontSelect = document.getElementById('fontFamilySelect');
-    if (fontSelect) {
-      styleValue = fontSelect.value;
-    } else {
-      styleValue = '(未选择字体)';
-    }
+   if (styleType === 'fontFamily') {
+    // 字体类型用下拉框显示
+    const fontSelect = document.createElement('select');
+    fontSelect.innerHTML = `
+      <option value="">请选择字体</option>
+      <option value="Arial">Arial</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Times New Roman">Times New Roman</option>
+      <option value="SimHei">黑体</option>
+      <option value="SimSun">宋体</option>
+    `;
+    tdContent.appendChild(fontSelect);
+  } else {
+    tdContent.textContent = styleType + " (待填写)";
   }
 
   tdContent.textContent = styleValue;
