@@ -451,6 +451,8 @@ function addStyleRow() {
     alert('请选择样式类型');
     return;
   }
+
+  // 检查当前属性下是否已使用该样式
   if (usedStyleTypes[currentStyleAttr].includes(styleType)) {
     alert('此样式已被使用，请选择其他样式');
     return;
@@ -459,44 +461,40 @@ function addStyleRow() {
 
   const tr = document.createElement('tr');
 
-  // 样式内容 td
+  // 样式内容单元格
   const tdContent = document.createElement('td');
 
-  let styleValue = styleType; // 默认内容
-  // 如果是字体类型，从 font 下拉框获取
-   if (styleType === 'fontFamily') {
-    // 字体类型用下拉框显示
+  // ---------- 新增逻辑：字体下拉 ----------
+  if (styleType === 'fontFamily') {
     const fontSelect = document.createElement('select');
     fontSelect.innerHTML = `
-      <option value="">请选择字体</option>
       <option value="Arial">Arial</option>
-      <option value="Verdana">Verdana</option>
       <option value="Times New Roman">Times New Roman</option>
-      <option value="SimHei">黑体</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Verdana">Verdana</option>
       <option value="SimSun">宋体</option>
+      <option value="SimHei">黑体</option>
+      <option value="KaiTi">楷体</option>
     `;
     tdContent.appendChild(fontSelect);
   } else {
     tdContent.textContent = styleType + " (待填写)";
   }
 
-  tdContent.textContent = styleValue;
-
-  // 应用属性多选 td
+  // 应用属性多选
   const tdAttr = document.createElement('td');
   const select = document.createElement('select');
   select.multiple = true;
-  // 将当前属性下的可用子属性填充（这里只显示单个属性，后续可扩展）
+  // 当前属性下的可选子属性
   select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
   tdAttr.appendChild(select);
 
-  // 删除按钮 td
+  // 删除按钮
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.textContent = '×';
   delBtn.onclick = () => {
     tr.remove();
-    // 移除 usedStyleTypes
     const idx = usedStyleTypes[currentStyleAttr].indexOf(styleType);
     if (idx >= 0) usedStyleTypes[currentStyleAttr].splice(idx, 1);
   };
