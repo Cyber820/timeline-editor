@@ -501,27 +501,34 @@ function addStyleRow() {
 // 确认按钮
   
 function confirmStyle() {
-  alert('样式设置完成（仅交互界面，未实际应用）');
-  closeStyleWindow();
+  const rows = styleTableBody.querySelectorAll('tr');
+  rows.forEach(row => {
+    const tdContent = row.children[0];
+    const tdAttr = row.children[1];
+
+    const styleType = tdContent.textContent.split(' ')[0]; // 获取样式类型
+    const selectedAttrs = Array.from(tdAttr.querySelectorAll('option:checked')).map(o => o.value);
+
+    selectedAttrs.forEach(attr => {
+      if (!customStyles[attr]) customStyles[attr] = {};
+
+      // 处理不同样式类型
+      if (styleType === 'fontFamily') {
+        // 字体类型，直接取内容
+        customStyles[attr]['fontFamily'] = tdContent.textContent;
+      } else if (styleType === 'color') {
+        customStyles[attr]['color'] = tdContent.textContent;
+      } else if (styleType === 'background') {
+        customStyles[attr]['backgroundColor'] = tdContent.textContent;
+      } else if (styleType === 'border') {
+        customStyles[attr]['border'] = tdContent.textContent;
+      }
+      // 可以根据需要继续扩展其他样式类型
+    });
+  });
+
+  applyCustomStyles(); // 调用函数将 customStyles 应用到页面
 }
-
-  document.getElementById('addFontStyleBtn').addEventListener('click', function() {
-  const select = document.getElementById('fontStyleSelect');
-  const font = select.value;
-  if (!font) return;
-
-  const list = document.getElementById('styleList'); // 样式列表容器
-  const li = document.createElement('li');
-  li.textContent = font;
-  li.style.fontFamily = font;  // 仅前端预览
-  const deleteBtn = document.createElement('button');
-  deleteBtn.textContent = '×';
-  deleteBtn.addEventListener('click', () => li.remove());
-  li.appendChild(deleteBtn);
-  list.appendChild(li);
-
-  select.value = '';
-});
 
 </script>
 </body>
