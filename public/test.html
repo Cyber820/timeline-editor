@@ -66,43 +66,59 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-  <div id="style-window" style="
+    <!-- 添加样式弹窗 -->
+ <div id="style-window" style="
   display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
-  width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
+  width:700px; height:460px; background:#fff; border:1px solid #ccc; padding:20px;
   box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
   <h3 id="style-title">属性样式</h3>
+
+  <!-- 绑定类型区：默认=none；只有点击“确认绑定”才写入 bound -->
   <div style="margin-bottom:10px;">
     <label>自定义样式：
-      <select id="style-type">
+      <select id="style-type" onchange="onStyleTypeChange()">
         <option value="none">无</option>
-        <option value="font">字体</option>
+        <!-- 建议把“字体”对应的 value 统一成 fontFamily，便于后续逻辑判断 -->
+        <option value="fontFamily">字体</option>
         <option value="fontColor">字体颜色</option>
         <option value="borderColor">事件框颜色</option>
         <option value="backgroundColor">事件框填充色</option>
         <option value="lineColor">连接线颜色</option>
       </select>
     </label>
-      <div id="fontSelectorDiv" style="display:none; margin-top:10px;">
+
+    <!-- 提示当前绑定（只读展示，可选） -->
+    <span id="bound-type-hint" style="margin-left:10px; color:#666;">当前绑定：无</span>
+
+    <!-- 绑定操作：只有当 stagedType !== none 且尚未绑定时，确认按钮才可点 -->
+    <button id="style-confirm-btn" disabled style="margin-left:10px;">确认绑定</button>
+    <!-- 已绑定时显示“重置”，未绑定时隐藏 -->
+    <button id="style-reset-btn" style="display:none; margin-left:6px;">重置</button>
+  </div>
+
+  <!-- 字体选择器（仅当 style-type=fontFamily 且已绑定时用于新增规则的内容输入） -->
+  <div id="fontSelectorDiv" style="display:none; margin-top:10px;">
     <label>选择字体：
       <select id="fontStyleSelect">
         <option value="">请选择字体</option>
-      <option value="Arial">Arial</option>
-      <option value="SimSun">宋体</option>
-      <option value="SimHei">黑体</option>
-      <option value="Microsoft YaHei">微软雅黑</option>
-      <option value="KaiTi">楷体</option>
-      <option value="STFangsong">仿宋</option>
-      <option value="Courier New">Courier New</option>
+        <option value="Arial">Arial</option>
+        <option value="SimSun">宋体</option>
+        <option value="SimHei">黑体</option>
+        <option value="Microsoft YaHei">微软雅黑</option>
+        <option value="KaiTi">楷体</option>
+        <option value="STFangsong">仿宋</option>
+        <option value="Courier New">Courier New</option>
       </select>
     </label>
     <button id="addFontStyleBtn">新增样式</button>
   </div>
-      <!-- 第3行：显示已添加的样式 -->
-  <ul id="styleList"></ul>
-  </div>
 
-     <div>
-    <button onclick="addStyleRow()">新增样式</button>
+  <!-- （可选）展示已添加样式的一览，如果你用到它 -->
+  <ul id="styleList" style="margin-top:8px;"></ul>
+
+  <!-- 在同一类型下新增规则行：未绑定前禁用，绑定后启用 -->
+  <div style="margin-top:8px;">
+    <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
   </div>
 
   <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
@@ -113,7 +129,7 @@
         <th>操作</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="styleTableBody">
       <!-- 动态添加行 -->
     </tbody>
   </table>
@@ -123,6 +139,7 @@
     <button onclick="confirmStyle()">确定</button>
   </div>
 </div>
+
   
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
@@ -416,29 +433,137 @@ attrSel.addEventListener("change", () => {
 let styleTableBody = document.querySelector("#style-table tbody");
 let usedStyleTypes = {}; // 记录当前属性已经选择的样式类型
 
+
+// 全局状态（若已存在同名变量，可保留你自己的，只要含义一致即可）
+const boundStyleType = {};   // { [attr]: 'fontFamily' | 'fontColor' | ... | 'none' }
+let stagedType = 'none';     // 下拉当前临时选择（未确认前）
+let currentStyleAttr = null; // 当前正在编辑的属性 key
+
+// ===== 1) 打开样式窗口 =====
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
-  document.getElementById('style-title').textContent = attributeLabels[attr] + " 样式";
+
+  // 标题 & 显示窗口（你的实现里已有这些 DOM）
+  document.getElementById('style-title').textContent = (window.attributeLabels?.[attr] || attr) + ' 样式';
   document.getElementById('style-window').style.display = 'block';
 
-  // 重置下拉和表格
-  document.getElementById('style-type').value = 'none';
+  const styleTypeSelect = document.getElementById('style-type');
+  const styleTableBody  = document.getElementById('styleTableBody');
+  const confirmBtn      = document.getElementById('style-confirm-btn');
+  const resetBtn        = document.getElementById('style-reset-btn');
+  const addBtn          = document.getElementById('add-style-btn');
+  const boundHint       = document.getElementById('bound-type-hint');
+  const fontDiv         = document.getElementById('fontSelectorDiv');
+
+  // 默认=无，且不写入绑定（避免误绑定）
+  styleTypeSelect.value = 'none';
+  stagedType = 'none';
+  if (fontDiv) fontDiv.style.display = 'none';
+
+  // 清空临时表格展示（不影响已绑定；未确认前不渲染历史）
   styleTableBody.innerHTML = '';
 
-  // 初始化 usedStyleTypes
-  if (!usedStyleTypes[attr]) usedStyleTypes[attr] = [];
-}
+  const bound = boundStyleType[attr] || 'none';
+  if (bound !== 'none') {
+    // 已绑定：提示当前绑定，允许新增样式；显示“重置”，隐藏“确认”
+    if (boundHint) boundHint.textContent = '当前绑定：' + bound;
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'none'; }
+    if (resetBtn)   resetBtn.style.display = 'inline-block';
+    if (addBtn)     addBtn.disabled = false;
 
-  function onStyleTypeChange() {
-  const styleType = document.getElementById("style-type").value;
-  const fontDiv = document.getElementById("fontSelectorDiv");
-
-  if(styleType === "fontFamily") {
-    fontDiv.style.display = "block"; // 显示字体选择框
+    // 如果你希望打开窗口时就显示与已绑定类型对应的输入区域，可按需展示
+    if (fontDiv) fontDiv.style.display = (bound === 'fontFamily') ? 'block' : 'none';
   } else {
-    fontDiv.style.display = "none";
+    // 未绑定：提示无、禁用新增样式、显示“确认绑定”、隐藏“重置”
+    if (boundHint) boundHint.textContent = '当前绑定：无';
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
+    if (resetBtn)   resetBtn.style.display = 'none';
+    if (addBtn)     addBtn.disabled = true;
   }
 }
+
+// ===== 2) 下拉变更（只更新 staged，不写入 bound）=====
+function onStyleTypeChange() {
+  const styleTypeSelect = document.getElementById('style-type');
+  const confirmBtn      = document.getElementById('style-confirm-btn');
+  const fontDiv         = document.getElementById('fontSelectorDiv');
+
+  stagedType = styleTypeSelect.value;
+
+  // 仅用于输入控件展示
+  if (fontDiv) fontDiv.style.display = (stagedType === 'fontFamily') ? 'block' : 'none';
+
+  // 只有“未绑定”时，且用户选择了具体类型，才允许“确认绑定”
+  const alreadyBound = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
+  if (!alreadyBound) {
+    if (confirmBtn) confirmBtn.disabled = (stagedType === 'none');
+  }
+}
+
+// ===== 3) 确认绑定（从 staged -> bound）=====
+function onConfirmBind() {
+  if (stagedType === 'none') return; // 双保险
+
+  const styleTableBody  = document.getElementById('styleTableBody');
+  const confirmBtn      = document.getElementById('style-confirm-btn');
+  const resetBtn        = document.getElementById('style-reset-btn');
+  const addBtn          = document.getElementById('add-style-btn');
+  const boundHint       = document.getElementById('bound-type-hint');
+  const fontDiv         = document.getElementById('fontSelectorDiv');
+
+  const prevBound = boundStyleType[currentStyleAttr] || 'none';
+  if (prevBound !== 'none' && prevBound !== stagedType) {
+    const ok = window.confirm('切换样式类型将清空当前属性下已设置的所有规则，是否继续？');
+    if (!ok) return;
+    // 清空已存在的行
+    styleTableBody.innerHTML = '';
+  }
+
+  // 正式绑定
+  boundStyleType[currentStyleAttr] = stagedType;
+
+  // UI 切换：隐藏确认、显示重置、允许新增、更新提示
+  if (confirmBtn) confirmBtn.style.display = 'none';
+  if (resetBtn)   resetBtn.style.display = 'inline-block';
+  if (addBtn)     addBtn.disabled = false;
+  if (boundHint)  boundHint.textContent = '当前绑定：' + stagedType;
+
+  // 根据绑定类型展示输入控件（例如字体）
+  if (fontDiv) fontDiv.style.display = (stagedType === 'fontFamily') ? 'block' : 'none';
+}
+
+// ===== 4) 重置绑定（回到 none，清空规则）=====
+function onResetBind() {
+  const styleTableBody  = document.getElementById('styleTableBody');
+  const styleTypeSelect = document.getElementById('style-type');
+  const confirmBtn      = document.getElementById('style-confirm-btn');
+  const resetBtn        = document.getElementById('style-reset-btn');
+  const addBtn          = document.getElementById('add-style-btn');
+  const boundHint       = document.getElementById('bound-type-hint');
+  const fontDiv         = document.getElementById('fontSelectorDiv');
+
+  const hasRows = styleTableBody.querySelectorAll('tr').length > 0;
+  const ok = !hasRows || window.confirm('重置将清空该属性下所有规则，是否继续？');
+  if (!ok) return;
+
+  // 回到无绑定
+  boundStyleType[currentStyleAttr] = 'none';
+  styleTableBody.innerHTML = '';
+  styleTypeSelect.value = 'none';
+  stagedType = 'none';
+
+  // UI 切换：显示确认、隐藏重置、禁用新增、提示无
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
+  if (resetBtn)   resetBtn.style.display = 'none';
+  if (addBtn)     addBtn.disabled = true;
+  if (boundHint)  boundHint.textContent = '当前绑定：无';
+  if (fontDiv)    fontDiv.style.display = 'none';
+}
+
+// （可选）初始化一次事件绑定（如果你没有在 HTML 里写 onclick/onchange）
+document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
+document.getElementById('style-reset-btn')?.addEventListener('click', onResetBind);
+// 下拉的 onchange 你已经在 HTML 写了：onchange="onStyleTypeChange()"
   
 function closeStyleWindow() {
   document.getElementById('style-window').style.display = 'none';
@@ -446,9 +571,9 @@ function closeStyleWindow() {
 
 // 添加一行样式
 function addStyleRow() {
-  const styleType = document.getElementById('style-type').value;
-  if (styleType === 'none') {
-    alert('请选择样式类型');
+ const bound = boundStyleType[currentStyleAttr];
+  if (!bound || bound === 'none') {
+    alert('请先从下拉中选择样式类型并点击“确认绑定”。');
     return;
   }
 
