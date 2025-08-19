@@ -486,50 +486,58 @@ function openStyleWindow(attr) {
 function onStyleTypeChange() {
   const styleTypeSelect = document.getElementById('style-type');
   const confirmBtn      = document.getElementById('style-confirm-btn');
-  const fontDiv         = document.getElementById('fontSelectorDiv');
+  const boundHint       = document.getElementById('bound-type-hint');
 
+  // 读取用户当前的临时选择（未确认前只算 staged）
   stagedType = styleTypeSelect.value;
 
-  // 仅用于输入控件展示
-  if (fontDiv) fontDiv.style.display = (stagedType === 'fontFamily') ? 'block' : 'none';
-
-  // 只有“未绑定”时，且用户选择了具体类型，才允许“确认绑定”
+  // 如果当前属性已经绑定了样式类型，则不允许通过下拉直接改动
   const alreadyBound = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
-  if (!alreadyBound) {
-    if (confirmBtn) confirmBtn.disabled = (stagedType === 'none');
+  if (alreadyBound) {
+    // 恢复下拉为 none，保持“只能先重置再更改”的规则
+    styleTypeSelect.value = 'none';
+    stagedType = 'none';
+    // 可选：给出轻提示（不建议用 alert，避免打断）
+    if (boundHint) boundHint.textContent = '当前绑定：' + boundStyleType[currentStyleAttr] + '（如需更改，请先点击“重置”）';
+    // 已绑定状态下，确认按钮始终不可用
+    if (confirmBtn) confirmBtn.disabled = true;
+    return;
+  }
+
+  // 未绑定：只有选择了具体类型（非 none），才允许“确认绑定”
+  if (confirmBtn) {
+    confirmBtn.disabled = (stagedType === 'none');
   }
 }
 
 // ===== 3) 确认绑定（从 staged -> bound）=====
 function onConfirmBind() {
-  if (stagedType === 'none') return; // 双保险
+  if (stagedType === 'none') return;
 
   const styleTableBody  = document.getElementById('styleTableBody');
   const confirmBtn      = document.getElementById('style-confirm-btn');
   const resetBtn        = document.getElementById('style-reset-btn');
   const addBtn          = document.getElementById('add-style-btn');
   const boundHint       = document.getElementById('bound-type-hint');
-  const fontDiv         = document.getElementById('fontSelectorDiv');
 
   const prevBound = boundStyleType[currentStyleAttr] || 'none';
   if (prevBound !== 'none' && prevBound !== stagedType) {
     const ok = window.confirm('切换样式类型将清空当前属性下已设置的所有规则，是否继续？');
     if (!ok) return;
-    // 清空已存在的行
     styleTableBody.innerHTML = '';
   }
 
   // 正式绑定
   boundStyleType[currentStyleAttr] = stagedType;
 
-  // UI 切换：隐藏确认、显示重置、允许新增、更新提示
+  // UI 切换
   if (confirmBtn) confirmBtn.style.display = 'none';
   if (resetBtn)   resetBtn.style.display = 'inline-block';
   if (addBtn)     addBtn.disabled = false;
-  if (boundHint)  boundHint.textContent = '当前样式：' + stagedType;
+  if (boundHint)  boundHint.textContent = '当前绑定：' + stagedType;
 
-  // 根据绑定类型展示输入控件（例如字体）
-  if (fontDiv) fontDiv.style.display = (stagedType === 'fontFamily') ? 'block' : 'none';
+  // ✅ 自动生成首行，让用户一眼看到可选控件
+  addStyleRow();
 }
 
 // ===== 4) 重置绑定（回到 none，清空规则）=====
@@ -571,40 +579,70 @@ function closeStyleWindow() {
 
 // 添加一行样式
 function addStyleRow() {
- const bound = boundStyleType[currentStyleAttr];
+  const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
-    alert('请先从下拉中选择样式类型并点击“确认样式”。');
+    alert('请先从下拉中选择样式类型并点击“确认绑定”。');
     return;
   }
 
-  // 检查当前属性下是否已使用该样式
-  if (usedStyleTypes[currentStyleAttr].includes(styleType)) {
-    alert('此样式已被使用，请选择其他样式');
-    return;
-  }
-  usedStyleTypes[currentStyleAttr].push(styleType);
-
+  const tbody = document.getElementById('styleTableBody');
   const tr = document.createElement('tr');
 
-  // 样式内容单元格
+  // --- 左侧：根据已绑定的类型，生成控件 ---
   const tdContent = document.createElement('td');
+  tdContent.appendChild(buildStyleControl(bound)); // ⬅ 见下方 buildStyleControl
 
-  // ---------- 新增逻辑：字体下拉 ----------
-  if (styleType === 'fontFamily') {
+  // --- 右侧：应用属性/子属性（你可以替换为真实的子属性列表） ---
+  const tdAttr = document.createElement('td');
+  const select = document.createElement('select');
+  select.multiple = true;
+  // 这里示例：当前属性本身。若你有“子属性/具体取值”，在这里生成多个 <option>
+  select.innerHTML = `<option value="${currentStyleAttr}">${(window.attributeLabels?.[currentStyleAttr] || currentStyleAttr)}</option>`;
+  tdAttr.appendChild(select);
+
+  // --- 操作：删除本行 ---
+  const tdAction = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '×';
+  delBtn.onclick = () => tr.remove();
+  tdAction.appendChild(delBtn);
+
+  tr.appendChild(tdContent);
+  tr.appendChild(tdAttr);
+  tr.appendChild(tdAction);
+  tbody.appendChild(tr);
+}
+
+// 根据类型生成控件（可按需扩展）
+function buildStyleControl(type) {
+  const wrapper = document.createElement('div');
+
+  if (type === 'fontFamily') {
     const fontSelect = document.createElement('select');
     fontSelect.innerHTML = `
+      <option value="">请选择字体</option>
       <option value="Arial">Arial</option>
-      <option value="Times New Roman">Times New Roman</option>
-      <option value="Courier New">Courier New</option>
-      <option value="Verdana">Verdana</option>
       <option value="SimSun">宋体</option>
       <option value="SimHei">黑体</option>
+      <option value="Microsoft YaHei">微软雅黑</option>
       <option value="KaiTi">楷体</option>
+      <option value="STFangsong">仿宋</option>
+      <option value="Courier New">Courier New</option>
     `;
-    tdContent.appendChild(fontSelect);
+    wrapper.appendChild(fontSelect);
+  } else if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    const color = document.createElement('input');
+    color.type = 'color';
+    wrapper.appendChild(color);
   } else {
-    tdContent.textContent = styleType + " (待填写)";
+    // 其他类型的占位控件（按需补完）
+    const span = document.createElement('span');
+    span.textContent = type + '（待配置）';
+    wrapper.appendChild(span);
   }
+
+  return wrapper;
+}
 
   // 应用属性多选
   const tdAttr = document.createElement('td');
