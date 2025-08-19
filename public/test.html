@@ -586,25 +586,32 @@ function addStyleRow() {
   }
 
   const tbody = document.getElementById('styleTableBody');
+  if (!tbody) {
+    console.error('未找到 #styleTableBody');
+    return;
+  }
+
   const tr = document.createElement('tr');
 
-  // --- 左侧：根据已绑定的类型，生成控件 ---
+  // 左：样式内容控件
   const tdContent = document.createElement('td');
-  tdContent.appendChild(buildStyleControl(bound)); // ⬅ 见下方 buildStyleControl
+  tdContent.appendChild(buildStyleControl(bound));
 
-  // --- 右侧：应用属性/子属性（你可以替换为真实的子属性列表） ---
+  // 中：应用属性/子属性（如有子属性，请在此生成多个 <option>）
   const tdAttr = document.createElement('td');
   const select = document.createElement('select');
   select.multiple = true;
-  // 这里示例：当前属性本身。若你有“子属性/具体取值”，在这里生成多个 <option>
-  select.innerHTML = `<option value="${currentStyleAttr}">${(window.attributeLabels?.[currentStyleAttr] || currentStyleAttr)}</option>`;
+  select.innerHTML = `<option value="${currentStyleAttr}">
+    ${(window.attributeLabels?.[currentStyleAttr] || currentStyleAttr)}
+  </option>`;
   tdAttr.appendChild(select);
 
-  // --- 操作：删除本行 ---
+  // 右：操作（删除本行）
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
+  delBtn.type = 'button';
   delBtn.textContent = '×';
-  delBtn.onclick = () => tr.remove();
+  delBtn.addEventListener('click', () => tr.remove());
   tdAction.appendChild(delBtn);
 
   tr.appendChild(tdContent);
@@ -613,7 +620,7 @@ function addStyleRow() {
   tbody.appendChild(tr);
 }
 
-// 根据类型生成控件（可按需扩展）
+// 根据已绑定类型构造控件
 function buildStyleControl(type) {
   const wrapper = document.createElement('div');
 
@@ -630,12 +637,16 @@ function buildStyleControl(type) {
       <option value="Courier New">Courier New</option>
     `;
     wrapper.appendChild(fontSelect);
-  } else if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+  } else if (
+    type === 'fontColor' ||
+    type === 'borderColor' ||
+    type === 'backgroundColor' ||
+    type === 'lineColor'
+  ) {
     const color = document.createElement('input');
     color.type = 'color';
     wrapper.appendChild(color);
   } else {
-    // 其他类型的占位控件（按需补完）
     const span = document.createElement('span');
     span.textContent = type + '（待配置）';
     wrapper.appendChild(span);
@@ -643,30 +654,6 @@ function buildStyleControl(type) {
 
   return wrapper;
 }
-
-  // 应用属性多选
-  const tdAttr = document.createElement('td');
-  const select = document.createElement('select');
-  select.multiple = true;
-  // 当前属性下的可选子属性
-  select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
-  tdAttr.appendChild(select);
-
-  // 删除按钮
-  const tdAction = document.createElement('td');
-  const delBtn = document.createElement('button');
-  delBtn.textContent = '×';
-  delBtn.onclick = () => {
-    tr.remove();
-    const idx = usedStyleTypes[currentStyleAttr].indexOf(styleType);
-    if (idx >= 0) usedStyleTypes[currentStyleAttr].splice(idx, 1);
-  };
-  tdAction.appendChild(delBtn);
-
-  tr.appendChild(tdContent);
-  tr.appendChild(tdAttr);
-  tr.appendChild(tdAction);
-  styleTableBody.appendChild(tr);
 
 // 确认按钮
   
