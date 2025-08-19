@@ -466,7 +466,7 @@ function openStyleWindow(attr) {
   const bound = boundStyleType[attr] || 'none';
   if (bound !== 'none') {
     // 已绑定：提示当前绑定，允许新增样式；显示“重置”，隐藏“确认”
-    if (boundHint) boundHint.textContent = '当前绑定：' + bound;
+    if (boundHint) boundHint.textContent = '当前样式：' + bound;
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'none'; }
     if (resetBtn)   resetBtn.style.display = 'inline-block';
     if (addBtn)     addBtn.disabled = false;
@@ -475,7 +475,7 @@ function openStyleWindow(attr) {
     if (fontDiv) fontDiv.style.display = (bound === 'fontFamily') ? 'block' : 'none';
   } else {
     // 未绑定：提示无、禁用新增样式、显示“确认绑定”、隐藏“重置”
-    if (boundHint) boundHint.textContent = '当前绑定：无';
+    if (boundHint) boundHint.textContent = '当前样式：无';
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
     if (resetBtn)   resetBtn.style.display = 'none';
     if (addBtn)     addBtn.disabled = true;
@@ -526,7 +526,7 @@ function onConfirmBind() {
   if (confirmBtn) confirmBtn.style.display = 'none';
   if (resetBtn)   resetBtn.style.display = 'inline-block';
   if (addBtn)     addBtn.disabled = false;
-  if (boundHint)  boundHint.textContent = '当前绑定：' + stagedType;
+  if (boundHint)  boundHint.textContent = '当前样式：' + stagedType;
 
   // 根据绑定类型展示输入控件（例如字体）
   if (fontDiv) fontDiv.style.display = (stagedType === 'fontFamily') ? 'block' : 'none';
@@ -556,7 +556,7 @@ function onResetBind() {
   if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
   if (resetBtn)   resetBtn.style.display = 'none';
   if (addBtn)     addBtn.disabled = true;
-  if (boundHint)  boundHint.textContent = '当前绑定：无';
+  if (boundHint)  boundHint.textContent = '当前样式：无';
   if (fontDiv)    fontDiv.style.display = 'none';
 }
 
@@ -573,7 +573,7 @@ function closeStyleWindow() {
 function addStyleRow() {
  const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
-    alert('请先从下拉中选择样式类型并点击“确认绑定”。');
+    alert('请先从下拉中选择样式类型并点击“确认样式”。');
     return;
   }
 
