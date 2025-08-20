@@ -433,25 +433,29 @@ function buildDataAttrs(ev) {
 
 
 
-    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
-      locale: "zh-cn",
-      editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      tooltip: { followMouse: true, overflowMethod: 'flip' },
-      verticalScroll: true,
-      zoomKey: "ctrlKey",
-      stack: true,
-      // —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* —— 
-  template: function (item) {
-    const attrs = buildDataAttrs(item);
-    const title = escapeHTML(item?.content ?? '');
-    return `<div class="ev" ${attrs}>
-              <div class="ev-title">${title}</div>
-            </div>`;
-    });
-  });
+timeline = new vis.Timeline(
+  document.getElementById("timeline"),
+  originalItems,
+  {
+    locale: "zh-cn",
+    editable: false,
+    margin: { item: 10, axis: 50 },
+    orientation: { axis: 'bottom', item: 'bottom' },
+    tooltip: { followMouse: true, overflowMethod: 'flip' },
+    verticalScroll: true,
+    zoomKey: "ctrlKey",
+    stack: true,
 
+    // —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* ——
+    template: function (item) {
+      const attrs = buildDataAttrs(item);
+      const title = escapeHTML(item?.content ?? '');
+      return `<div class="ev" ${attrs}>
+                <div class="ev-title">${title}</div>
+              </div>`;
+    }
+  }
+);
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
