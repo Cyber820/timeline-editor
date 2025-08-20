@@ -408,6 +408,28 @@ fetch(ENDPOINT)
   };
 });
 
+// —— 安全转义：避免标题里出现 < > & 等造成 HTML 注入 —— 
+function escapeHTML(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// —— 把业务字段映射为 data-*，供样式/过滤命中（为空的就忽略）——
+function buildDataAttrs(ev) {
+  const pairs = [
+    ['EventType',       ev.EventType],
+    ['Platform',        ev.Platform],
+    ['ConsolePlatform', ev.ConsolePlatform],
+    ['Company',         ev.Company],
+    ['Region',          ev.Region],
+    ['Status',          ev.Status],
+  ].filter(([_, v]) => v != null && v !== '');
+  return pairs
+    .map(([k, v]) => `data-${k}="${String(v).replace(/"/g, '&quot;')}"`)
+    .join(' ');
+}
 
 
 
@@ -419,7 +441,14 @@ fetch(ENDPOINT)
       tooltip: { followMouse: true, overflowMethod: 'flip' },
       verticalScroll: true,
       zoomKey: "ctrlKey",
-      stack: true
+      stack: true,
+      // —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* —— 
+  template: function (item) {
+    const attrs = buildDataAttrs(item);
+    const title = escapeHTML(item?.content ?? '');
+    return `<div class="ev" ${attrs}>
+              <div class="ev-title">${title}</div>
+            </div>`;
     });
   });
 
