@@ -64,59 +64,26 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-    <!-- 添加样式弹窗 -->
- <div id="style-window" style="
+  <div id="style-window" style="
   display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
-  width:700px; height:460px; background:#fff; border:1px solid #ccc; padding:20px;
+  width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
   box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
   <h3 id="style-title">属性样式</h3>
-
-  <!-- 绑定类型区：默认=none；只有点击“确认绑定”才写入 bound -->
   <div style="margin-bottom:10px;">
     <label>自定义样式：
-      <select id="style-type" onchange="onStyleTypeChange()">
+      <select id="style-type">
         <option value="none">无</option>
-        <!-- 建议把“字体”对应的 value 统一成 fontFamily，便于后续逻辑判断 -->
-        <option value="fontFamily">字体</option>
+        <option value="font">字体</option>
         <option value="fontColor">字体颜色</option>
         <option value="borderColor">事件框颜色</option>
         <option value="backgroundColor">事件框填充色</option>
         <option value="lineColor">连接线颜色</option>
       </select>
     </label>
-
-    <!-- 提示当前绑定（只读展示，可选） -->
-    <span id="bound-type-hint" style="margin-left:10px; color:#666;">当前绑定：无</span>
-
-    <!-- 绑定操作：只有当 stagedType !== none 且尚未绑定时，确认按钮才可点 -->
-    <button id="style-confirm-btn" disabled style="margin-left:10px;">确认绑定</button>
-    <!-- 已绑定时显示“重置”，未绑定时隐藏 -->
-    <button id="style-reset-btn" style="display:none; margin-left:6px;">重置</button>
   </div>
 
-  <!-- 字体选择器（仅当 style-type=fontFamily 且已绑定时用于新增规则的内容输入） -->
-  <div id="fontSelectorDiv" style="display:none; margin-top:10px;">
-    <label>选择字体：
-      <select id="fontStyleSelect">
-        <option value="">请选择字体</option>
-        <option value="Arial">Arial</option>
-        <option value="SimSun">宋体</option>
-        <option value="SimHei">黑体</option>
-        <option value="Microsoft YaHei">微软雅黑</option>
-        <option value="KaiTi">楷体</option>
-        <option value="STFangsong">仿宋</option>
-        <option value="Courier New">Courier New</option>
-      </select>
-    </label>
-    <button id="addFontStyleBtn">新增样式</button>
-  </div>
-
-  <!-- （可选）展示已添加样式的一览，如果你用到它 -->
-  <ul id="styleList" style="margin-top:8px;"></ul>
-
-  <!-- 在同一类型下新增规则行：未绑定前禁用，绑定后启用 -->
-  <div style="margin-top:8px;">
-    <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
+     <div>
+    <button onclick="addStyleRow()">新增样式</button>
   </div>
 
   <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
@@ -127,7 +94,7 @@
         <th>操作</th>
       </tr>
     </thead>
-    <tbody id="styleTableBody">
+    <tbody>
       <!-- 动态添加行 -->
     </tbody>
   </table>
@@ -137,29 +104,10 @@
     <button onclick="confirmStyle()">确定</button>
   </div>
 </div>
-
   
 <script>
-  // 急救日志：把所有运行时错误打出来，方便定位
-window.addEventListener('error', e => console.error('[window.error]', e.message, e.filename, e.lineno, e.colno));
-window.addEventListener('unhandledrejection', e => console.error('[promise]', e.reason));
-
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
-// [Styles: Fonts] 候选字体列表（仅使用常见系统字体，不引入外链/自托管）
-const FONT_OPTIONS = [
-  { label: '华文彩云 (STCaiyun)', value: 'STCaiyun' },
-  { label: '方正舒体 (FZShuTi)', value: 'FZShuTi' },
-  { label: '方正姚体 (FZYaoti)', value: 'FZYaoti' },
-  { label: '微软雅黑 (Microsoft YaHei)', value: '"Microsoft YaHei"' },
-  { label: '等线 (DengXian)', value: 'DengXian' },
-  { label: '苹方-简 (PingFang SC)', value: '"PingFang SC"' },
-  { label: '冬青黑体-简 (Hiragino Sans GB)', value: '"Hiragino Sans GB"' },
-  { label: '宋体 (SimSun)', value: 'SimSun' },
-  { label: '黑体 (SimHei)', value: 'SimHei' },
-  { label: '楷体 (KaiTi)', value: 'KaiTi' },
-];
-  
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
 
@@ -170,36 +118,6 @@ const attributeLabels = {
   Company: "公司",
   ConsolePlatform: "主机类型"
 };
-
-// [Styles: Fonts] 把选中的家族名映射为包含回退的字体栈（仅使用系统/常见字体）
-function cssFont(val) {
-  switch (val) {
-    case 'STCaiyun':
-      return '"STCaiyun","华文彩云","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'FZShuTi':
-      return '"FZShuTi","方正舒体","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'FZYaoti':
-      return '"FZYaoti","方正姚体","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case '"Microsoft YaHei"':
-      return '"Microsoft YaHei","微软雅黑","PingFang SC","Hiragino Sans GB",Arial,sans-serif';
-    case 'DengXian':
-      return 'DengXian,"Microsoft YaHei","PingFang SC","Hiragino Sans GB",Arial,sans-serif';
-    case '"PingFang SC"':
-      return '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif';
-    case '"Hiragino Sans GB"':
-      return '"Hiragino Sans GB","PingFang SC","Microsoft YaHei",Arial,sans-serif';
-    case 'SimSun':
-      return '"SimSun","宋体","STSong","Songti SC",serif';
-    case 'SimHei':
-      return '"SimHei","黑体","STHeiti","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'KaiTi':
-      return '"KaiTi","KaiTi_GB2312","楷体","STKaiti","Kaiti SC","Songti SC",serif';
-    default:
-      // [Styles: Fonts] 未匹配到就原样返回（方便未来扩展自定义值）
-      return val;
-  }
-}
-
 
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -410,57 +328,23 @@ fetch(ENDPOINT)
     Status,
     ConsolePlatform
   };
-    });
 });
 
-// —— 安全转义：避免标题里出现 < > & 等造成 HTML 注入 —— 
-function escapeHTML(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-// —— 把业务字段映射为 data-*，供样式/过滤命中（为空的就忽略）——
-function buildDataAttrs(ev) {
-  const pairs = [
-    ['EventType',       ev.EventType],
-    ['Platform',        ev.Platform],
-    ['ConsolePlatform', ev.ConsolePlatform],
-    ['Company',         ev.Company],
-    ['Region',          ev.Region],
-    ['Status',          ev.Status],
-  ].filter(([_, v]) => v != null && v !== '');
-  return pairs
-    .map(([k, v]) => `data-${k}="${String(v).replace(/"/g, '&quot;')}"`)
-    .join(' ');
-}
 
 
 
-timeline = new vis.Timeline(
-  document.getElementById("timeline"),
-  originalItems,
-  {
-    locale: "zh-cn",
-    editable: false,
-    margin: { item: 10, axis: 50 },
-    orientation: { axis: 'bottom', item: 'bottom' },
-    tooltip: { followMouse: true, overflowMethod: 'flip' },
-    verticalScroll: true,
-    zoomKey: "ctrlKey",
-    stack: true,
+    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
+      locale: "zh-cn",
+      editable: false,
+      margin: { item: 10, axis: 50 },
+      orientation: { axis: 'bottom', item: 'bottom' },
+      tooltip: { followMouse: true, overflowMethod: 'flip' },
+      verticalScroll: true,
+      zoomKey: "ctrlKey",
+      stack: true
+    });
+  });
 
-    /* —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* ——
-    template: function (item) {
-      const attrs = buildDataAttrs(item);
-      const title = escapeHTML(item?.content ?? '');
-      return `<div class="ev" ${attrs}>
-                <div class="ev-title">${title}</div>
-              </div>`;
-    }*/
-  }
-);
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
   .then(res => res.json())
@@ -507,387 +391,75 @@ attrSel.addEventListener("change", () => {
     attrSel.dispatchEvent(new Event("change"));
   });
 
+  let currentStyleAttr = '';
+let styleTableBody = document.querySelector("#style-table tbody");
+let usedStyleTypes = {}; // 记录当前属性已经选择的样式类型
 
-//样式代码部分
-
-
-
-
-// 全局状态
-const boundStyleType = {};   // { [attr]: 'fontFamily' | 'fontColor' | ... | 'none' }
-let stagedType = 'none';     // 下拉当前临时选择（未确认前）
-let currentStyleAttr = null; // 当前正在编辑的属性 key
-
-// 每个属性下的规则列表：{ [attr]: Array<{ id, values: string[], style: {...} }> }
-const styleRules = window.styleRules || (window.styleRules = {});
-
-// 简单的行 id 生成
-function genId() { return (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())); }
-
-/***********************
- * [Styles: Fonts] 字体栈映射（第2步）
- ***********************/
-function cssFont(val) {
-  switch (val) {
-    case 'STCaiyun':
-      return '"STCaiyun","华文彩云","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'FZShuTi':
-      return '"FZShuTi","方正舒体","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'FZYaoti':
-      return '"FZYaoti","方正姚体","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif';
-    case '"Microsoft YaHei"':
-      return '"Microsoft YaHei","微软雅黑","PingFang SC","Hiragino Sans GB",Arial,sans-serif';
-    case 'DengXian':
-      return 'DengXian,"Microsoft YaHei","PingFang SC","Hiragino Sans GB",Arial,sans-serif';
-    case '"PingFang SC"':
-      return '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif';
-    case '"Hiragino Sans GB"':
-      return '"Hiragino Sans GB","PingFang SC","Microsoft YaHei",Arial,sans-serif';
-    case 'SimSun':
-      return '"SimSun","宋体","STSong","Songti SC",serif';
-    case 'SimHei':
-      return '"SimHei","黑体","STHeiti","PingFang SC","Hiragino Sans GB",sans-serif';
-    case 'KaiTi':
-      return '"KaiTi","KaiTi_GB2312","楷体","STKaiti","Kaiti SC","Songti SC",serif';
-    default:
-      return val; // 兜底
-  }
-}
-
-/***********************
- * [Styles: Compile] 编译并注入 CSS（第5步）
- ***********************/
-
-// 按你的真实 DOM 如需修改↓
-const EVENT_CONTAINER_SELECTOR = '.ev'; // 每个事件容器类名
-const TITLE_SELECTOR = '.ev-title';     // 事件标题元素类名（若想作用于整个事件，去掉它）
-
-function attrToDataName(attrKey) {
-  // 如需映射：if (attrKey === 'EventType') return 'event-type';
-  return attrKey;
-}
-
-let _styleTag = null;
-function ensureStyleTag() {
-  if (!_styleTag) {
-    _styleTag = document.getElementById('dynamic-style-rules');
-    if (!_styleTag) {
-      _styleTag = document.createElement('style');
-      _styleTag.id = 'dynamic-style-rules';
-      document.head.appendChild(_styleTag);
-    }
-  }
-}
-
-function escapeAttrValue(v) {
-  return String(v).replace(/"/g, '\\"');
-}
-
-// 把一条 rule.style 转成 CSS 声明串（调色盘完成后在这里继续加颜色）
-function ruleStyleToDecls(styleObj) {
-  const decls = [];
-  if (styleObj.fontFamily) {
-    decls.push(`font-family:${cssFont(styleObj.fontFamily)};`);
-  }
-  if (styleObj.fontColor) {
-    decls.push(`color:${styleObj.fontColor};`);
-  }
-  if (styleObj.backgroundColor) {
-    decls.push(`background-color:${styleObj.backgroundColor};`);
-  }
-  if (styleObj.borderColor) {
-    decls.push(`border-color:${styleObj.borderColor};`);
-  }
-  if (styleObj.lineColor) {
-    decls.push(`border-color:${styleObj.lineColor};`);
-  }
-  return decls;
-}
-
-/**
- * 把 styleRules 全量编译为 CSS 并注入 <head>
- */
-function compileStyleCSS() {
-  ensureStyleTag();
-  let css = '';
-
-  Object.keys(styleRules).forEach(attrKey => {
-    const dataName = attrToDataName(attrKey);
-    const rules = styleRules[attrKey] || [];
-
-    rules.forEach(rule => {
-      const decls = ruleStyleToDecls(rule.style);
-      if (decls.length === 0) return;
-
-      const values = Array.isArray(rule.values) ? rule.values : [];
-      if (values.length === 0) {
-        // 应用于所有带该 data-attr 的事件
-        const selector = `${EVENT_CONTAINER_SELECTOR}[data-${dataName}] ${TITLE_SELECTOR}`;
-        css += `${selector}{${decls.join('')}}\n`;
-      } else {
-        // 应用于具体属性值
-        values.forEach(val => {
-          const selector = `${EVENT_CONTAINER_SELECTOR}[data-${dataName}="${escapeAttrValue(val)}"] ${TITLE_SELECTOR}`;
-          css += `${selector}{${decls.join('')}}\n`;
-        });
-      }
-    });
-  });
-
-  _styleTag.textContent = css;
-}
-
-/***********************
- * [Styles: UI] 打开/变更/确认/重置
- ***********************/
-
-// 1) 打开样式窗口
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
-
-  document.getElementById('style-title').textContent = (window.attributeLabels?.[attr] || attr) + ' 样式';
+  document.getElementById('style-title').textContent = attributeLabels[attr] + " 样式";
   document.getElementById('style-window').style.display = 'block';
 
-  const styleTypeSelect = document.getElementById('style-type');
-  const styleTableBody  = document.getElementById('styleTableBody');
-  const confirmBtn      = document.getElementById('style-confirm-btn');
-  const resetBtn        = document.getElementById('style-reset-btn');
-  const addBtn          = document.getElementById('add-style-btn');
-  const boundHint       = document.getElementById('bound-type-hint');
-
-  // 下拉默认“无”，避免误绑定
-  styleTypeSelect.value = 'none';
-  stagedType = 'none';
-
-  // 清空“当前窗口展示”的行（不影响已绑定规则对象）
+  // 重置下拉和表格
+  document.getElementById('style-type').value = 'none';
   styleTableBody.innerHTML = '';
 
-  const bound = boundStyleType[attr] || 'none';
-  if (bound !== 'none') {
-    if (boundHint) boundHint.textContent = '当前样式：' + bound;
-    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'none'; }
-    if (resetBtn)   resetBtn.style.display = 'inline-block';
-    if (addBtn)     addBtn.disabled = false;
-  } else {
-    if (boundHint) boundHint.textContent = '当前样式：无';
-    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
-    if (resetBtn)   resetBtn.style.display = 'none';
-    if (addBtn)     addBtn.disabled = true;
-  }
+  // 初始化 usedStyleTypes
+  if (!usedStyleTypes[attr]) usedStyleTypes[attr] = [];
 }
 
-// 2) 下拉变更（只更新 staged，不写入 bound）
-function onStyleTypeChange() {
-  const styleTypeSelect = document.getElementById('style-type');
-  const confirmBtn      = document.getElementById('style-confirm-btn');
-  const boundHint       = document.getElementById('bound-type-hint');
-
-  stagedType = styleTypeSelect.value;
-
-  const alreadyBound = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
-  if (alreadyBound) {
-    styleTypeSelect.value = 'none';
-    stagedType = 'none';
-    if (boundHint) boundHint.textContent = '当前绑定：' + boundStyleType[currentStyleAttr] + '（如需更改，请先“重置”）';
-    if (confirmBtn) confirmBtn.disabled = true;
-    return;
-  }
-
-  if (confirmBtn) confirmBtn.disabled = (stagedType === 'none');
+function closeStyleWindow() {
+  document.getElementById('style-window').style.display = 'none';
 }
 
-// 3) 确认绑定（staged -> bound）并自动新增首行
-function onConfirmBind() {
-  if (stagedType === 'none') return;
-
-  const styleTableBody  = document.getElementById('styleTableBody');
-  const confirmBtn      = document.getElementById('style-confirm-btn');
-  const resetBtn        = document.getElementById('style-reset-btn');
-  const addBtn          = document.getElementById('add-style-btn');
-  const boundHint       = document.getElementById('bound-type-hint');
-
-  const prevBound = boundStyleType[currentStyleAttr] || 'none';
-  if (prevBound !== 'none' && prevBound !== stagedType) {
-    const ok = window.confirm('切换样式类型将清空当前属性下已设置的所有规则，是否继续？');
-    if (!ok) return;
-    styleTableBody.innerHTML = '';
-    if (styleRules[currentStyleAttr]) styleRules[currentStyleAttr] = [];
-  }
-
-  boundStyleType[currentStyleAttr] = stagedType;
-
-  if (confirmBtn) confirmBtn.style.display = 'none';
-  if (resetBtn)   resetBtn.style.display = 'inline-block';
-  if (addBtn)     addBtn.disabled = false;
-  if (boundHint)  boundHint.textContent = '当前绑定：' + stagedType;
-
-  addStyleRow();
-  compileStyleCSS(); // 双保险：初次也刷新一次
-}
-
-// 4) 重置（回到 none，清空规则与行）
-function onResetBind() {
-  const styleTableBody  = document.getElementById('styleTableBody');
-  const styleTypeSelect = document.getElementById('style-type');
-  const confirmBtn      = document.getElementById('style-confirm-btn');
-  const resetBtn        = document.getElementById('style-reset-btn');
-  const addBtn          = document.getElementById('add-style-btn');
-  const boundHint       = document.getElementById('bound-type-hint');
-
-  const hasRows = styleTableBody.querySelectorAll('tr').length > 0;
-  const ok = !hasRows || window.confirm('重置将清空该属性下所有规则，是否继续？');
-  if (!ok) return;
-
-  boundStyleType[currentStyleAttr] = 'none';
-  styleTableBody.innerHTML = '';
-  styleTypeSelect.value = 'none';
-  stagedType = 'none';
-
-  if (window.styleRules && window.styleRules[currentStyleAttr]) {
-    window.styleRules[currentStyleAttr] = [];
-  }
-  compileStyleCSS();
-
-  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
-  if (resetBtn)   resetBtn.style.display = 'none';
-  if (addBtn)     addBtn.disabled = true;
-  if (boundHint)  boundHint.textContent = '当前样式：无';
-}
-
-// （如未在 HTML 写 onclick/onchange，可启用以下绑定）
-document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
-document.getElementById('style-reset-btn')?.addEventListener('click', onResetBind);
-// 下拉 <select id="style-type"> 的 onchange 已在 HTML：onchange="onStyleTypeChange()"
-// “新增样式”按钮通常是 onclick="addStyleRow()"；如果没有，可加：
-// document.getElementById('add-style-btn')?.addEventListener('click', addStyleRow);
-
-/***********************
- * [Styles: Rows] 新增/删除样式行（第3+4步）
- ***********************/
+// 添加一行样式
 function addStyleRow() {
-  const bound = boundStyleType[currentStyleAttr];
-  if (!bound || bound === 'none') {
-    alert('请先从下拉中选择样式类型并点击“确认绑定”。');
+  const styleType = document.getElementById('style-type').value;
+  if (styleType === 'none') {
+    alert('请选择样式类型');
     return;
   }
-
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) {
-    console.error('未找到 #styleTableBody');
+  if (usedStyleTypes[currentStyleAttr].includes(styleType)) {
+    alert('此样式已被使用，请选择其他样式');
     return;
   }
-
-  // 为该行创建一个规则对象
-  if (!styleRules[currentStyleAttr]) styleRules[currentStyleAttr] = [];
-  const rule = { id: genId(), values: [], style: {} };
-  styleRules[currentStyleAttr].push(rule);
+  usedStyleTypes[currentStyleAttr].push(styleType);
 
   const tr = document.createElement('tr');
-
-  // 左：样式内容控件
+  // 样式内容占位
   const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = bound;      // 兼容旧 confirmStyle，如果你还用它
-  const control = buildStyleControl(bound); // { el, inputEl }
-  tdContent.appendChild(control.el);
+  tdContent.textContent = styleType + " (待填写)";
 
-  // 控件写入规则 + 触发编译
-  if (bound === 'fontFamily' && control.inputEl) {
-    control.inputEl.addEventListener('change', (e) => {
-      rule.style.fontFamily = e.target.value || '';
-      compileStyleCSS();
-    });
-  }
-  // 未来颜色控件同理：rule.style.fontColor / backgroundColor / borderColor / ...
-
-  // 中：应用范围（现在先把“当前属性本身”放进 options；未来可换成具体取值）
+  // 应用属性多选
   const tdAttr = document.createElement('td');
   const select = document.createElement('select');
   select.multiple = true;
-  select.innerHTML = `<option value="${currentStyleAttr}">
-    ${(window.attributeLabels?.[currentStyleAttr] || currentStyleAttr)}
-  </option>`;
+  // 将当前属性下的可用子属性填充（这里只显示单个属性，后续可扩展）
+  select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
   tdAttr.appendChild(select);
 
-  select.addEventListener('change', () => {
-    rule.values = Array.from(select.selectedOptions).map(o => o.value);
-    compileStyleCSS();
-  });
-
-  // 右：删除本行
+  // 删除按钮
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
-  delBtn.type = 'button';
   delBtn.textContent = '×';
-  delBtn.addEventListener('click', () => {
+  delBtn.onclick = () => {
     tr.remove();
-    const arr = styleRules[currentStyleAttr] || [];
-    const idx = arr.findIndex(r => r.id === rule.id);
-    if (idx >= 0) arr.splice(idx, 1);
-    compileStyleCSS();
-  });
+    // 移除 usedStyleTypes
+    const idx = usedStyleTypes[currentStyleAttr].indexOf(styleType);
+    if (idx >= 0) usedStyleTypes[currentStyleAttr].splice(idx, 1);
+  };
   tdAction.appendChild(delBtn);
 
   tr.appendChild(tdContent);
   tr.appendChild(tdAttr);
   tr.appendChild(tdAction);
-  tbody.appendChild(tr);
-
-  // 初次编译（有默认值时立刻生效；没有也安全）
-  compileStyleCSS();
+  styleTableBody.appendChild(tr);
 }
 
-/***********************
- * [Styles: Controls] 构建控件
- ***********************/
-function buildStyleControl(type) {
-  const wrapper = document.createElement('div');
-
-  if (type === 'fontFamily') {
-    const fontSelect = document.createElement('select');
-
-    // 占位项
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '请选择字体';
-    placeholder.selected = true;
-    fontSelect.appendChild(placeholder);
-
-    // 用 FONT_OPTIONS 生成选项
-    (window.FONT_OPTIONS || []).forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f.value;   // "STCaiyun" / "SimSun" / '"Microsoft YaHei"'
-      opt.textContent = f.label;
-      fontSelect.appendChild(opt);
-    });
-
-    wrapper.appendChild(fontSelect);
-    return { el: wrapper, inputEl: fontSelect };
-  }
-
-  // 颜色类型（调色盘接入时会继续完善）
-  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
-    const color = document.createElement('input');
-    color.type = 'color';
-    wrapper.appendChild(color);
-    return { el: wrapper, inputEl: color };
-  }
-
-  // 其他类型（占位）
-  const span = document.createElement('span');
-  span.textContent = type + '（待配置）';
-  wrapper.appendChild(span);
-  return { el: wrapper, inputEl: null };
-}
-
-/***********************
- * [Styles: (Optional Legacy)] 旧的“确认样式”逻辑
- * 现在样式已即时编译；如果你还想保留按钮，可让它只关闭窗口
- ***********************/
+// 确认按钮
 function confirmStyle() {
-  // 如果仍在用这个按钮，这里只做关闭弹窗，避免“双轨”
-  document.getElementById('style-window').style.display = 'none';
-  // 如仍需旧逻辑，请改用 tdContent.dataset.styleType 获取类型
-  // const styleType = tdContent.dataset.styleType || 'unknown';
+  alert('样式设置完成（仅交互界面，未实际应用）');
+  closeStyleWindow();
 }
 
 </script>
