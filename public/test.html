@@ -570,7 +570,15 @@ function confirmStyle() {
 
   document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
 document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
-  
+  // 让内联 onclick 能找到这些函数（显式挂到全局）
+window.openStyleWindow   = openStyleWindow;
+window.onStyleTypeChange = onStyleTypeChange;
+window.onConfirmBind     = onConfirmBind;
+window.onResetBind       = onResetBind;
+window.addStyleRow       = addStyleRow;
+window.confirmStyle      = confirmStyle;
+window.closeStyleWindow  = closeStyleWindow;
+
 </script>
 </body>
 </html>
