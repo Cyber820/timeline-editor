@@ -140,6 +140,10 @@
 
   
 <script>
+  // 急救日志：把所有运行时错误打出来，方便定位
+window.addEventListener('error', e => console.error('[window.error]', e.message, e.filename, e.lineno, e.colno));
+window.addEventListener('unhandledrejection', e => console.error('[promise]', e.reason));
+
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
 
 // [Styles: Fonts] 候选字体列表（仅使用常见系统字体，不引入外链/自托管）
@@ -447,13 +451,13 @@ timeline = new vis.Timeline(
     zoomKey: "ctrlKey",
     stack: true,
 
-    // —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* ——
+    /* —— 关键：给每个条目包一层 .ev + .ev-title，并挂上 data-* ——
     template: function (item) {
       const attrs = buildDataAttrs(item);
       const title = escapeHTML(item?.content ?? '');
       return `<div class="ev" ${attrs}>
                 <div class="ev-title">${title}</div>
-              </div>`;
+              </div>`;*/
     }
   }
 );
