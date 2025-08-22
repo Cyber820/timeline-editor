@@ -1,5 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>电子游戏时间轴</title>
+  <!-- 引入所需样式和库 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <style>
+    #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
+    .vis-tooltip {
+      white-space: normal !important; max-width: 700px !important; min-width: 300px;
+      font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff;
+      border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    }
+    .vis-item {
+      font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
+      border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
+    }
+    #event-form, #filter-window, #add-filter-window {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #fff; padding: 20px; border: 1px solid #ccc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
+      z-index: 2000; max-height: 80vh; overflow: auto;
+    }
+    #add-filter-window { width: 700px; height: 300px; }
+    #filter-window { width: 700px; }
+  </style>
+</head>
+<body>
+  <h2>电子游戏时间轴</h2>
+  <!-- 功能按钮 -->
+  <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
+  <button onclick="openStyleWindow('EventType')">事件样式</button>
+  <button onclick="openStyleWindow('Platform')">平台样式</button>
+  <button onclick="openStyleWindow('ConsolePlatform')">主机样式</button>
+  <button onclick="openStyleWindow('Company')">公司样式</button>
+  <button onclick="openStyleWindow('Region')">地区样式</button>
+  <div id="timeline"></div>
 
-<!-- 样式弹窗（整块替换你当前那一堆散落的控件） -->
+  <!-- 过滤逻辑设置弹窗 -->
+  <div id="filter-window">
+    <h3>过滤标准（和逻辑）</h3>
+    <button onclick="openAddFilter()">增加过滤标准</button>
+    <button onclick="resetFilters()">复原过滤标准</button>
+    <button onclick="applyFilters()">应用和逻辑</button>
+    <button onclick="applyFiltersOr()">应用或逻辑</button>
+    <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
+    <div id="current-filters"></div>
+  </div>
+
+  <!-- 添加过滤标准弹窗 -->
+  <div id="add-filter-window">
+    <h3>新增过滤标准</h3>
+    <label>过滤属性：<select id="filter-attribute"></select></label><br>
+    <label>过滤选项：<select id="filter-options" multiple></select></label><br>
+    <button onclick="confirmAddFilter()">确定</button>
+    <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
+  </div>
+
+  <!-- 样式弹窗（整块替换你当前那一堆散落的控件） -->
+
 <div id="style-window" style="
   display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
   width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
