@@ -64,27 +64,26 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-  <div id="style-window" style="
-  display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
-  width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
-  <h3 id="style-title">属性样式</h3>
-  <div style="margin-bottom:10px;">
-    <label>自定义样式：
-      <select id="style-type">
-        <option value="none">无</option>
-        <option value="font">字体</option>
-        <option value="fontColor">字体颜色</option>
-        <option value="borderColor">事件框颜色</option>
-        <option value="backgroundColor">事件框填充色</option>
-        <option value="lineColor">连接线颜色</option>
-      </select>
-    </label>
-  </div>
+<div style="margin-bottom:10px;">
+  <label>自定义样式：
+    <select id="style-type" onchange="onStyleTypeChange()">
+      <option value="none">无</option>
+      <!-- 保留你原值：font；内部会映射成 fontFamily -->
+      <option value="font">字体</option>
+      <option value="fontColor">字体颜色</option>
+      <option value="borderColor">事件框颜色</option>
+      <option value="backgroundColor">事件框填充色</option>
+      <option value="lineColor">连接线颜色</option>
+    </select>
+  </label>
+  <span id="bound-type-hint" style="margin-left:10px; color:#666;">当前样式：无</span>
+  <button id="style-confirm-btn" disabled>确认绑定</button>
+  <button id="style-reset-btn" style="display:none;">重置</button>
+</div>
 
-     <div>
-    <button onclick="addStyleRow()">新增样式</button>
-  </div>
+<div>
+  <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
+</div>
 
   <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
     <thead>
@@ -94,7 +93,7 @@
         <th>操作</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="styleTableBody">
       <!-- 动态添加行 -->
     </tbody>
   </table>
@@ -270,69 +269,48 @@ fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
     originalItems = data.map((event, i) => {
-  // 1) 简介文本：优先后端的 event.content，其次 Title，最后占位
-  const contentText = event.content ?? event.Title ?? '(无标题)';
+      const contentText = event.content ?? event.Title ?? '(无标题)';
+      const Start = event.Start ?? event.start ?? '';
+      const End   = event.End   ?? event.end   ?? '';
+      const blob  = (event.title ?? '').toString();
 
-  // 2) 时间
-  const Start = event.Start ?? event.start ?? '';
-  const End   = event.End   ?? event.end   ?? '';
+      const pick = (label) => {
+        if (!blob) return '';
+        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+        return m ? m[1].trim() : '';
+      };
 
-  // 3) 如果后端提供了整块说明(event.title)，先准备一份纯文本
-  const blob = (event.title ?? '').toString();
+      const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+      const Region          = event.Region          ?? event.region          ?? pick('地区');
+      const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+      const Company         = event.Company         ?? event.company         ?? pick('公司');
+      const Status          = event.Status          ?? event.status          ?? pick('状态');
+      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
 
-  // 4) 小工具：从整块说明中提取“标签：值”
-  const pick = (label) => {
-    if (!blob) return '';
-    const m = new RegExp(label + '：([^\\n]+)').exec(blob);
-    return m ? m[1].trim() : '';
-  };
+      const tooltipHtml = blob
+        ? blob.replace(/\n/g, '<br>')
+        : [
+            `事件名称：${contentText}`,
+            `事件类型：${EventType || ''}`,
+            `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+            `状态：${Status || ''}`,
+            `地区：${Region || ''}`,
+            `平台类型：${Platform || ''}`,
+            `主机类型：${ConsolePlatform || ''}`,
+            `公司：${Company || ''}`
+          ].join('<br>');
 
-  // 5) 结构化字段（优先用后端字段；没有就从整块里抽取）
-  const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
-  const Region          = event.Region          ?? event.region          ?? pick('地区');
-  const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
-  const Company         = event.Company         ?? event.company         ?? pick('公司');
-  const Status          = event.Status          ?? event.status          ?? pick('状态');
-  const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+      return {
+        id: event.id || `auto-${i + 1}`,
+        content: contentText,
+        start: Start,
+        end: End || undefined,
+        title: tooltipHtml,
+        EventType, Region, Platform, Company, Status, ConsolePlatform
+      };
+    });
 
-  // 6) 悬停 HTML：若后端已给整块(title)，只做换行；否则按字段拼
-  let tooltipHtml;
-  if (blob) {
-    tooltipHtml = blob.replace(/\n/g, '<br>');
-  } else {
-    tooltipHtml = [
-      `事件名称：${contentText}`,
-      `事件类型：${EventType || ''}`,
-      `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
-      `状态：${Status || ''}`,
-      `地区：${Region || ''}`,
-      `平台类型：${Platform || ''}`,
-      `主机类型：${ConsolePlatform || ''}`,
-      `公司：${Company || ''}`
-    ].join('<br>');
-  }
-
-
-
-  // 8) 返回给 timeline & 过滤
-  return {
-    id: event.id || `auto-${i + 1}`,
-    content: contentText,    // ✅ 简介只显示标题
-    start: Start,            // ✅ 时间轴关键字段
-    end: End || undefined,
-    title: tooltipHtml,      // ✅ 悬停完整说明（含 <br>）
-    EventType,
-    Region,
-    Platform,
-    Company,
-    Status,
-    ConsolePlatform
-  };
-});
-
-
-
-
+    // ✅ 把 Timeline 初始化放在 then 内部
     timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
       locale: "zh-cn",
       editable: false,
@@ -343,7 +321,7 @@ fetch(ENDPOINT)
       zoomKey: "ctrlKey",
       stack: true
     });
-  });
+  }); // ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
@@ -395,73 +373,207 @@ attrSel.addEventListener("change", () => {
 let styleTableBody = document.querySelector("#style-table tbody");
 let usedStyleTypes = {}; // 记录当前属性已经选择的样式类型
 
+/************ 样式绑定：只做交互（不应用 CSS） ************/
+let currentStyleAttr = null;         // 当前正在编辑的属性
+const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
+let stagedType = 'none';             // 下拉的临时选择（未确认前）
+
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
-  document.getElementById('style-title').textContent = attributeLabels[attr] + " 样式";
+  document.getElementById('style-title').textContent =
+    (attributeLabels[attr] || attr) + ' 样式';
   document.getElementById('style-window').style.display = 'block';
 
-  // 重置下拉和表格
-  document.getElementById('style-type').value = 'none';
-  styleTableBody.innerHTML = '';
+  const typeSel   = document.getElementById('style-type');
+  const tbody     = document.getElementById('styleTableBody');
+  const confirm   = document.getElementById('style-confirm-btn');
+  const resetBtn  = document.getElementById('style-reset-btn');
+  const addBtn    = document.getElementById('add-style-btn');
+  const hint      = document.getElementById('bound-type-hint');
 
-  // 初始化 usedStyleTypes
-  if (!usedStyleTypes[attr]) usedStyleTypes[attr] = [];
+  // 下拉复位到 none（防止误绑定）
+  typeSel.value = 'none';
+  stagedType = 'none';
+
+  // 清空当前窗口里的临时行（不影响已绑定类型）
+  tbody.innerHTML = '';
+
+  const bound = boundStyleType[attr] || 'none';
+  if (bound !== 'none') {
+    if (hint)      hint.textContent = '当前样式：' + bound;
+    if (confirm) { confirm.disabled = true; confirm.style.display = 'none'; }
+    if (resetBtn)  resetBtn.style.display = 'inline-block';
+    if (addBtn)    addBtn.disabled = false;
+  } else {
+    if (hint)      hint.textContent = '当前样式：无';
+    if (confirm) { confirm.disabled = true; confirm.style.display = 'inline-block'; }
+    if (resetBtn)  resetBtn.style.display = 'none';
+    if (addBtn)    addBtn.disabled = true;
+  }
 }
 
+  function onStyleTypeChange() {
+  const typeSel = document.getElementById('style-type');
+  const confirm = document.getElementById('style-confirm-btn');
+  const hint    = document.getElementById('bound-type-hint');
+
+  // 把 UI 的 'font' 映射为内部的 'fontFamily'
+  const raw = typeSel.value;
+  const mapped = (raw === 'font') ? 'fontFamily' : raw;
+  stagedType = mapped;
+
+  const already = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
+  if (already) {
+    // 已绑定不允许直接改，提示需重置
+    typeSel.value = 'none';
+    stagedType = 'none';
+    if (hint)    hint.textContent = '当前绑定：' + boundStyleType[currentStyleAttr] + '（如需更改，请先“重置”）';
+    if (confirm) confirm.disabled = true;
+    return;
+  }
+
+  if (confirm) confirm.disabled = (stagedType === 'none');
+}
+
+  function onConfirmBind() {
+  if (stagedType === 'none') return;
+
+  const tbody    = document.getElementById('styleTableBody');
+  const confirm  = document.getElementById('style-confirm-btn');
+  const resetBtn = document.getElementById('style-reset-btn');
+  const addBtn   = document.getElementById('add-style-btn');
+  const hint     = document.getElementById('bound-type-hint');
+
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && prev !== stagedType) {
+    const ok = window.confirm('切换样式类型将清空该属性下已添加的样式行，是否继续？');
+    if (!ok) return;
+    tbody.innerHTML = '';
+  }
+
+  boundStyleType[currentStyleAttr] = stagedType;
+
+  // UI 状态切换
+  if (confirm)  { confirm.disabled = true; confirm.style.display = 'none'; }
+  if (resetBtn)  resetBtn.style.display = 'inline-block';
+  if (addBtn)    addBtn.disabled = false;
+  if (hint)      hint.textContent = '当前样式：' + stagedType;
+
+  // 自动添加首行输入控件（仅 UI，不应用样式）
+  addStyleRow();
+}
+
+// 点击“重置”：清空该属性的绑定与行
+function onResetBind() {
+  const tbody    = document.getElementById('styleTableBody');
+  const typeSel  = document.getElementById('style-type');
+  const confirm  = document.getElementById('style-confirm-btn');
+  const resetBtn = document.getElementById('style-reset-btn');
+  const addBtn   = document.getElementById('add-style-btn');
+  const hint     = document.getElementById('bound-type-hint');
+
+  const hasRows = tbody.querySelectorAll('tr').length > 0;
+  const ok = !hasRows || window.confirm('重置将清空该属性下所有样式行，是否继续？');
+  if (!ok) return;
+
+  boundStyleType[currentStyleAttr] = 'none';
+  tbody.innerHTML = '';
+  typeSel.value = 'none';
+  stagedType = 'none';
+
+  if (confirm)  { confirm.disabled = true; confirm.style.display = 'inline-block'; }
+  if (resetBtn)  resetBtn.style.display = 'none';
+  if (addBtn)    addBtn.disabled = true;
+  if (hint)      hint.textContent = '当前样式：无';
+}
+
+// 仅更新临时选择；未确认前不写入绑定
 function closeStyleWindow() {
   document.getElementById('style-window').style.display = 'none';
 }
 
-// 添加一行样式
+// 新增一行（根据“已绑定的类型”生成对应控件；仅 UI）
 function addStyleRow() {
-  const styleType = document.getElementById('style-type').value;
-  if (styleType === 'none') {
-    alert('请选择样式类型');
+  const bound = boundStyleType[currentStyleAttr];
+  if (!bound || bound === 'none') {
+    alert('请先选择样式类型并“确认绑定”。');
     return;
   }
-  if (usedStyleTypes[currentStyleAttr].includes(styleType)) {
-    alert('此样式已被使用，请选择其他样式');
-    return;
-  }
-  usedStyleTypes[currentStyleAttr].push(styleType);
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
 
   const tr = document.createElement('tr');
-  // 样式内容占位
+
+  // 左：样式内容控件（仅 UI，不落库、不应用）
   const tdContent = document.createElement('td');
-  tdContent.textContent = styleType + " (待填写)";
+  tdContent.appendChild(buildStyleControl(bound));  // 见下方
+  tr.appendChild(tdContent);
 
-  // 应用属性多选
+  // 中：应用范围（目前先放“当前属性本身”，未来再替换为该属性的具体值列表）
   const tdAttr = document.createElement('td');
-  const select = document.createElement('select');
-  select.multiple = true;
-  // 将当前属性下的可用子属性填充（这里只显示单个属性，后续可扩展）
-  select.innerHTML = `<option value="${currentStyleAttr}">${attributeLabels[currentStyleAttr]}</option>`;
-  tdAttr.appendChild(select);
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.innerHTML = `<option value="${currentStyleAttr}">
+    ${(attributeLabels[currentStyleAttr] || currentStyleAttr)}
+  </option>`;
+  tdAttr.appendChild(sel);
+  tr.appendChild(tdAttr);
 
-  // 删除按钮
+  // 右：删除本行
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
+  delBtn.type = 'button';
   delBtn.textContent = '×';
-  delBtn.onclick = () => {
-    tr.remove();
-    // 移除 usedStyleTypes
-    const idx = usedStyleTypes[currentStyleAttr].indexOf(styleType);
-    if (idx >= 0) usedStyleTypes[currentStyleAttr].splice(idx, 1);
-  };
+  delBtn.onclick = () => tr.remove();
   tdAction.appendChild(delBtn);
-
-  tr.appendChild(tdContent);
-  tr.appendChild(tdAttr);
   tr.appendChild(tdAction);
-  styleTableBody.appendChild(tr);
+
+  tbody.appendChild(tr);
+}
+
+  // 根据类型构造控件（这里只造 UI，暂不写任何样式）
+function buildStyleControl(type) {
+  const wrap = document.createElement('div');
+
+  if (type === 'fontFamily') {
+    const fontSel = document.createElement('select');
+    fontSel.innerHTML = `
+      <option value="">请选择字体</option>
+      <option value="STCaiyun">华文彩云 (STCaiyun)</option>
+      <option value="FZShuTi">方正舒体 (FZShuTi)</option>
+      <option value="FZYaoti">方正姚体 (FZYaoti)</option>
+      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
+      <option value="DengXian">等线 (DengXian)</option>
+      <option value='"PingFang SC"'>苹方-简 (PingFang SC)</option>
+      <option value='"Hiragino Sans GB"'>冬青黑体-简 (Hiragino Sans GB)</option>
+      <option value="SimSun">宋体 (SimSun)</option>
+      <option value="SimHei">黑体 (SimHei)</option>
+      <option value="KaiTi">楷体 (KaiTi)</option>
+    `;
+    wrap.appendChild(fontSel);
+    return wrap;
+  }
+
+  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    const color = document.createElement('input');
+    color.type = 'color';
+    wrap.appendChild(color);
+    return wrap;
+  }
+
+  // 未知类型占位
+  wrap.textContent = type + '（待配置）';
+  return wrap;
 }
 
 // 确认按钮
 function confirmStyle() {
-  alert('样式设置完成（仅交互界面，未实际应用）');
-  closeStyleWindow();
+  document.getElementById('style-window').style.display = 'none';
 }
 
+  document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
+document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
+  
 </script>
 </body>
 </html>
