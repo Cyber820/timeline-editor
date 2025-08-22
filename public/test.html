@@ -369,9 +369,6 @@ attrSel.addEventListener("change", () => {
     attrSel.dispatchEvent(new Event("change"));
   });
 
-  let currentStyleAttr = '';
-let styleTableBody = document.querySelector("#style-table tbody");
-let usedStyleTypes = {}; // 记录当前属性已经选择的样式类型
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
 let currentStyleAttr = null;         // 当前正在编辑的属性
