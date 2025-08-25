@@ -29,11 +29,22 @@
     }
     #add-filter-window { width: 700px; height: 300px; }
     #filter-window { width: 700px; }
-  /* —— Color UI（轻量样式，仅影响颜色选择控件） —— */
+  /* —— Color UI（轻量样式，仅影响颜色选择控件） 以下style和样式相关—— */
 .color-ui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .color-ui input[type="text"] { width: 110px; padding: 2px 4px; font-size: 12px; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .swatch { width: 18px; height: 18px; border: 1px solid #ccc; cursor: pointer; border-radius: 3px; }
+
+    #style-window .toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+#style-window .toolbar .spacer { flex: 1; }
+#style-window .btn-ghost {
+  background: transparent; border: 0; font-size: 18px; line-height: 1;
+  padding: 2px 6px; cursor: pointer; color: #666;
+}
+#style-window .btn-ghost:hover { color: #000; }
+    
   </style>
 </head>
 <body>
@@ -75,21 +86,25 @@
   box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
   <h3 id="style-title">属性样式</h3>
 
-  <div style="margin-bottom:10px;">
-    <label>自定义样式：
-      <select id="style-type" onchange="onStyleTypeChange()">
-        <option value="none">无</option>
-        <option value="font">字体</option>
-        <option value="fontColor">字体颜色</option>
-        <option value="borderColor">事件框颜色</option>
-        <option value="backgroundColor">事件框填充色</option>
-        <option value="lineColor">连接线颜色</option>
-      </select>
-    </label>
-    <span id="bound-type-hint" style="margin-left:10px; color:#666;">当前样式：无</span>
-    <button id="style-confirm-btn" disabled>确认绑定</button>
-    <button id="style-reset-btn" style="display:none;">重置</button>
-  </div>
+<div class="toolbar" style="margin-bottom:10px;">
+  <label>自定义样式：
+    <select id="style-type" onchange="onStyleTypeChange()">
+      <option value="none">无</option>
+      <option value="font">字体</option>
+      <option value="fontColor">字体颜色</option>
+      <option value="borderColor">事件框颜色</option>
+      <option value="backgroundColor">事件框填充色</option>
+      <option value="lineColor">连接线颜色</option>
+    </select>
+  </label>
+
+  <span id="bound-type-hint" style="color:#666;">当前样式：无</span>
+  <span class="spacer"></span>
+
+  <button id="style-confirm-btn" disabled>确认绑定</button>
+  <button id="style-reset-btn" style="display:none;">重置</button>
+  <button class="btn-ghost" onclick="closeStyleWindow()" aria-label="关闭">×</button>
+</div>
 
   <div>
     <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
