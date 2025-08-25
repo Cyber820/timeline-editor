@@ -134,7 +134,7 @@ const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7S
 
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
-
+<!
 const attributeLabels = {
   EventType: "事件类型",
   Region: "地区",
@@ -142,7 +142,7 @@ const attributeLabels = {
   Company: "公司",
   ConsolePlatform: "主机类型"
 };
-
+/*样式参数*/
 const PRESET_COLORS = [
   { name: '红', hex: '#FF0000' },
   { name: '橙', hex: '#FF7F00' },
@@ -156,6 +156,18 @@ const PRESET_COLORS = [
   { name: '白', hex: '#FFFFFF' }
 ];
 
+  const STYLE_LABELS = {
+  fontFamily: '字体',
+  fontColor: '字体颜色',
+  borderColor: '事件框颜色',
+  backgroundColor: '事件框填充色',
+  lineColor: '连接线颜色',
+  none: '无'
+};
+function styleLabel(key) {
+  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
+}
+/*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
   document.getElementById('platform')?.dispatchEvent(new Event('change'));
@@ -435,7 +447,7 @@ function openStyleWindow(attr) {
 
   const bound = boundStyleType[attr] || 'none';
   if (bound !== 'none') {
-    if (hint)      hint.textContent = '当前样式：' + bound;
+    if (hint)      hint.textContent = '当前样式：' + styleLabel(bound);
     if (confirm) { confirm.disabled = true; confirm.style.display = 'none'; }
     if (resetBtn)  resetBtn.style.display = 'inline-block';
     if (addBtn)    addBtn.disabled = false;
@@ -462,7 +474,7 @@ function openStyleWindow(attr) {
     // 已绑定不允许直接改，提示需重置
     typeSel.value = 'none';
     stagedType = 'none';
-    if (hint)    hint.textContent = '当前绑定：' + boundStyleType[currentStyleAttr] + '（如需更改，请先“重置”）';
+    if (hint)    hint.textContent = '当前绑定：' + styleLabel(boundStyleType[currentStyleAttr]) + '（如需更改，请先“重置”）';
     if (confirm) confirm.disabled = true;
     return;
   }
@@ -492,7 +504,7 @@ function openStyleWindow(attr) {
   if (confirm)  { confirm.disabled = true; confirm.style.display = 'none'; }
   if (resetBtn)  resetBtn.style.display = 'inline-block';
   if (addBtn)    addBtn.disabled = false;
-  if (hint)      hint.textContent = '当前样式：' + stagedType;
+  if (hint)      hint.textContent = '当前样式：' + styleLabel(stagedType);
 
   // 自动添加首行输入控件（仅 UI，不应用样式）
   addStyleRow();
@@ -519,7 +531,7 @@ function onResetBind() {
   if (confirm)  { confirm.disabled = true; confirm.style.display = 'inline-block'; }
   if (resetBtn)  resetBtn.style.display = 'none';
   if (addBtn)    addBtn.disabled = true;
-  if (hint)      hint.textContent = '当前样式：无';
+  if (hint)      hint.textContent = '当前样式：' + styleLabel('none');
 }
 
 // 仅更新临时选择；未确认前不写入绑定
