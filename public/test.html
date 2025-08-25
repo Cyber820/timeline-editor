@@ -29,6 +29,11 @@
     }
     #add-filter-window { width: 700px; height: 300px; }
     #filter-window { width: 700px; }
+  /* —— Color UI（轻量样式，仅影响颜色选择控件） —— */
+.color-ui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.color-ui input[type="text"] { width: 110px; padding: 2px 4px; font-size: 12px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatch { width: 18px; height: 18px; border: 1px solid #ccc; cursor: pointer; border-radius: 3px; }
   </style>
 </head>
 <body>
@@ -122,6 +127,19 @@ const attributeLabels = {
   Company: "公司",
   ConsolePlatform: "主机类型"
 };
+
+const PRESET_COLORS = [
+  { name: '红', hex: '#FF0000' },
+  { name: '橙', hex: '#FF7F00' },
+  { name: '黄', hex: '#FFFF00' },
+  { name: '绿', hex: '#00FF00' },
+  { name: '青', hex: '#00FFFF' },
+  { name: '蓝', hex: '#0000FF' },
+  { name: '紫', hex: '#8B00FF' },
+  { name: '黑', hex: '#000000' },
+  { name: '灰', hex: '#808080' },
+  { name: '白', hex: '#FFFFFF' }
+];
 
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -546,6 +564,7 @@ function buildStyleControl(type) {
       <option value="FZYaoti">方正姚体 (FZYaoti)</option>
       <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
       <option value="DengXian">等线 (DengXian)</option>
+      <!-- 已按你的计划替换：隶书 / 幼圆 -->
       <option value="LiSu">隶书 (LiSu)</option>
       <option value="YouYuan">幼圆 (YouYuan)</option>
       <option value="SimSun">宋体 (SimSun)</option>
@@ -556,14 +575,72 @@ function buildStyleControl(type) {
     return wrap;
   }
 
+  // 颜色相关：提供 取色器 + HEX 文本框 + 预设色块（仅交互，不应用）
   if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    wrap.className = 'color-ui';
+
+    // 1) 原生取色器
     const color = document.createElement('input');
     color.type = 'color';
+    color.value = '#000000';
+
+    // 2) HEX 输入
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.placeholder = '#RRGGBB';
+    hex.value = color.value.toUpperCase();
+
+    // 同步：取色器 -> HEX
+    color.addEventListener('input', () => {
+      hex.value = color.value.toUpperCase();
+    });
+
+    // 规范化 & 校验
+    function normalizeHex(v) {
+      let s = String(v || '').trim();
+      if (!s) return null;
+      if (s[0] !== '#') s = '#' + s;
+      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
+        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
+      }
+      if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
+      return null;
+    }
+
+    // 同步：HEX -> 取色器（无效输入回退）
+    hex.addEventListener('change', () => {
+      const n = normalizeHex(hex.value);
+      if (n) {
+        hex.value = n;
+        color.value = n;
+      } else {
+        hex.value = color.value.toUpperCase();
+      }
+    });
+
     wrap.appendChild(color);
+    wrap.appendChild(hex);
+
+    // 3) 预设色块
+    const sw = document.createElement('div');
+    sw.className = 'swatches';
+    PRESET_COLORS.forEach(c => {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.title = `${c.name} ${c.hex}`;
+      s.style.background = c.hex;
+      s.addEventListener('click', () => {
+        color.value = c.hex;
+        hex.value = c.hex;
+      });
+      sw.appendChild(s);
+    });
+    wrap.appendChild(sw);
+
     return wrap;
   }
 
-  // 未知类型占位
+  // 其他类型占位
   wrap.textContent = type + '（待配置）';
   return wrap;
 }
