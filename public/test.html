@@ -539,46 +539,115 @@ function closeStyleWindow() {
   document.getElementById('style-window').style.display = 'none';
 }
   
+  // 收集同一属性(attrKey)下，除当前行(excludeRowId)之外，所有行已选择的值（用于去重、动态过滤）
+function collectTakenValues(attrKey, excludeRowId) {
+  const taken = new Set();
+  document.querySelectorAll('#styleTableBody tr').forEach(tr => {
+    if (tr.dataset.attrKey !== attrKey) return;
+    if (excludeRowId && tr.dataset.rowId === excludeRowId) return;
+    const sel = tr.querySelector('select.style-attr-select');
+    if (!sel) return;
+    // Choices 会同步到原生 <select> 的 selectedOptions，这里直接读
+    Array.from(sel.selectedOptions).forEach(o => {
+      if (o && o.value) taken.add(String(o.value));
+    });
+  });
+  return taken;
+}
+
+// 刷新当前属性的所有下拉（当某行选择变化/被删除后调用）
+function refreshAllAttrSelects(attrKey) {
+  document.querySelectorAll('#styleTableBody tr').forEach(tr => {
+    if (tr.dataset.attrKey !== attrKey) return;
+    const sel = tr.querySelector('select.style-attr-select');
+    if (!sel || !sel._refreshChoices) return;
+    sel._refreshChoices(); // 调用我们挂在 select 上的刷新函数
+  });
+}
+
 // —— 为样式行生成“应用范围”的多选下拉（复用过滤的数据与函数）——
 // 只负责 UI；不写任何样式逻辑
-function buildAttrMultiSelect(attrKey) {
+function buildAttrMultiSelect(attrKey, rowId) {
   const sel = document.createElement('select');
   sel.multiple = true;
-  sel.size = 6;                       // ✅ 无 Choices 时也便于多选
   sel.className = 'style-attr-select';
+  // 在元素上记住行/属性，方便统一刷新与去重
+  sel.dataset.attrKey = attrKey;
+  sel.dataset.rowId = rowId;
 
-  // 复用过滤候选；统一转字符串并去重
+  // 统一拿候选（复用过滤逻辑）
   const raw = (typeof getFilterOptionsForKey === 'function')
     ? getFilterOptionsForKey(attrKey)
     : (window.allOptions?.[attrKey] || []);
-  const opts = Array.isArray(raw)
+  // 标准化 + 去重
+  const allValues = Array.isArray(raw)
     ? Array.from(new Set(raw.map(v => String(v)).filter(Boolean)))
     : [];
 
-  if (opts.length === 0) {
-    const o = new Option('（暂无可选项 / 仍在加载）', '');
-    o.disabled = true;
-    sel.appendChild(o);
-  } else {
-    // 默认不选中任何项（保持“默认为空”）
-    opts.forEach(v => sel.appendChild(new Option(v, v)));
-  }
+  // —— 初始化：先放一个空的占位（默认不展示全部，等展开时再填） —— //
+  const placeholder = new Option('（选择适用的属性值…）', '');
+  placeholder.disabled = true;
+  sel.appendChild(placeholder);
 
-  // 若引入了 Choices.js，则升级为可搜索多选（与过滤弹窗一致的体验）
+  // 若有 Choices，则创建“可搜索多选 + 标签展示”
   if (window.Choices) {
-    sel._choices = new Choices(sel, {
+    const choices = new Choices(sel, {
       removeItemButton: true,
       shouldSort: false,
       placeholder: true,
       placeholderValue: '选择适用的属性值…',
       searchPlaceholderValue: '搜索…',
       position: 'bottom',
-      allowHTML: false         // ✅ 安全：不渲染潜在 HTML
+      allowHTML: false
     });
+    sel._choices = choices;
+
+    // 刷新函数：展开/增删选择/其它行变更时，重建可选项 = 全量 - 其它行已占用 + 本行已选
+    sel._refreshChoices = function () {
+      const taken = collectTakenValues(attrKey, rowId);
+      const current = new Set(choices.getValue(true)); // 当前行已选（数组）
+      const available = allValues.filter(v => !taken.has(v) || current.has(v));
+
+      // 重建下拉项，但保留已选
+      choices.clearChoices();
+      choices.setChoices(
+        available.map(v => ({ value: v, label: v, selected: current.has(v) })),
+        'value',
+        'label',
+        true
+      );
+    };
+
+    // 展开下拉时才展示“剩余可选项”
+    sel.addEventListener('showDropdown', sel._refreshChoices);
+    // 本行增删选择后，刷新其它行
+    sel.addEventListener('addItem',   () => refreshAllAttrSelects(attrKey));
+    sel.addEventListener('removeItem',() => refreshAllAttrSelects(attrKey));
+  } else {
+    // —— 无 Choices 的退化处理（不完全满足“收起只显示已选”，但保证多选可用） —— //
+    sel.size = 6; // 退化模式：一直展示列表
+    sel._refreshChoices = function () {
+      const taken = collectTakenValues(attrKey, rowId);
+      const current = new Set(Array.from(sel.selectedOptions).map(o => o.value));
+      const available = allValues.filter(v => !taken.has(v) || current.has(v));
+
+      const selected = new Set(current);
+      sel.innerHTML = '';
+      available.forEach(v => {
+        const o = new Option(v, v);
+        o.selected = selected.has(v);
+        sel.appendChild(o);
+      });
+    };
+    // 初次填充
+    sel._refreshChoices();
+    // 变更后刷新其它行
+    sel.addEventListener('change', () => refreshAllAttrSelects(attrKey));
   }
 
   return sel;
 }
+
 
 
 // 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
@@ -593,22 +662,53 @@ function addStyleRow() {
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
 
+  // 本行唯一 id，供去重/刷新使用
   const tr = document.createElement('tr');
+  const rowId = (crypto.randomUUID?.() || ('row-' + Date.now() + Math.random()));
+  tr.dataset.rowId = rowId;
+  tr.dataset.attrKey = currentStyleAttr;
 
   // —— 左：样式值控件（字体下拉 / 取色器 + 预设），仅 UI
   const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = bound;      // 记录本行样式类型（后续 confirmStyle 收集用）
-  const ctrl = buildStyleControl(bound);    // 你已有的函数：返回一个元素（select 或 color 等）
-  tdContent.appendChild(ctrl);
+  tdContent.dataset.styleType = bound; // 记录本行样式类型
+  const ctrlBuilt = buildStyleControl(bound);          // 兼容两种返回：元素 或 {el,inputEl}
+  const ctrlEl = (ctrlBuilt && ctrlBuilt.el) ? ctrlBuilt.el : ctrlBuilt;
+  if (ctrlEl) tdContent.appendChild(ctrlEl);
   tr.appendChild(tdContent);
 
   // —— 中：属性值多选（复用过滤逻辑 + Choices，可搜索；默认空）
   const tdAttr = document.createElement('td');
-  const sel = buildAttrMultiSelect(currentStyleAttr);
+  // 兼容老版只接受一个参数的 buildAttrMultiSelect
+  const sel = (buildAttrMultiSelect.length >= 2)
+    ? buildAttrMultiSelect(currentStyleAttr, rowId)
+    : buildAttrMultiSelect(currentStyleAttr);
+  sel.dataset.rowId = rowId;
+  sel.dataset.attrKey = currentStyleAttr;
   tdAttr.appendChild(sel);
   tr.appendChild(tdAttr);
 
-  // —— 右：删除按钮（如启用 Choices，先销毁实例再删节点）
+  // 给多选绑定联动刷新（有 Choices 走 add/removeItem，没有就走 change）
+  if (sel && sel._choices) {
+    // 展开时刷新“剩余可选项”
+    if (typeof sel._refreshChoices === 'function') {
+      sel.addEventListener('showDropdown', sel._refreshChoices);
+      // 初始也刷新一次，避免第一次展开前状态不一致
+      sel._refreshChoices();
+    }
+    sel.addEventListener('addItem', () => {
+      if (typeof refreshAllAttrSelects === 'function') refreshAllAttrSelects(currentStyleAttr);
+    });
+    sel.addEventListener('removeItem', () => {
+      if (typeof refreshAllAttrSelects === 'function') refreshAllAttrSelects(currentStyleAttr);
+    });
+  } else {
+    // 退化模式：无 Choices，则用原生 change 事件做同步
+    sel.addEventListener('change', () => {
+      if (typeof refreshAllAttrSelects === 'function') refreshAllAttrSelects(currentStyleAttr);
+    });
+  }
+
+  // —— 右：删除按钮（如启用 Choices，先销毁实例再删节点，并刷新其它行）
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
@@ -619,6 +719,7 @@ function addStyleRow() {
       sel._choices.destroy();
     }
     tr.remove();
+    if (typeof refreshAllAttrSelects === 'function') refreshAllAttrSelects(currentStyleAttr);
   });
   tdAction.appendChild(delBtn);
   tr.appendChild(tdAction);
