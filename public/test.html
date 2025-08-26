@@ -538,43 +538,113 @@ function onResetBind() {
 function closeStyleWindow() {
   document.getElementById('style-window').style.display = 'none';
 }
+  
+// —— 为样式行生成“应用范围”的多选下拉（复用过滤的数据与函数）——
+// 只负责 UI；不写任何样式逻辑
+function buildAttrMultiSelect(attrKey) {
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.className = 'style-attr-select'; // 可选：便于加样式
 
-// 新增一行（根据“已绑定的类型”生成对应控件；仅 UI）
+  // 用过滤系统的取值逻辑复用现有候选
+  const opts = (typeof getFilterOptionsForKey === 'function')
+    ? getFilterOptionsForKey(attrKey)
+    : (allOptions?.[attrKey] || []);
+
+  if (!opts || opts.length === 0) {
+    const o = new Option('（暂无可选项 / 仍在加载）', '');
+    o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    opts.forEach(v => sel.appendChild(new Option(v, v)));
+  }
+
+  // 可选：如果已引入 Choices.js，让多选更好用
+  if (window.Choices) {
+    sel._choices = new Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+  return sel;
+}
+
+// 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
 function addStyleRow() {
+  // 1) 必须先完成“确认绑定”
   const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
     alert('请先选择样式类型并“确认绑定”。');
     return;
   }
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) return;
 
+  // 2) 取表格 tbody
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) {
+    console.warn('未找到 #styleTableBody');
+    return;
+  }
+
+  // 3) 构建一行
   const tr = document.createElement('tr');
 
-  // 左：样式内容控件（仅 UI，不落库、不应用）
+  // —— 左：样式内容控件（字体下拉 / 取色器 + HEX + 预设色块）
   const tdContent = document.createElement('td');
-  tdContent.appendChild(buildStyleControl(bound));  // 见下方
+  tdContent.dataset.styleType = bound; // 仅作标记，后续调试或扩展会用到
+
+  // 兼容两种返回：buildStyleControl 可能返回 Node 或 { el, ... }
+  const ctrl = (typeof buildStyleControl === 'function') ? buildStyleControl(bound) : null;
+  if (ctrl) {
+    if (ctrl instanceof Node) {
+      tdContent.appendChild(ctrl);
+    } else if (ctrl.el) {
+      tdContent.appendChild(ctrl.el);
+    } else {
+      tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
+    }
+  } else {
+    tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
+  }
   tr.appendChild(tdContent);
 
-  // 中：应用范围（目前先放“当前属性本身”，未来再替换为该属性的具体值列表）
+  // —— 中：应用范围（复用过滤功能：allOptions + getFilterOptionsForKey + Choices）
   const tdAttr = document.createElement('td');
-  const sel = document.createElement('select');
-  sel.multiple = true;
-  sel.innerHTML = `<option value="${currentStyleAttr}">
-    ${(attributeLabels[currentStyleAttr] || currentStyleAttr)}
-  </option>`;
+  let sel;
+  if (typeof buildAttrMultiSelect === 'function') {
+    // 第③步推荐：真正的“该属性值”的多选
+    sel = buildAttrMultiSelect(currentStyleAttr);
+  } else {
+    // 兜底：仍然只放“当前属性本身”的占位多选（不推荐，等你把 buildAttrMultiSelect 加上）
+    sel = document.createElement('select');
+    sel.multiple = true;
+    sel.innerHTML = `
+      <option value="${currentStyleAttr}">
+        ${(attributeLabels[currentStyleAttr] || currentStyleAttr)}
+      </option>
+    `;
+  }
   tdAttr.appendChild(sel);
   tr.appendChild(tdAttr);
 
-  // 右：删除本行
+  // —— 右：删除按钮（若启用了 Choices，销毁实例再移除行）
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
   delBtn.textContent = '×';
-  delBtn.onclick = () => tr.remove();
+  delBtn.title = '删除该样式行';
+  delBtn.addEventListener('click', () => {
+    const choices = sel && sel._choices;
+    if (choices && typeof choices.destroy === 'function') {
+      choices.destroy();
+    }
+    tr.remove();
+  });
   tdAction.appendChild(delBtn);
   tr.appendChild(tdAction);
 
+  // 4) 插入表格
   tbody.appendChild(tr);
 }
 
