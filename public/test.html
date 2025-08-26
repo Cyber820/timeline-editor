@@ -801,23 +801,6 @@ function confirmStyle() {
   document.getElementById('style-window').style.display = 'none';
 }
 
-  // 合并到持久规则（若你已有 styleRules）
-  if (window.styleRules) {
-    if (!styleRules[attr]) styleRules[attr] = [];
-    // 合并（简单 push；需要去重可自行扩展）
-    staged.forEach(r => styleRules[attr].push(r));
-  }
-
-  // 清空本次暂存
-  stagedRules[attr] = [];
-
-  // 若已实现编译应用，这里应用；否则仅关闭
-  if (typeof compileStyleCSS === 'function') {
-    compileStyleCSS();
-  }
-
-  document.getElementById('style-window').style.display = 'none';
-}
 
   document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
 document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
