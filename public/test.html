@@ -484,6 +484,28 @@ function openStyleWindow(attr) {
   }
 }
 
+  // 读取左侧“样式值”的控件值（字体下拉 / 颜色取色器）
+function readStyleValue(tdContent, type) {
+  if (type === 'fontFamily') {
+    const sel = tdContent.querySelector('select');
+    return sel ? sel.value : '';
+  }
+  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    const color = tdContent.querySelector('input[type=color]');
+    return color ? color.value : '';
+  }
+  return '';
+}
+
+// 读取中间“属性值多选”的已选值（兼容 Choices / 原生）
+function getSelectedAttrValues(sel) {
+  if (sel && sel._choices && typeof sel._choices.getValue === 'function') {
+    return sel._choices.getValue(true);  // 直接得到值数组
+  }
+  return Array.from(sel.selectedOptions || []).map(o => o.value);
+}
+
+  
   function onStyleTypeChange() {
   const typeSel = document.getElementById('style-type');
   const confirm = document.getElementById('style-confirm-btn');
@@ -598,13 +620,13 @@ function buildAttrMultiSelect(attrKey) {
 }
 
 // 新增一行（仅 UI；点“添加到本次更改”后写入 stagedRules，不立刻应用）
+// 新增一行（左=样式控件，右=删除，中=可搜索多选；仅 UI，不立刻应用）
 function addStyleRow() {
   const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
     alert('请先选择样式类型并“确认绑定”。');
     return;
   }
-
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
 
@@ -612,82 +634,28 @@ function addStyleRow() {
 
   // —— 左：样式内容控件（字体下拉 / 取色器 + 预设）
   const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = bound;
-  tdContent.appendChild(buildStyleControl(bound));
+  tdContent.dataset.styleType = bound;          // 记录本行样式类型
+  const ctrl = buildStyleControl(bound);        // 你已有：fontFamily -> <select>；颜色 -> <input type="color">...
+  tdContent.appendChild(ctrl);
   tr.appendChild(tdContent);
 
-  // —— 中：属性值多选（复用过滤数据）
+  // —— 中：属性值多选（默认为空；可搜索）
   const tdAttr = document.createElement('td');
-  const sel = (typeof buildAttrMultiSelect === 'function')
-    ? buildAttrMultiSelect(currentStyleAttr)
-    : (function () { // 兜底：原生多选 + 当前属性名
-        const s = document.createElement('select');
-        s.multiple = true; s.size = 6;
-        s.innerHTML = `<option value="${currentStyleAttr}">${(attributeLabels[currentStyleAttr] || currentStyleAttr)}</option>`;
-        return s;
-      })();
+  const sel = buildAttrMultiSelect(currentStyleAttr);
   tdAttr.appendChild(sel);
   tr.appendChild(tdAttr);
 
-  // —— 右：操作（添加到本次更改 / 删除此行）
+  // —— 右：删除按钮（若启用 Choices，需销毁实例）
   const tdAction = document.createElement('td');
-
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.textContent = '添加到本次更改';
-
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
   delBtn.textContent = '×';
-  delBtn.style.marginLeft = '8px';
-
-  // 行内“添加到本次更改”：只写入 stagedRules，不应用
-  addBtn.addEventListener('click', () => {
-    const styleType = tdContent.dataset.styleType;                 // e.g. 'fontFamily' / 'fontColor'
-    const styleVal  = readStyleValue(tdContent, styleType);        // e.g. '"KaiTi"' / '#rrggbb'
-    const values    = getSelectedAttrValues(sel);                  // 选中的属性值数组
-
-    if (!styleVal) {
-      alert('请先选择一个样式值（如字体或颜色）');
-      return;
-    }
-    if (!values.length) {
-      alert('请至少选择一个属性值');
-      return;
-    }
-
-    // 写入本次暂存
-    if (!stagedRules[currentStyleAttr]) stagedRules[currentStyleAttr] = [];
-    const id = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random()));
-    const rec = { id, values, style: {} };
-    rec.style[styleType] = styleVal;
-    stagedRules[currentStyleAttr].push(rec);
-
-    // 行内反馈：禁用控件 + 按钮，显示已添加
-    addBtn.disabled = true;
-    addBtn.textContent = '已添加';
-    const choices = sel && sel._choices;
-    if (choices && typeof choices.disable === 'function') choices.disable();
-    (tdContent.querySelector('select') || tdContent.querySelector('input'))?.setAttribute('disabled', 'disabled');
-
-    // 记住 id，若删除此行可同步移除暂存
-    tr.dataset.ruleId = id;
-  });
-
-  // 删除此行（若启用 Choices，要销毁；若此行已添加到暂存，也同步删除）
+  delBtn.title = '删除该样式行';
   delBtn.addEventListener('click', () => {
     const choices = sel && sel._choices;
     if (choices && typeof choices.destroy === 'function') choices.destroy();
-    const ruleId = tr.dataset.ruleId;
-    if (ruleId && stagedRules[currentStyleAttr]) {
-      const arr = stagedRules[currentStyleAttr];
-      const idx = arr.findIndex(r => r.id === ruleId);
-      if (idx >= 0) arr.splice(idx, 1);
-    }
     tr.remove();
   });
-
-  tdAction.appendChild(addBtn);
   tdAction.appendChild(delBtn);
   tr.appendChild(tdAction);
 
@@ -791,13 +759,47 @@ function buildStyleControl(type) {
 
 // 确认按钮
 function confirmStyle() {
-  const attr = currentStyleAttr;
-  const staged = stagedRules[attr] || [];
-  if (!staged.length) {
-    // 没有任何新增，直接关
-    document.getElementById('style-window').style.display = 'none';
-    return;
+  const tbody = document.getElementById('styleTableBody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const rules = [];
+
+  for (const row of rows) {
+    const tdContent = row.children[0];
+    const tdAttr    = row.children[1];
+
+    const styleType = tdContent.dataset.styleType;   // 'fontFamily' | 'fontColor' | ...
+    const styleVal  = readStyleValue(tdContent, styleType);
+    const sel       = tdAttr.querySelector('select');
+    const values    = getSelectedAttrValues(sel);
+
+    // 基本校验：样式值必须选、属性值至少选一个
+    if (!styleVal) {
+      alert('有一行未选择样式值，请先为该行选择具体样式。');
+      return;
+    }
+    if (!values.length) {
+      alert('有一行未选择“应用属性值”，请在该行的下拉里选择至少一个。');
+      return;
+    }
+
+    const rec = { id: (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())), values, style: {} };
+    rec.style[styleType] = styleVal;
+    rules.push(rec);
   }
+
+  // 写入到全局的持久规则容器（为后续应用做准备 / 或立即应用）
+  if (!window.styleRules) window.styleRules = {};
+  if (!window.styleRules[currentStyleAttr]) window.styleRules[currentStyleAttr] = [];
+  window.styleRules[currentStyleAttr].push(...rules);
+
+  // 若你已实现了 CSS 应用函数，则现在统一应用；否则只是保存并关闭
+  if (typeof compileStyleCSS === 'function') {
+    compileStyleCSS();
+  }
+
+  // 关闭弹窗
+  document.getElementById('style-window').style.display = 'none';
+}
 
   // 合并到持久规则（若你已有 styleRules）
   if (window.styleRules) {
