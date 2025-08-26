@@ -164,13 +164,9 @@ const PRESET_COLORS = [
   lineColor: '连接线颜色',
   none: '无'
 };
-
-  // 本次会话的暂存：{ [attrKey]: Array<{ id, values: string[], style: {...} }> }
-const stagedRules = {};
 function styleLabel(key) {
   return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
 }
-  
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -429,27 +425,6 @@ let currentStyleAttr = null;         // 当前正在编辑的属性
 const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
 let stagedType = 'none';             // 下拉的临时选择（未确认前）
 
-  // 读取“样式内容控件”的当前值
-function readStyleValue(tdContent, type) {
-  if (type === 'fontFamily') {
-    const sel = tdContent.querySelector('select');
-    return sel ? sel.value : '';
-  }
-  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
-    const color = tdContent.querySelector('input[type=color]');
-    return color ? color.value : '';
-  }
-  return '';
-}
-
-// 读取属性多选控件的值（支持 Choices.js 或原生 <select multiple>）
-function getSelectedAttrValues(sel) {
-  if (sel && sel._choices && typeof sel._choices.getValue === 'function') {
-    return sel._choices.getValue(true); // 直接取值数组
-  }
-  return Array.from(sel.selectedOptions || []).map(o => o.value);
-}
-  
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
   document.getElementById('style-title').textContent =
@@ -484,28 +459,6 @@ function openStyleWindow(attr) {
   }
 }
 
-  // 读取左侧“样式值”的控件值（字体下拉 / 颜色取色器）
-function readStyleValue(tdContent, type) {
-  if (type === 'fontFamily') {
-    const sel = tdContent.querySelector('select');
-    return sel ? sel.value : '';
-  }
-  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
-    const color = tdContent.querySelector('input[type=color]');
-    return color ? color.value : '';
-  }
-  return '';
-}
-
-// 读取中间“属性值多选”的已选值（兼容 Choices / 原生）
-function getSelectedAttrValues(sel) {
-  if (sel && sel._choices && typeof sel._choices.getValue === 'function') {
-    return sel._choices.getValue(true);  // 直接得到值数组
-  }
-  return Array.from(sel.selectedOptions || []).map(o => o.value);
-}
-
-  
   function onStyleTypeChange() {
   const typeSel = document.getElementById('style-type');
   const confirm = document.getElementById('style-confirm-btn');
@@ -583,10 +536,9 @@ function onResetBind() {
 
 // 仅更新临时选择；未确认前不写入绑定
 function closeStyleWindow() {
-  // 丢弃本次暂存
-  if (currentStyleAttr) stagedRules[currentStyleAttr] = [];
   document.getElementById('style-window').style.display = 'none';
 }
+  
 // —— 为样式行生成“应用范围”的多选下拉（复用过滤的数据与函数）——
 // 只负责 UI；不写任何样式逻辑
 function buildAttrMultiSelect(attrKey) {
@@ -619,33 +571,64 @@ function buildAttrMultiSelect(attrKey) {
   return sel;
 }
 
-// 新增一行（仅 UI；点“添加到本次更改”后写入 stagedRules，不立刻应用）
-// 新增一行（左=样式控件，右=删除，中=可搜索多选；仅 UI，不立刻应用）
+// 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
 function addStyleRow() {
+  // 1) 必须先完成“确认绑定”
   const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
     alert('请先选择样式类型并“确认绑定”。');
     return;
   }
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) return;
 
+  // 2) 取表格 tbody
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) {
+    console.warn('未找到 #styleTableBody');
+    return;
+  }
+
+  // 3) 构建一行
   const tr = document.createElement('tr');
 
-  // —— 左：样式内容控件（字体下拉 / 取色器 + 预设）
+  // —— 左：样式内容控件（字体下拉 / 取色器 + HEX + 预设色块）
   const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = bound;          // 记录本行样式类型
-  const ctrl = buildStyleControl(bound);        // 你已有：fontFamily -> <select>；颜色 -> <input type="color">...
-  tdContent.appendChild(ctrl);
+  tdContent.dataset.styleType = bound; // 仅作标记，后续调试或扩展会用到
+
+  // 兼容两种返回：buildStyleControl 可能返回 Node 或 { el, ... }
+  const ctrl = (typeof buildStyleControl === 'function') ? buildStyleControl(bound) : null;
+  if (ctrl) {
+    if (ctrl instanceof Node) {
+      tdContent.appendChild(ctrl);
+    } else if (ctrl.el) {
+      tdContent.appendChild(ctrl.el);
+    } else {
+      tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
+    }
+  } else {
+    tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
+  }
   tr.appendChild(tdContent);
 
-  // —— 中：属性值多选（默认为空；可搜索）
+  // —— 中：应用范围（复用过滤功能：allOptions + getFilterOptionsForKey + Choices）
   const tdAttr = document.createElement('td');
-  const sel = buildAttrMultiSelect(currentStyleAttr);
+  let sel;
+  if (typeof buildAttrMultiSelect === 'function') {
+    // 第③步推荐：真正的“该属性值”的多选
+    sel = buildAttrMultiSelect(currentStyleAttr);
+  } else {
+    // 兜底：仍然只放“当前属性本身”的占位多选（不推荐，等你把 buildAttrMultiSelect 加上）
+    sel = document.createElement('select');
+    sel.multiple = true;
+    sel.innerHTML = `
+      <option value="${currentStyleAttr}">
+        ${(attributeLabels[currentStyleAttr] || currentStyleAttr)}
+      </option>
+    `;
+  }
   tdAttr.appendChild(sel);
   tr.appendChild(tdAttr);
 
-  // —— 右：删除按钮（若启用 Choices，需销毁实例）
+  // —— 右：删除按钮（若启用了 Choices，销毁实例再移除行）
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
@@ -653,15 +636,17 @@ function addStyleRow() {
   delBtn.title = '删除该样式行';
   delBtn.addEventListener('click', () => {
     const choices = sel && sel._choices;
-    if (choices && typeof choices.destroy === 'function') choices.destroy();
+    if (choices && typeof choices.destroy === 'function') {
+      choices.destroy();
+    }
     tr.remove();
   });
   tdAction.appendChild(delBtn);
   tr.appendChild(tdAction);
 
+  // 4) 插入表格
   tbody.appendChild(tr);
 }
-
 
   // 根据类型构造控件（这里只造 UI，暂不写任何样式）
 function buildStyleControl(type) {
@@ -759,48 +744,8 @@ function buildStyleControl(type) {
 
 // 确认按钮
 function confirmStyle() {
-  const tbody = document.getElementById('styleTableBody');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  const rules = [];
-
-  for (const row of rows) {
-    const tdContent = row.children[0];
-    const tdAttr    = row.children[1];
-
-    const styleType = tdContent.dataset.styleType;   // 'fontFamily' | 'fontColor' | ...
-    const styleVal  = readStyleValue(tdContent, styleType);
-    const sel       = tdAttr.querySelector('select');
-    const values    = getSelectedAttrValues(sel);
-
-    // 基本校验：样式值必须选、属性值至少选一个
-    if (!styleVal) {
-      alert('有一行未选择样式值，请先为该行选择具体样式。');
-      return;
-    }
-    if (!values.length) {
-      alert('有一行未选择“应用属性值”，请在该行的下拉里选择至少一个。');
-      return;
-    }
-
-    const rec = { id: (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())), values, style: {} };
-    rec.style[styleType] = styleVal;
-    rules.push(rec);
-  }
-
-  // 写入到全局的持久规则容器（为后续应用做准备 / 或立即应用）
-  if (!window.styleRules) window.styleRules = {};
-  if (!window.styleRules[currentStyleAttr]) window.styleRules[currentStyleAttr] = [];
-  window.styleRules[currentStyleAttr].push(...rules);
-
-  // 若你已实现了 CSS 应用函数，则现在统一应用；否则只是保存并关闭
-  if (typeof compileStyleCSS === 'function') {
-    compileStyleCSS();
-  }
-
-  // 关闭弹窗
   document.getElementById('style-window').style.display = 'none';
 }
-
 
   document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
 document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
