@@ -77,6 +77,23 @@
     <button onclick="confirmAddFilter()">确定</button>
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
+<!-- 属性多选弹窗（复用 Choices，可搜索，可多选） -->
+<div id="attr-picker-window" style="
+  display:none; position:absolute; top:120px; left:50%; transform:translateX(-50%);
+  width:700px; background:#fff; border:1px solid #ccc; padding:16px;
+  box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
+  <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
+  <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
+  <label style="display:block; margin-bottom:8px;">
+    属性值：
+    <select id="attr-picker-options" multiple></select>
+  </label>
+  <div style="margin-top:10px; text-align:right;">
+    <!-- 左“确定”右“取消” -->
+    <button id="attr-picker-confirm" style="margin-right:8px;">确定</button>
+    <button id="attr-picker-cancel">取消</button>
+  </div>
+</div>
 
   <!-- 样式弹窗（整块替换你当前那一堆散落的控件） -->
 
@@ -573,80 +590,152 @@ function buildAttrMultiSelect(attrKey) {
 
 // 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
 function addStyleRow() {
-  // 1) 必须先完成“确认绑定”
   const bound = boundStyleType[currentStyleAttr];
   if (!bound || bound === 'none') {
     alert('请先选择样式类型并“确认绑定”。');
     return;
   }
-
-  // 2) 取表格 tbody
   const tbody = document.getElementById('styleTableBody');
-  if (!tbody) {
-    console.warn('未找到 #styleTableBody');
-    return;
-  }
+  if (!tbody) return;
 
-  // 3) 构建一行
   const tr = document.createElement('tr');
+  const rowId = (crypto.randomUUID?.() || ('row-' + Date.now() + Math.random()));
+  tr.dataset.rowId  = rowId;
+  tr.dataset.attrKey = currentStyleAttr; // 记录本行对应的属性类别
 
-  // —— 左：样式内容控件（字体下拉 / 取色器 + HEX + 预设色块）
+  // —— 左：样式值控件（仅 UI，不落库、不应用）
   const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = bound; // 仅作标记，后续调试或扩展会用到
-
-  // 兼容两种返回：buildStyleControl 可能返回 Node 或 { el, ... }
-  const ctrl = (typeof buildStyleControl === 'function') ? buildStyleControl(bound) : null;
-  if (ctrl) {
-    if (ctrl instanceof Node) {
-      tdContent.appendChild(ctrl);
-    } else if (ctrl.el) {
-      tdContent.appendChild(ctrl.el);
-    } else {
-      tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
-    }
-  } else {
-    tdContent.textContent = (window.styleLabel ? styleLabel(bound) : bound) + '（控件未加载）';
-  }
+  tdContent.dataset.styleType = bound;      // 记录本行样式类型（后续应用阶段可用）
+  const ctrl = buildStyleControl(bound);    // 你已有的函数
+  tdContent.appendChild(ctrl);
   tr.appendChild(tdContent);
 
-  // —— 中：应用范围（复用过滤功能：allOptions + getFilterOptionsForKey + Choices）
+  // —— 中：已选标签 + “添加/修改属性”按钮
   const tdAttr = document.createElement('td');
-  let sel;
-  if (typeof buildAttrMultiSelect === 'function') {
-    // 第③步推荐：真正的“该属性值”的多选
-    sel = buildAttrMultiSelect(currentStyleAttr);
-  } else {
-    // 兜底：仍然只放“当前属性本身”的占位多选（不推荐，等你把 buildAttrMultiSelect 加上）
-    sel = document.createElement('select');
-    sel.multiple = true;
-    sel.innerHTML = `
-      <option value="${currentStyleAttr}">
-        ${(attributeLabels[currentStyleAttr] || currentStyleAttr)}
-      </option>
-    `;
-  }
-  tdAttr.appendChild(sel);
+
+  const chips = document.createElement('div');
+  chips.className = 'attr-chips';
+  chips.style.minHeight = '28px';
+  chips.innerHTML = '<span style="color:#999;">（未选择）</span>';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.textContent = '添加/修改属性';
+  editBtn.style.marginLeft = '8px';
+  editBtn.addEventListener('click', () => {
+    openAttrPicker(rowId, currentStyleAttr);
+  });
+
+  tdAttr.appendChild(chips);
+  tdAttr.appendChild(editBtn);
   tr.appendChild(tdAttr);
 
-  // —— 右：删除按钮（若启用了 Choices，销毁实例再移除行）
+  // —— 右：删除按钮
   const tdAction = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
   delBtn.textContent = '×';
   delBtn.title = '删除该样式行';
   delBtn.addEventListener('click', () => {
-    const choices = sel && sel._choices;
-    if (choices && typeof choices.destroy === 'function') {
-      choices.destroy();
-    }
+    // 清理本行已选记录
+    delete styleRowSelections[rowId];
     tr.remove();
   });
   tdAction.appendChild(delBtn);
   tr.appendChild(tdAction);
 
-  // 4) 插入表格
   tbody.appendChild(tr);
 }
+
+/************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
+const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
+let attrPickerEditing = { rowId: null, attrKey: null };
+let attrPickerChoices = null; // Choices 实例
+
+function openAttrPicker(rowId, attrKey) {
+  attrPickerEditing = { rowId, attrKey };
+
+  const modal = document.getElementById('attr-picker-window');
+  const title = document.getElementById('attr-picker-title');
+  const hint  = document.getElementById('attr-picker-hint');
+  const sel   = document.getElementById('attr-picker-options');
+
+  // 标题/提示
+  title.textContent = '选择应用的属性值';
+  hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
+
+  // 先清空
+  if (attrPickerChoices) { attrPickerChoices.destroy(); attrPickerChoices = null; }
+  sel.innerHTML = '';
+
+  // 候选：直接复用过滤系统的获取函数
+  const all = (typeof getFilterOptionsForKey === 'function')
+    ? (getFilterOptionsForKey(attrKey) || [])
+    : (window.allOptions?.[attrKey] || []);
+
+  // 预选：如果该行已有选择，弹窗打开时默认勾上
+  const pre = styleRowSelections[rowId] || [];
+
+  // 这里不做跨行去重（后续你需要时可加），现在只做本行多选
+  all.forEach(v => {
+    const o = new Option(v, v, /*defaultSelected*/ false, /*selected*/ pre.includes(v));
+    sel.appendChild(o);
+  });
+
+  // 初始化 Choices（可搜索+多选标签）
+  if (window.Choices) {
+    attrPickerChoices = new Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+
+  modal.style.display = 'block';
+}
+
+function closeAttrPicker() {
+  document.getElementById('attr-picker-window').style.display = 'none';
+}
+
+function confirmAttrPicker() {
+  const { rowId } = attrPickerEditing;
+  const sel = document.getElementById('attr-picker-options');
+
+  // 读取选择
+  const values = Array.from(sel.selectedOptions).map(o => o.value);
+  styleRowSelections[rowId] = values;
+
+  // 回填为标签
+  renderRowAttrChips(rowId, values);
+
+  closeAttrPicker();
+}
+
+// 把选中的属性值渲染为“标签”
+function renderRowAttrChips(rowId, values) {
+  const tr = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
+  if (!tr) return;
+  const box = tr.querySelector('.attr-chips');
+  if (!box) return;
+
+  box.innerHTML = '';
+  if (!values || values.length === 0) {
+    box.innerHTML = '<span style="color:#999;">（未选择）</span>';
+    return;
+  }
+  values.forEach(v => {
+    const tag = document.createElement('span');
+    tag.textContent = v;
+    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    box.appendChild(tag);
+  });
+}
+
+// 绑定弹窗按钮
+document.getElementById('attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
+document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
 
   // 根据类型构造控件（这里只造 UI，暂不写任何样式）
 function buildStyleControl(type) {
