@@ -440,7 +440,8 @@ attrSel.addEventListener("change", () => {
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
 /************ 样式行-属性选择（可搜索多选 + 全选/全不选 + 去重） ************/
-const styleRowSelections = styleRowSelections || {}; // { [rowId]: string[] }
+window.styleRowSelections = window.styleRowSelections || {};
+const styleRowSelections = window.styleRowSelections;
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null; // Choices 实例
 
