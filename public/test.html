@@ -181,7 +181,6 @@ const PRESET_COLORS = [
   lineColor: '连接线颜色',
   none: '无'
 };
-  
 function styleLabel(key) {
   return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
 }
@@ -439,184 +438,9 @@ attrSel.addEventListener("change", () => {
 
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
-/************ 样式行-属性选择（可搜索多选 + 全选/全不选 + 去重） ************/
-window.styleRowSelections = window.styleRowSelections || {};
-const styleRowSelections = window.styleRowSelections;
-let attrPickerEditing = { rowId: null, attrKey: null };
-let attrPickerChoices = null; // Choices 实例
-
-// 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
-function readRowStyleKey(rowEl) {
-  const type = rowEl.querySelector('td:first-child')?.dataset?.styleType || ''; // e.g. 'fontFamily' / 'fontColor'
-  let value = '';
-  const td = rowEl.querySelector('td:first-child');
-
-  if (!td) return `${type}|`;
-
-  // 字体：select
-  const sel = td.querySelector('select');
-  if (sel) value = sel.value || '';
-
-  // 颜色：input[type=color]
-  const color = td.querySelector('input[type="color"]');
-  if (color) value = color.value || value;
-
-  return `${type}|${value}`;
-}
-
-// 简单集合比较
-function isSameSet(a = [], b = []) {
-  if (a.length !== b.length) return false;
-  const sa = new Set(a), sb = new Set(b);
-  for (const v of sa) if (!sb.has(v)) return false;
-  return true;
-}
-
-// 统计同一属性下，除当前行外已被占用的属性值（用于去重）
-function getTakenValues(attrKey, exceptRowId) {
-  const taken = new Set();
-  const rows = document.querySelectorAll(`#styleTableBody tr[data-attr-key="${attrKey}"]`);
-  rows.forEach(tr => {
-    const rid = tr.dataset.rowId;
-    if (rid === exceptRowId) return;
-    const vals = styleRowSelections[rid] || [];
-    vals.forEach(v => taken.add(v));
-  });
-  return taken;
-}
-
-function openAttrPicker(rowId, attrKey) {
-  attrPickerEditing = { rowId, attrKey };
-
-  const modal = document.getElementById('attr-picker-window');
-  const title = document.getElementById('attr-picker-title');
-  const hint  = document.getElementById('attr-picker-hint');
-  const sel   = document.getElementById('attr-picker-options');
-
-  // 标题/提示
-  title.textContent = '选择应用的属性值';
-  hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
-
-  // 清空
-  if (attrPickerChoices) { attrPickerChoices.destroy(); attrPickerChoices = null; }
-  sel.innerHTML = '';
-
-  // 候选（复用过滤取值逻辑）
-  const all = (typeof getFilterOptionsForKey === 'function')
-    ? (getFilterOptionsForKey(attrKey) || [])
-    : (window.allOptions?.[attrKey] || []);
-
-  // 预选：该行已有选择
-  const pre = styleRowSelections[rowId] || [];
-
-  // 去重：排除“其它行”已占用的值，但保留本行已选（避免不可见）
-  const takenByOthers = getTakenValues(attrKey, rowId);
-  const options = all.filter(v => pre.includes(v) || !takenByOthers.has(v));
-
-  // 构建选项（保留预选状态）
-  options.forEach(v => sel.appendChild(new Option(v, v, false, pre.includes(v))));
-
-  // 初始化 Choices（可搜索+多选标签）
-  if (window.Choices) {
-    attrPickerChoices = new Choices(sel, {
-      removeItemButton: true,
-      shouldSort: false,
-      searchPlaceholderValue: '搜索…',
-      position: 'bottom'
-    });
-  }
-
-  modal.style.display = 'block';
-}
-
-function closeAttrPicker() {
-  document.getElementById('attr-picker-window').style.display = 'none';
-}
-
-// “全选” = 当前下拉里的所有可见选项（已经过去重过滤）
-function selectAllInAttrPicker() {
-  const sel = document.getElementById('attr-picker-options');
-  const vals = Array.from(sel.options).map(o => o.value).filter(Boolean);
-  if (attrPickerChoices) {
-    // 清空后直接设定所有值
-    attrPickerChoices.removeActiveItems();
-    if (vals.length) attrPickerChoices.setChoiceByValue(vals);
-  } else {
-    Array.from(sel.options).forEach(o => o.selected = true);
-  }
-}
-
-// “全不选”
-function clearAttrPicker() {
-  const sel = document.getElementById('attr-picker-options');
-  if (attrPickerChoices) {
-    attrPickerChoices.removeActiveItems();
-  } else {
-    Array.from(sel.options).forEach(o => o.selected = false);
-  }
-}
-
-function confirmAttrPicker() {
-  const { rowId, attrKey } = attrPickerEditing;
-  const sel = document.getElementById('attr-picker-options');
-  const values = Array.from(sel.selectedOptions).map(o => o.value);
-
-  // 1) 跨行去重二次校验：不允许与其它行冲突（理论上已在 open 过滤过）
-  const takenByOthers = getTakenValues(attrKey, rowId);
-  const conflict = values.find(v => takenByOthers.has(v));
-  if (conflict) {
-    alert(`“${conflict}” 已被同属性的其他样式行占用，请取消或改用其他值。`);
-    return;
-  }
-
-  // 2) “具体样式本身”的去重：同 attrKey 下，不允许出现【相同样式值 + 相同一组属性值】的重复行
-  const thisRow = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
-  const thisKey = readRowStyleKey(thisRow);
-  const rows = document.querySelectorAll(`#styleTableBody tr[data-attr-key="${attrKey}"]`);
-  for (const tr of rows) {
-    if (tr.dataset.rowId === rowId) continue;
-    const otherKey = readRowStyleKey(tr);
-    if (otherKey === thisKey) {
-      const otherVals = styleRowSelections[tr.dataset.rowId] || [];
-      if (isSameSet(values, otherVals)) {
-        alert('该样式值与属性组合已存在，避免重复。');
-        return;
-      }
-    }
-  }
-
-  // 保存并回填
-  styleRowSelections[rowId] = values;
-  renderRowAttrChips(rowId, values);
-  closeAttrPicker();
-}
-
-// 回填为“标签”
-function renderRowAttrChips(rowId, values) {
-  const tr = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
-  if (!tr) return;
-  const box = tr.querySelector('.attr-chips');
-  if (!box) return;
-
-  box.innerHTML = '';
-  if (!values || values.length === 0) {
-    box.innerHTML = '<span style="color:#999;">（未选择）</span>';
-    return;
-  }
-  values.forEach(v => {
-    const tag = document.createElement('span');
-    tag.textContent = v;
-    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
-    box.appendChild(tag);
-  });
-}
-
-// 绑定弹窗按钮
-document.getElementById('attr-picker-confirm')   ?.addEventListener('click', confirmAttrPicker);
-document.getElementById('attr-picker-cancel')    ?.addEventListener('click', closeAttrPicker);
-document.getElementById('attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
-document.getElementById('attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
-
+let currentStyleAttr = null;         // 当前正在编辑的属性
+const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
+let stagedType = 'none';             // 下拉的临时选择（未确认前）
 
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
@@ -824,6 +648,9 @@ function addStyleRow() {
 }
 
 /************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
+const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
+let attrPickerEditing = { rowId: null, attrKey: null };
+let attrPickerChoices = null; // Choices 实例
 
 function openAttrPicker(rowId, attrKey) {
   attrPickerEditing = { rowId, attrKey };
