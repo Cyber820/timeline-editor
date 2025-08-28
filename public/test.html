@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -145,13 +144,6 @@
   <button onclick="confirmStyle()" class="btn-primary">确定</button>
   <button onclick="closeStyleWindow()">取消</button>
 </div>
-
-  <!-- 选择快捷操作 -->
-<div style="display:flex; gap:8px; justify-content:flex-start; margin:8px 0 0;">
-  <button type="button" id="attr-picker-select-all">全选</button>
-  <button type="button" id="attr-picker-clear">全不选</button>
-</div>
-  
 </div>
 
 <script>
@@ -189,8 +181,10 @@ const PRESET_COLORS = [
   lineColor: '连接线颜色',
   none: '无'
 };
-
-
+  
+function styleLabel(key) {
+  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
+}
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -445,15 +439,12 @@ attrSel.addEventListener("change", () => {
 
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
-let currentStyleAttr = null;         // 当前正在编辑的属性
-const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
-let stagedType = 'none';             // 下拉的临时选择（未确认前）
-
-  /************ 样式行-属性选择（可搜索多选 + 全选/全不选 + 去重） ************/
+/************ 样式行-属性选择（可搜索多选 + 全选/全不选 + 去重） ************/
 const styleRowSelections = styleRowSelections || {}; // { [rowId]: string[] }
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null; // Choices 实例
-  // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
+
+// 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
 function readRowStyleKey(rowEl) {
   const type = rowEl.querySelector('td:first-child')?.dataset?.styleType || ''; // e.g. 'fontFamily' / 'fontColor'
   let value = '';
@@ -618,7 +609,14 @@ function renderRowAttrChips(rowId, values) {
     box.appendChild(tag);
   });
 }
-  
+
+// 绑定弹窗按钮
+document.getElementById('attr-picker-confirm')   ?.addEventListener('click', confirmAttrPicker);
+document.getElementById('attr-picker-cancel')    ?.addEventListener('click', closeAttrPicker);
+document.getElementById('attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
+document.getElementById('attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
+
+
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
   document.getElementById('style-title').textContent =
@@ -825,10 +823,7 @@ function addStyleRow() {
 }
 
 /************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
-// 创建或复用全局存储（只出现一次）
-window.styleRowSelections = window.styleRowSelections || {};
-// 需要局部引用就用这个别名；请确保全文件仅此一处声明
-const styleRowSelections = window.styleRowSelections;
+const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null; // Choices 实例
 
@@ -1026,12 +1021,7 @@ window.onResetBind       = onResetBind;
 window.addStyleRow       = addStyleRow;
 window.confirmStyle      = confirmStyle;
 window.closeStyleWindow  = closeStyleWindow;
-// 绑定弹窗按钮
-document.getElementById('attr-picker-confirm')   ?.addEventListener('click', confirmAttrPicker);
-document.getElementById('attr-picker-cancel')    ?.addEventListener('click', closeAttrPicker);
-document.getElementById('attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
-document.getElementById('attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
-  
+
 </script>
 </body>
 </html>
