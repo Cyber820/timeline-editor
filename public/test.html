@@ -823,9 +823,6 @@ function addStyleRow() {
 }
 
 /************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
-const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
-let attrPickerEditing = { rowId: null, attrKey: null };
-let attrPickerChoices = null; // Choices 实例
 
 function openAttrPicker(rowId, attrKey) {
   attrPickerEditing = { rowId, attrKey };
