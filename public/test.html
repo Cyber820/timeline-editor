@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -824,7 +825,10 @@ function addStyleRow() {
 }
 
 /************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
-const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
+// 创建或复用全局存储（只出现一次）
+window.styleRowSelections = window.styleRowSelections || {};
+// 需要局部引用就用这个别名；请确保全文件仅此一处声明
+const styleRowSelections = window.styleRowSelections;
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null; // Choices 实例
 
