@@ -84,16 +84,26 @@
   box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
   <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
   <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
+
+  <!-- 新增：全选 / 全不选按钮 -->
+  <div style="margin:6px 0 8px;">
+    <button id="attr-picker-select-all" type="button">全选</button>
+    <button id="attr-picker-clear" type="button">全不选</button>
+  </div>
+  <!-- /新增 -->
+
   <label style="display:block; margin-bottom:8px;">
     属性值：
     <select id="attr-picker-options" multiple></select>
   </label>
+
   <div style="margin-top:10px; text-align:right;">
     <!-- 左“确定”右“取消” -->
     <button id="attr-picker-confirm" style="margin-right:8px;">确定</button>
     <button id="attr-picker-cancel">取消</button>
   </div>
 </div>
+
 
   <!-- 样式弹窗（整块替换你当前那一堆散落的控件） -->
 
@@ -144,6 +154,8 @@
   <button onclick="confirmStyle()" class="btn-primary">确定</button>
   <button onclick="closeStyleWindow()">取消</button>
 </div>
+
+
 </div>
 
 <script>
@@ -774,6 +786,42 @@ function confirmAttrPicker() {
   renderRowAttrChips(rowId, values);
   closeAttrPicker();
 }
+
+// —— 全选：把弹窗当前下拉（已过滤后的）所有选项选中 ——
+// 兼容：有 Choices.js 时用实例；没有就设置 <option>.selected
+function selectAllInAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  const allValues = Array.from(sel.options).map(o => o.value).filter(Boolean);
+
+  if (window.attrPickerChoices) {
+    // 清空后一次性设置全部
+    attrPickerChoices.removeActiveItems();
+    if (allValues.length) {
+      // Choices 支持数组
+      attrPickerChoices.setChoiceByValue(allValues);
+    }
+  } else {
+    Array.from(sel.options).forEach(o => { if (o.value) o.selected = true; });
+  }
+}
+
+// —— 全不选 —— 
+function clearAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  if (window.attrPickerChoices) {
+    attrPickerChoices.removeActiveItems(); // 清空已选
+  } else {
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+  }
+}
+
+// 事件绑定（放在脚本末尾那堆 addEventListener 附近）
+document.getElementById('attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
+document.getElementById('attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
 
 // 把选中的属性值渲染为“标签”
 function renderRowAttrChips(rowId, values) {
