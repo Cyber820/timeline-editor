@@ -789,34 +789,54 @@ function confirmAttrPicker() {
 
 // —— 全选：把弹窗当前下拉（已过滤后的）所有选项选中 ——
 // 兼容：有 Choices.js 时用实例；没有就设置 <option>.selected
+// 全选：把当前下拉里的所有可选项立即设为选中，并同步 Choices UI
 function selectAllInAttrPicker() {
   const sel = document.getElementById('attr-picker-options');
   if (!sel) return;
 
-  const allValues = Array.from(sel.options).map(o => o.value).filter(Boolean);
+  // 取出当前下拉里的所有可选值（排除空值）
+  const vals = Array.from(sel.options).map(o => o.value).filter(Boolean);
 
   if (window.attrPickerChoices) {
-    // 清空后一次性设置全部
+    // 先清掉已选 token
     attrPickerChoices.removeActiveItems();
-    if (allValues.length) {
-      // Choices 支持数组
-      attrPickerChoices.setChoiceByValue(allValues);
-    }
+
+    // 保障底层 <option> 也处于 selected 状态（有些版本的 Choices 对 programmatic change 不敏感）
+    Array.from(sel.options).forEach(o => { o.selected = vals.includes(o.value); });
+
+    // 再让 Choices 生成 token
+    if (vals.length) attrPickerChoices.setChoiceByValue(vals);
+
+    // 可选：保持下拉展开，方便用户继续查看/搜索
+    // attrPickerChoices.showDropdown();
   } else {
-    Array.from(sel.options).forEach(o => { if (o.value) o.selected = true; });
+    // 无 Choices 时，直接原生多选全选
+    Array.from(sel.options).forEach(o => { o.selected = true; });
   }
+
+  // 触发一次 change（有些场景需要）
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// —— 全不选 —— 
+// 全不选：清空已选项，并同步 Choices UI
 function clearAttrPicker() {
   const sel = document.getElementById('attr-picker-options');
   if (!sel) return;
 
   if (window.attrPickerChoices) {
-    attrPickerChoices.removeActiveItems(); // 清空已选
+    // 先清掉 Choices 的 token
+    attrPickerChoices.removeActiveItems();
+
+    // 再把底层 <option> 选中状态清空
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+
+    // 可选：保持下拉展开
+    // attrPickerChoices.showDropdown();
   } else {
     Array.from(sel.options).forEach(o => { o.selected = false; });
   }
+
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // 事件绑定（放在脚本末尾那堆 addEventListener 附近）
