@@ -824,7 +824,6 @@ function addStyleRow() {
 
 
 /************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
-const styleRowSelections = {}; // { [rowId]: string[] } 当前弹窗确定后回填展示所用
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null;
 
@@ -931,7 +930,6 @@ function getTakenValues(attrKey, exceptRowId) {
   rows.forEach(tr => {
     const rid = tr.dataset.rowId;
     if (rid === exceptRowId) return;
-    const vals = styleRowSelections[rid] || [];
     vals.forEach(v => taken.add(v));
   });
   return taken;
