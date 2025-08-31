@@ -453,6 +453,35 @@ attrSel.addEventListener("change", () => {
 let currentStyleAttr = null;         // 当前正在编辑的属性
 const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
 let stagedType = 'none';             // 下拉的临时选择（未确认前）
+// 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
+const styleTypeOwner = {};
+
+  // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
+function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
+
+// 根据占用关系，刷新“样式类型”下拉的可用性和提示文案
+function refreshStyleTypeOptions() {
+  const sel = document.getElementById('style-type');
+  if (!sel) return;
+
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.dataset.baseText) opt.dataset.baseText = opt.textContent; // 记住原始文案
+    const internal = uiTypeToInternal(opt.value);
+    if (internal === 'none') {
+      opt.disabled = false;
+      opt.textContent = opt.dataset.baseText;
+      return;
+    }
+    const owner = styleTypeOwner[internal];
+    const isMine = owner === currentStyleAttr;
+
+    // 有其它属性占用 -> 禁用并标注“已绑定：XX”
+    opt.disabled = !!(owner && !isMine);
+    opt.textContent = opt.dataset.baseText + (
+      owner && !isMine ? `（已绑定：${(attributeLabels[owner] || owner)}）` : ''
+    );
+  });
+}
 
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
@@ -476,7 +505,7 @@ function openStyleWindow(attr) {
 
   const bound = boundStyleType[attr] || 'none';
   if (bound !== 'none') {
-    if (hint)      hint.textContent = '当前样式：' + styleLabel(bound);
+    if (hint)      hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(bound) : bound);
     if (confirm) { confirm.disabled = true; confirm.style.display = 'none'; }
     if (resetBtn)  resetBtn.style.display = 'inline-block';
     if (addBtn)    addBtn.disabled = false;
@@ -486,32 +515,49 @@ function openStyleWindow(attr) {
     if (resetBtn)  resetBtn.style.display = 'none';
     if (addBtn)    addBtn.disabled = true;
   }
+
+  // ✅ 根据“已被其它属性占用”的类型禁用选项 + 标注
+  refreshStyleTypeOptions();
 }
+
 
   function onStyleTypeChange() {
   const typeSel = document.getElementById('style-type');
   const confirm = document.getElementById('style-confirm-btn');
   const hint    = document.getElementById('bound-type-hint');
 
-  // 把 UI 的 'font' 映射为内部的 'fontFamily'
-  const raw = typeSel.value;
-  const mapped = (raw === 'font') ? 'fontFamily' : raw;
+  const mapped = uiTypeToInternal(typeSel.value); // 'font' -> 'fontFamily'
   stagedType = mapped;
 
+  // 该属性已绑定某类型 -> 不允许在未重置前切换
   const already = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
   if (already) {
-    // 已绑定不允许直接改，提示需重置
     typeSel.value = 'none';
     stagedType = 'none';
-    if (hint)    hint.textContent = '当前绑定：' + styleLabel(boundStyleType[currentStyleAttr]) + '（如需更改，请先“重置”）';
+    if (hint)    hint.textContent = '当前绑定：' + (typeof styleLabel === 'function' ? styleLabel(boundStyleType[currentStyleAttr]) : boundStyleType[currentStyleAttr]) + '（如需更改，请先“重置”）';
     if (confirm) confirm.disabled = true;
     return;
+  }
+
+  // ✅ 全局唯一：该样式类型是否已被其它属性占用
+  if (mapped !== 'none') {
+    const owner = styleTypeOwner[mapped];
+    if (owner && owner !== currentStyleAttr) {
+      alert(`“${(typeof styleLabel === 'function' ? styleLabel(mapped) : mapped)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+      typeSel.value = 'none';
+      stagedType    = 'none';
+      if (confirm) confirm.disabled = true;
+      // 反映占用状态
+      refreshStyleTypeOptions();
+      return;
+    }
   }
 
   if (confirm) confirm.disabled = (stagedType === 'none');
 }
 
-  function onConfirmBind() {
+
+ function onConfirmBind() {
   if (stagedType === 'none') return;
 
   const tbody    = document.getElementById('styleTableBody');
@@ -520,24 +566,42 @@ function openStyleWindow(attr) {
   const addBtn   = document.getElementById('add-style-btn');
   const hint     = document.getElementById('bound-type-hint');
 
+  // 再次确认全局唯一占用（防 race）
+  const owner = styleTypeOwner[stagedType];
+  if (owner && owner !== currentStyleAttr) {
+    alert(`“${(typeof styleLabel === 'function' ? styleLabel(stagedType) : stagedType)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+    return;
+  }
+
   const prev = boundStyleType[currentStyleAttr] || 'none';
   if (prev !== 'none' && prev !== stagedType) {
     const ok = window.confirm('切换样式类型将清空该属性下已添加的样式行，是否继续？');
     if (!ok) return;
     tbody.innerHTML = '';
+
+    // 释放之前占用的类型
+    if (styleTypeOwner[prev] === currentStyleAttr) {
+      delete styleTypeOwner[prev];
+    }
   }
 
+  // 写入绑定与占用
   boundStyleType[currentStyleAttr] = stagedType;
+  styleTypeOwner[stagedType] = currentStyleAttr;
 
   // UI 状态切换
   if (confirm)  { confirm.disabled = true; confirm.style.display = 'none'; }
   if (resetBtn)  resetBtn.style.display = 'inline-block';
   if (addBtn)    addBtn.disabled = false;
-  if (hint)      hint.textContent = '当前样式：' + styleLabel(stagedType);
+  if (hint)      hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(stagedType) : stagedType);
 
-  // 自动添加首行输入控件（仅 UI，不应用样式）
+  // 更新下拉可用性（把该类型标记为“已被本属性占用”，其它属性会看到禁用）
+  refreshStyleTypeOptions();
+
+  // 自动新增一行（仅 UI）
   addStyleRow();
 }
+
 
 // 点击“重置”：清空该属性的绑定与行
 function onResetBind() {
@@ -552,6 +616,12 @@ function onResetBind() {
   const ok = !hasRows || window.confirm('重置将清空该属性下所有样式行，是否继续？');
   if (!ok) return;
 
+  // 释放占用者
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && styleTypeOwner[prev] === currentStyleAttr) {
+    delete styleTypeOwner[prev];
+  }
+
   boundStyleType[currentStyleAttr] = 'none';
   tbody.innerHTML = '';
   typeSel.value = 'none';
@@ -560,8 +630,12 @@ function onResetBind() {
   if (confirm)  { confirm.disabled = true; confirm.style.display = 'inline-block'; }
   if (resetBtn)  resetBtn.style.display = 'none';
   if (addBtn)    addBtn.disabled = true;
-  if (hint)      hint.textContent = '当前样式：' + styleLabel('none');
+  if (hint)      hint.textContent = '当前样式：无';
+
+  // 让其它属性重新可选该类型
+  refreshStyleTypeOptions();
 }
+
 
 // 仅更新临时选择；未确认前不写入绑定
 function closeStyleWindow() {
