@@ -455,21 +455,9 @@ const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' 
 let stagedType = 'none';             // 下拉的临时选择（未确认前）
 // 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
 const styleTypeOwner = {};
-
-// —— 样式规则内存：{ [attrKey]: Array<{ id, type, style:{...}, values:string[] }> } ——
-// 只做交互存储，不应用 CSS
-const styleRules = window.styleRules || (window.styleRules = {});
-
-// 生成稳定 id（重开窗口不变）
-function genId() {
-  return (crypto.randomUUID?.() || 'r-' + Date.now() + '-' + Math.random().toString(36).slice(2));
-}
-
-// 查找某行规则
-function findRule(attrKey, rowId) {
-  const arr = styleRules[attrKey] || [];
-  return arr.find(r => r.id === rowId) || null;
-}
+/*** 规则内存：每个属性对应一组规则行 ***/
+// 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
+const styleRules = {};
 
 // 生成行 id（与 <tr data-row-id> 对应）
 function genId() {
@@ -619,83 +607,38 @@ function refreshStyleTypeOptions() {
 
 function openStyleWindow(attr) {
   currentStyleAttr = attr;
+  document.getElementById('style-title').textContent =
+    (attributeLabels[attr] || attr) + ' 样式';
+  document.getElementById('style-window').style.display = 'block';
 
-  // 标题 & 展示窗口
-  const win      = document.getElementById('style-window');
-  const titleEl  = document.getElementById('style-title');
-  const typeSel  = document.getElementById('style-type');
-  const tbody    = document.getElementById('styleTableBody');
-  const confirm  = document.getElementById('style-confirm-btn');
-  const resetBtn = document.getElementById('style-reset-btn');
-  const addBtn   = document.getElementById('add-style-btn');
-  const hint     = document.getElementById('bound-type-hint');
+  const typeSel   = document.getElementById('style-type');
+  const tbody     = document.getElementById('styleTableBody');
+  const confirm   = document.getElementById('style-confirm-btn');
+  const resetBtn  = document.getElementById('style-reset-btn');
+  const addBtn    = document.getElementById('add-style-btn');
+  const hint      = document.getElementById('bound-type-hint');
 
-  if (titleEl) titleEl.textContent = (attributeLabels[attr] || attr) + ' 样式';
-  if (win) win.style.display = 'block';
-
-  // 本次会话临时选择复位
-  if (typeSel) typeSel.value = 'none';
+  typeSel.value = 'none';
   stagedType = 'none';
 
-  // 清空表格（随后用 renderStyleTable 重新渲染）
-  if (tbody) tbody.innerHTML = '';
+  tbody.innerHTML = '';
 
-  // 确保有规则桶（若未定义 ensureBucket，则做兜底）
-  if (typeof ensureBucket === 'function') {
-    ensureBucket(attr);
-  } else {
-    window.styleRules = window.styleRules || {};
-    if (!window.styleRules[attr]) window.styleRules[attr] = [];
-  }
-
-  // 当前属性已绑定的样式类型（'fontFamily' | 'fontColor' | ... | 'none'）
-  const thisBound = boundStyleType[attr] || 'none';
-
-  // 1) 动态禁用“样式类型”下拉里，已被其它属性绑定的选项
-  //    - UI 值 'font' 映射为内部 'fontFamily'
-  if (typeSel && typeSel.options) {
-    // 统计所有已使用的类型
-    const used = new Set(
-      Object.keys(boundStyleType)
-        .filter(k => k !== attr)                           // 非本属性
-        .map(k => boundStyleType[k])
-        .filter(v => v && v !== 'none')
-    );
-
-    Array.from(typeSel.options).forEach(opt => {
-      // 保留“无”
-      if (opt.value === 'none') { opt.disabled = false; opt.title = ''; return; }
-      const normalized = (opt.value === 'font') ? 'fontFamily' : opt.value;
-      // 若该类型已被其他属性占用，且不是当前属性自己已绑定的类型，则禁用
-      if (used.has(normalized) && normalized !== thisBound) {
-        opt.disabled = true;
-        opt.title = '该样式类型已被其它属性绑定';
-      } else {
-        opt.disabled = false;
-        opt.title = '';
-      }
-    });
-  }
-
-  // 2) 切换按钮与提示
-  if (thisBound !== 'none') {
-    if (hint)     hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(thisBound) : thisBound);
+  const bound = boundStyleType[attr] || 'none';
+  if (bound !== 'none') {
+    if (hint)      hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(bound) : bound);
     if (confirm) { confirm.disabled = true; confirm.style.display = 'none'; }
-    if (resetBtn) resetBtn.style.display = 'inline-block';
-    if (addBtn)   addBtn.disabled = false;
+    if (resetBtn)  resetBtn.style.display = 'inline-block';
+    if (addBtn)    addBtn.disabled = false;
   } else {
-    if (hint)     hint.textContent = '当前样式：无';
+    if (hint)      hint.textContent = '当前样式：无';
     if (confirm) { confirm.disabled = true; confirm.style.display = 'inline-block'; }
-    if (resetBtn) resetBtn.style.display = 'none';
-    if (addBtn)   addBtn.disabled = true;
+    if (resetBtn)  resetBtn.style.display = 'none';
+    if (addBtn)    addBtn.disabled = true;
   }
 
-  // 3) 用内存里的规则重建表格（恢复之前添加的行/选择）
-  if (typeof renderStyleTable === 'function') {
-    renderStyleTable(attr);
-  }
+  // ✅ 用内存里的规则重建表格
+  renderStyleTable(attr);
 }
-
 
 
 
@@ -892,21 +835,30 @@ function openAttrPicker(rowId, attrKey) {
   const hint  = document.getElementById('attr-picker-hint');
   const sel   = document.getElementById('attr-picker-options');
 
+  // 标题/提示
   title.textContent = '选择应用的属性值';
   hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
 
-  if (attrPickerChoices) { attrPickerChoices.destroy(); attrPickerChoices = null; }
+  // 清空旧实例/选项
+  if (attrPickerChoices) {
+    attrPickerChoices.destroy();
+    attrPickerChoices = null;
+  }
   sel.innerHTML = '';
 
-  const rule = findRule(attrKey, rowId);
+  // 预选：从内存规则取
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
   const pre  = (rule && Array.isArray(rule.values)) ? rule.values : [];
 
+  // 候选（复用过滤）
   const all = (typeof getFilterOptionsForKey === 'function')
     ? (getFilterOptionsForKey(attrKey) || [])
     : (window.allOptions?.[attrKey] || []);
 
+  // 构建选项，保留预选
   all.forEach(v => sel.appendChild(new Option(v, v, false, pre.includes(v))));
 
+  // Choices
   if (window.Choices) {
     attrPickerChoices = new Choices(sel, {
       removeItemButton: true,
@@ -917,20 +869,32 @@ function openAttrPicker(rowId, attrKey) {
   }
 
   modal.style.display = 'block';
-}
+} // ← openAttrPicker 正确闭合
 
 function confirmAttrPicker() {
   const { rowId, attrKey } = attrPickerEditing;
   const sel = document.getElementById('attr-picker-options');
+
+  // 读取当前选择
   const vals = Array.from(sel.selectedOptions).map(o => o.value);
 
-  const rule = findRule(attrKey, rowId);
-  if (rule) {
-    rule.values = vals;
+  // 写回内存规则
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  if (!rule) {
+    // 没找到对应规则行就直接收起（避免顶层 return）
+    document.getElementById('attr-picker-window').style.display = 'none';
+    return; // ← 在函数体内，合法
+  }
+  rule.values = vals;
+
+  // 回填标签
+  if (typeof renderRowAttrChips === 'function') {
     renderRowAttrChips(rowId, vals);
   }
+
+  // 关闭弹窗
   document.getElementById('attr-picker-window').style.display = 'none';
-}
+} // ← confirmAttrPicker 正确闭合
 
 
   // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
@@ -1060,7 +1024,7 @@ function renderRowAttrChips(rowId, values) {
 document.getElementById('attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
 document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
 
- // ✅ 完整替换：仅负责构建控件 UI，不直接应用样式
+  // 根据类型构造控件（这里只造 UI，暂不写任何样式）
 function buildStyleControl(type) {
   const wrap = document.createElement('div');
 
@@ -1073,6 +1037,7 @@ function buildStyleControl(type) {
       <option value="FZYaoti">方正姚体 (FZYaoti)</option>
       <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
       <option value="DengXian">等线 (DengXian)</option>
+      <!-- 已按你的计划替换：隶书 / 幼圆 -->
       <option value="LiSu">隶书 (LiSu)</option>
       <option value="YouYuan">幼圆 (YouYuan)</option>
       <option value="SimSun">宋体 (SimSun)</option>
@@ -1083,86 +1048,75 @@ function buildStyleControl(type) {
     return wrap;
   }
 
-  // 颜色类：fontColor / borderColor / backgroundColor / lineColor
+  // 颜色相关：提供 取色器 + HEX 文本框 + 预设色块（仅交互，不应用）
   if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
     wrap.className = 'color-ui';
-
-    // 初始值（默认黑）
-    const initial = '#000000';
 
     // 1) 原生取色器
     const color = document.createElement('input');
     color.type = 'color';
-    color.value = initial;
+    color.value = '#000000';
 
-    // 2) HEX 输入框
+    // 2) HEX 输入
     const hex = document.createElement('input');
     hex.type = 'text';
     hex.placeholder = '#RRGGBB';
-    hex.value = initial;
+    hex.value = color.value.toUpperCase();
 
-    // 统一设置（互相同步）
-    const setVal = (v) => {
-      const n = normalizeHex(v);
-      if (!n) return;
-      color.value = n;
-      hex.value = n;
-    };
+    // 同步：取色器 -> HEX
+    color.addEventListener('input', () => {
+      hex.value = color.value.toUpperCase();
+    });
 
-    // 取色器 -> HEX
-    color.addEventListener('input', () => setVal(color.value));
-    // HEX -> 取色器（无效回退）
+    // 规范化 & 校验
+    function normalizeHex(v) {
+      let s = String(v || '').trim();
+      if (!s) return null;
+      if (s[0] !== '#') s = '#' + s;
+      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
+        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
+      }
+      if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
+      return null;
+    }
+
+    // 同步：HEX -> 取色器（无效输入回退）
     hex.addEventListener('change', () => {
       const n = normalizeHex(hex.value);
-      if (n) setVal(n);
-      else hex.value = color.value.toUpperCase();
+      if (n) {
+        hex.value = n;
+        color.value = n;
+      } else {
+        hex.value = color.value.toUpperCase();
+      }
     });
 
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块（若未定义 PRESET_COLORS 也不报错）
+    // 3) 预设色块
     const sw = document.createElement('div');
     sw.className = 'swatches';
-    (window.PRESET_COLORS || PRESET_COLORS || []).forEach(c => {
+    PRESET_COLORS.forEach(c => {
       const s = document.createElement('div');
       s.className = 'swatch';
       s.title = `${c.name} ${c.hex}`;
-      s.style.cssText = 'display:inline-block;width:18px;height:18px;margin:2px;border:1px solid #ccc;cursor:pointer;';
       s.style.background = c.hex;
-      s.addEventListener('click', () => setVal(c.hex));
+      s.addEventListener('click', () => {
+        color.value = c.hex;
+        hex.value = c.hex;
+      });
       sw.appendChild(s);
     });
     wrap.appendChild(sw);
-
-    // 回填一次，确保同步为大写 HEX
-    setVal(initial);
 
     return wrap;
   }
 
   // 其他类型占位
-  const span = document.createElement('span');
-  span.textContent = (type || '未知') + '（待配置）';
-  wrap.appendChild(span);
+  wrap.textContent = type + '（待配置）';
   return wrap;
 }
-
-    // 工具：规范化 #RRGGBB / #RGB
-// 全局唯一：颜色值规范化（#RGB/#RRGGBB -> #RRGGBB；非法返回 null）
-function normalizeHex(v) {
-  let s = String(v || '').trim();
-  if (!s) return null;
-  if (s[0] !== '#') s = '#' + s;
-  // #RGB -> #RRGGBB
-  if (/^#([0-9a-fA-F]{3})$/.test(s)) {
-    s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-  }
-  // #RRGGBB
-  if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
-  return null;
-}
-
 
 // 确认按钮
 function confirmStyle() {
