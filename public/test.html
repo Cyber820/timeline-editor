@@ -84,6 +84,11 @@
   box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
   <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
   <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
+  
+  <label style="display:block; margin-bottom:8px;">
+    <span id="attr-picker-attrname">属性值</span>：
+    <select id="attr-picker-options" multiple></select>
+  </label>
 
   <!-- 新增：全选 / 全不选按钮 -->
   <div style="margin:6px 0 8px;">
@@ -171,6 +176,8 @@ const attributeLabels = {
   Company: "公司",
   ConsolePlatform: "主机类型"
 };
+  // ✅ 让其它地方的 window.attributeLabels 可用
+window.attributeLabels = attributeLabels;
 /*样式参数*/
 const PRESET_COLORS = [
   { name: '红', hex: '#FF0000' },
@@ -829,18 +836,21 @@ let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null;
 
 function openAttrPicker(rowId, attrKey) {
-  // 记录当前正在编辑的行 & 属性
   attrPickerEditing = { rowId, attrKey };
 
-  // DOM 引用
   const modal = document.getElementById('attr-picker-window');
   const title = document.getElementById('attr-picker-title');
   const hint  = document.getElementById('attr-picker-hint');
   const sel   = document.getElementById('attr-picker-options');
 
-  // 标题/提示
+  const cn = (window.attributeLabels && window.attributeLabels[attrKey]) || attrKey;
+
   title.textContent = '选择应用的属性值';
-  hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
+  hint.textContent  = cn + '：可多选，可搜索';
+
+  // 可选：把“属性值：”三字也换成中文属性名
+  const attrNameSpan = document.getElementById('attr-picker-attrname');
+  if (attrNameSpan) attrNameSpan.textContent = cn;
 
   // 清掉旧的 Choices 实例 & 旧选项
   if (attrPickerChoices) {
