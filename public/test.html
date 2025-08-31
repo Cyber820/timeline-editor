@@ -1060,11 +1060,10 @@ function renderRowAttrChips(rowId, values) {
 document.getElementById('attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
 document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
 
-  // 根据类型构造控件（这里只造 UI，暂不写任何样式）
-function buildStyleControl(type, rule) {
+ // ✅ 完整替换：仅负责构建控件 UI，不直接应用样式
+function buildStyleControl(type) {
   const wrap = document.createElement('div');
 
-  // —— 字体（写入 rule.style.fontFamily）——
   if (type === 'fontFamily') {
     const fontSel = document.createElement('select');
     fontSel.innerHTML = `
@@ -1080,37 +1079,18 @@ function buildStyleControl(type, rule) {
       <option value="SimHei">黑体 (SimHei)</option>
       <option value="KaiTi">楷体 (KaiTi)</option>
     `;
-    // 回填
-    fontSel.value = rule?.style?.fontFamily || '';
-    // 写回
-    fontSel.addEventListener('change', () => {
-      if (rule && rule.style) rule.style.fontFamily = fontSel.value || '';
-    });
-
     wrap.appendChild(fontSel);
     return wrap;
   }
 
-  // —— 颜色（写入 rule.style[type]）——
+  // 颜色类：fontColor / borderColor / backgroundColor / lineColor
   if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
     wrap.className = 'color-ui';
 
-    // 工具：规范化 #RRGGBB / #RGB
-    function normalizeHex(v) {
-      let s = String(v || '').trim();
-      if (!s) return null;
-      if (s[0] !== '#') s = '#' + s;
-      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
-        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-      }
-      if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
-      return null;
-    }
-
     // 初始值（默认黑）
-    const initial = normalizeHex(rule?.style?.[type]) || '#000000';
+    const initial = '#000000';
 
-    // 1) 取色器
+    // 1) 原生取色器
     const color = document.createElement('input');
     color.type = 'color';
     color.value = initial;
@@ -1121,17 +1101,17 @@ function buildStyleControl(type, rule) {
     hex.placeholder = '#RRGGBB';
     hex.value = initial;
 
-    // 统一设置（更新两个控件 + 写回 rule.style[type]）
+    // 统一设置（互相同步）
     const setVal = (v) => {
       const n = normalizeHex(v);
       if (!n) return;
       color.value = n;
       hex.value = n;
-      if (rule && rule.style) rule.style[type] = n;
     };
 
-    // 同步方向
+    // 取色器 -> HEX
     color.addEventListener('input', () => setVal(color.value));
+    // HEX -> 取色器（无效回退）
     hex.addEventListener('change', () => {
       const n = normalizeHex(hex.value);
       if (n) setVal(n);
@@ -1141,7 +1121,7 @@ function buildStyleControl(type, rule) {
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块
+    // 3) 预设色块（若未定义 PRESET_COLORS 也不报错）
     const sw = document.createElement('div');
     sw.className = 'swatches';
     (window.PRESET_COLORS || PRESET_COLORS || []).forEach(c => {
@@ -1155,69 +1135,34 @@ function buildStyleControl(type, rule) {
     });
     wrap.appendChild(sw);
 
-    // 回填 -> 写回一次，确保 rule.style[type] 同步
+    // 回填一次，确保同步为大写 HEX
     setVal(initial);
 
     return wrap;
   }
 
-  // —— 其他类型占位 —— 
+  // 其他类型占位
   const span = document.createElement('span');
   span.textContent = (type || '未知') + '（待配置）';
   wrap.appendChild(span);
   return wrap;
 }
 
-
-    // 规范化 & 校验
-    function normalizeHex(v) {
-      let s = String(v || '').trim();
-      if (!s) return null;
-      if (s[0] !== '#') s = '#' + s;
-      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
-        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-      }
-      if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
-      return null;
-    }
-
-    // 同步：HEX -> 取色器（无效输入回退）
-    hex.addEventListener('change', () => {
-      const n = normalizeHex(hex.value);
-      if (n) {
-        hex.value = n;
-        color.value = n;
-      } else {
-        hex.value = color.value.toUpperCase();
-      }
-    });
-
-    wrap.appendChild(color);
-    wrap.appendChild(hex);
-
-    // 3) 预设色块
-    const sw = document.createElement('div');
-    sw.className = 'swatches';
-    PRESET_COLORS.forEach(c => {
-      const s = document.createElement('div');
-      s.className = 'swatch';
-      s.title = `${c.name} ${c.hex}`;
-      s.style.background = c.hex;
-      s.addEventListener('click', () => {
-        color.value = c.hex;
-        hex.value = c.hex;
-      });
-      sw.appendChild(s);
-    });
-    wrap.appendChild(sw);
-
-    return wrap;
+    // 工具：规范化 #RRGGBB / #RGB
+// 全局唯一：颜色值规范化（#RGB/#RRGGBB -> #RRGGBB；非法返回 null）
+function normalizeHex(v) {
+  let s = String(v || '').trim();
+  if (!s) return null;
+  if (s[0] !== '#') s = '#' + s;
+  // #RGB -> #RRGGBB
+  if (/^#([0-9a-fA-F]{3})$/.test(s)) {
+    s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
   }
-
-  // 其他类型占位
-  wrap.textContent = type + '（待配置）';
-  return wrap;
+  // #RRGGBB
+  if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
+  return null;
 }
+
 
 // 确认按钮
 function confirmStyle() {
