@@ -836,21 +836,30 @@ function openAttrPicker(rowId, attrKey) {
   const hint  = document.getElementById('attr-picker-hint');
   const sel   = document.getElementById('attr-picker-options');
 
+  // 标题/提示
   title.textContent = '选择应用的属性值';
   hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
 
-  if (attrPickerChoices) { attrPickerChoices.destroy(); attrPickerChoices = null; }
+  // 清空旧实例/选项
+  if (attrPickerChoices) {
+    attrPickerChoices.destroy();
+    attrPickerChoices = null;
+  }
   sel.innerHTML = '';
 
-  const rule = findRule(attrKey, rowId);
-  const pre  = (rule?.values || []);
+  // 预选：从内存规则取
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  const pre  = (rule && Array.isArray(rule.values)) ? rule.values : [];
 
+  // 候选（复用过滤）
   const all = (typeof getFilterOptionsForKey === 'function')
     ? (getFilterOptionsForKey(attrKey) || [])
     : (window.allOptions?.[attrKey] || []);
 
+  // 构建选项，保留预选
   all.forEach(v => sel.appendChild(new Option(v, v, false, pre.includes(v))));
 
+  // Choices
   if (window.Choices) {
     attrPickerChoices = new Choices(sel, {
       removeItemButton: true,
@@ -861,7 +870,33 @@ function openAttrPicker(rowId, attrKey) {
   }
 
   modal.style.display = 'block';
-}
+} // ← openAttrPicker 正确闭合
+
+function confirmAttrPicker() {
+  const { rowId, attrKey } = attrPickerEditing;
+  const sel = document.getElementById('attr-picker-options');
+
+  // 读取当前选择
+  const vals = Array.from(sel.selectedOptions).map(o => o.value);
+
+  // 写回内存规则
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  if (!rule) {
+    // 没找到对应规则行就直接收起（避免顶层 return）
+    document.getElementById('attr-picker-window').style.display = 'none';
+    return; // ← 在函数体内，合法
+  }
+  rule.values = vals;
+
+  // 回填标签
+  if (typeof renderRowAttrChips === 'function') {
+    renderRowAttrChips(rowId, vals);
+  }
+
+  // 关闭弹窗
+  document.getElementById('attr-picker-window').style.display = 'none';
+} // ← confirmAttrPicker 正确闭合
+
 
   // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
 function readRowStyleKey(rowEl) {
@@ -909,41 +944,7 @@ function closeAttrPicker() {
   document.getElementById('attr-picker-window').style.display = 'none';
 }
 
-function confirmAttrPicker() {
-  const { rowId, attrKey } = attrPickerEditing;
-  const sel = document.getElementById('attr-picker-options');
-  const vals = Array.from(sel.selectedOptions).map(o => o.value);
 
-  const rule = findRule(attrKey, rowId);
-  if (rule) {
-    rule.values = vals;
-    renderRowAttrChips(rowId, vals);
-  }
-  document.getElementById('attr-picker-window').style.display = 'none';
-}
-
-  // 2) “具体样式本身”的去重：
-  //    在同一个 attrKey 下，不允许出现【相同样式值 + 相同一组属性值】的重复行
-  const thisRow = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
-  const thisKey = readRowStyleKey(thisRow); // e.g. 'fontFamily|"KaiTi"' 或 'fontColor|#FF0000'
-  const rows = document.querySelectorAll(`#styleTableBody tr[data-attr-key="${attrKey}"]`);
-  for (const tr of rows) {
-    if (tr.dataset.rowId === rowId) continue;
-    const otherKey = readRowStyleKey(tr);
-    if (otherKey === thisKey) {
-      const otherVals = styleRowSelections[tr.dataset.rowId] || [];
-      if (isSameSet(values, otherVals)) {
-        alert('该“样式值 + 属性值集合”组合已存在，请勿重复新增。');
-        return;
-      }
-    }
-  }
-
-  // 通过：保存并回填到行内“标签”
-  styleRowSelections[rowId] = values;
-  renderRowAttrChips(rowId, values);
-  closeAttrPicker();
-}
 
 // —— 全选：把弹窗当前下拉（已过滤后的）所有选项选中 ——
 // 兼容：有 Choices.js 时用实例；没有就设置 <option>.selected
