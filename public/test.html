@@ -458,7 +458,8 @@ const styleTypeOwner = {};
 /*** 规则内存：每个属性对应一组规则行 ***/
 // 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
 const styleRules = {};
-
+// 每一行样式行里被选中的属性值集合：{ [rowId]: string[] }
+const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
 // 生成行 id（与 <tr data-row-id> 对应）
 function genId() {
   return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
@@ -828,8 +829,10 @@ let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null;
 
 function openAttrPicker(rowId, attrKey) {
+  // 记录当前正在编辑的行 & 属性
   attrPickerEditing = { rowId, attrKey };
 
+  // DOM 引用
   const modal = document.getElementById('attr-picker-window');
   const title = document.getElementById('attr-picker-title');
   const hint  = document.getElementById('attr-picker-hint');
@@ -839,26 +842,35 @@ function openAttrPicker(rowId, attrKey) {
   title.textContent = '选择应用的属性值';
   hint.textContent  = (window.attributeLabels?.[attrKey] || attrKey) + '：可多选，可搜索';
 
-  // 清空旧实例/选项
+  // 清掉旧的 Choices 实例 & 旧选项
   if (attrPickerChoices) {
     attrPickerChoices.destroy();
     attrPickerChoices = null;
   }
   sel.innerHTML = '';
 
-  // 预选：从内存规则取
+  // 预选：从持久规则里取（需要你已实现 findRule / styleRules）
   const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
   const pre  = (rule && Array.isArray(rule.values)) ? rule.values : [];
 
-  // 候选（复用过滤）
+  // 候选集：复用过滤系统
   const all = (typeof getFilterOptionsForKey === 'function')
     ? (getFilterOptionsForKey(attrKey) || [])
     : (window.allOptions?.[attrKey] || []);
 
-  // 构建选项，保留预选
-  all.forEach(v => sel.appendChild(new Option(v, v, false, pre.includes(v))));
+  // 跨行去重：排除“同一属性、其它行”已占用的值，但保留本行已选，避免看不到
+  const takenByOthers = (typeof getTakenValues === 'function')
+    ? getTakenValues(attrKey, rowId)
+    : new Set();
 
-  // Choices
+  const options = all.filter(v => pre.includes(v) || !takenByOthers.has(v));
+
+  // 构建 <option>，把本行已选的设为 selected，供 Choices 初始化识别
+  options.forEach(v => {
+    sel.appendChild(new Option(v, v, /*defaultSelected*/ false, /*selected*/ pre.includes(v)));
+  });
+
+  // 初始化 Choices（可搜索+多选标签）
   if (window.Choices) {
     attrPickerChoices = new Choices(sel, {
       removeItemButton: true,
@@ -868,33 +880,60 @@ function openAttrPicker(rowId, attrKey) {
     });
   }
 
+  // 展示弹窗
   modal.style.display = 'block';
-} // ← openAttrPicker 正确闭合
+}
+
 
 function confirmAttrPicker() {
-  const { rowId, attrKey } = attrPickerEditing;
+  const { rowId, attrKey } = attrPickerEditing || {};
   const sel = document.getElementById('attr-picker-options');
 
-  // 读取当前选择
-  const vals = Array.from(sel.selectedOptions).map(o => o.value);
+  // 兜底：编辑状态或控件缺失就直接收起
+  if (!rowId || !attrKey || !sel) {
+    document.getElementById('attr-picker-window').style.display = 'none';
+    attrPickerEditing = { rowId: null, attrKey: null };
+    return;
+  }
 
-  // 写回内存规则
+  // 读取当前选择并去重
+  const vals = Array.from(sel.selectedOptions).map(o => o.value);
+  const uniqueVals = Array.from(new Set(vals));
+
+  // 终检：与其他行冲突拦截（即使 open 时已过滤，这里再保险一次）
+  if (typeof getTakenValues === 'function') {
+    const takenByOthers = getTakenValues(attrKey, rowId); // Set
+    const conflict = uniqueVals.find(v => takenByOthers.has(v));
+    if (conflict) {
+      alert(`“${conflict}” 已被同属性的其他样式行占用，请取消或更换。`);
+      return;
+    }
+  }
+
+  // 写回到持久规则
   const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
   if (!rule) {
     // 没找到对应规则行就直接收起（避免顶层 return）
     document.getElementById('attr-picker-window').style.display = 'none';
-    return; // ← 在函数体内，合法
+    attrPickerEditing = { rowId: null, attrKey: null };
+    return;
   }
-  rule.values = vals;
+  rule.values = uniqueVals;
+
+  // 如仍保留了旧的行内缓存对象，也同步一下（可选）
+  if (window.styleRowSelections) {
+    window.styleRowSelections[rowId] = uniqueVals;
+  }
 
   // 回填标签
   if (typeof renderRowAttrChips === 'function') {
-    renderRowAttrChips(rowId, vals);
+    renderRowAttrChips(rowId, uniqueVals);
   }
 
-  // 关闭弹窗
+  // 关闭弹窗并重置编辑态
   document.getElementById('attr-picker-window').style.display = 'none';
-} // ← confirmAttrPicker 正确闭合
+  attrPickerEditing = { rowId: null, attrKey: null };
+}
 
 
   // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
@@ -926,14 +965,28 @@ function isSameSet(a = [], b = []) {
 // 统计同一属性(attrKey)下，除某行外已被占用的属性值（跨行去重）
 function getTakenValues(attrKey, exceptRowId) {
   const taken = new Set();
-  const rows = document.querySelectorAll(`#styleTableBody tr[data-attr-key="${attrKey}"]`);
+
+  // 找到同一属性类别（如 'EventType'）下的所有样式行
+  const rows = document.querySelectorAll(
+    `#styleTableBody tr[data-attr-key="${attrKey}"]`
+  );
+
   rows.forEach(tr => {
     const rid = tr.dataset.rowId;
-    if (rid === exceptRowId) return;
-    vals.forEach(v => taken.add(v));
+    if (rid === exceptRowId) return;              // 跳过当前正在编辑的行
+
+    // 关键：从全局行选择表里取出该行已选择的属性值数组
+    const vals = (window.styleRowSelections?.[rid]) || [];
+
+    // 累加到已占用集合
+    vals.forEach(v => {
+      if (v != null && v !== '') taken.add(String(v));
+    });
   });
+
   return taken;
 }
+
 
 
 
@@ -1000,17 +1053,19 @@ document.getElementById('attr-picker-clear')     ?.addEventListener('click', cle
 
 // 把选中的属性值渲染为“标签”
 function renderRowAttrChips(rowId, values) {
-  const tr = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
+  const tr  = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
   if (!tr) return;
   const box = tr.querySelector('.attr-chips');
   if (!box) return;
 
-  box.innerHTML = '';
   const list = Array.isArray(values) ? values : [];
+  box.innerHTML = '';
+
   if (list.length === 0) {
     box.innerHTML = '<span style="color:#999;">（未选择）</span>';
     return;
   }
+
   list.forEach(v => {
     const tag = document.createElement('span');
     tag.textContent = v;
