@@ -455,9 +455,7 @@ const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' 
 let stagedType = 'none';             // 下拉的临时选择（未确认前）
 // 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
 const styleTypeOwner = {};
-/*** 规则内存：每个属性对应一组规则行 ***/
-// 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
-const styleRules = {};
+
 // —— 样式规则内存：{ [attrKey]: Array<{ id, type, style:{...}, values:string[] }> } ——
 // 只做交互存储，不应用 CSS
 const styleRules = window.styleRules || (window.styleRules = {});
