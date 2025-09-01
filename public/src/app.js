@@ -7,3 +7,5 @@ window.__styleEngine = { attachEventDataAttrs, applyStyleState };
 window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
 
 console.log('app.js loaded (style engine + state ready)');
+// app.js 末尾（在 console.log 之后即可）
+window.dispatchEvent(new Event('style:ready'));
