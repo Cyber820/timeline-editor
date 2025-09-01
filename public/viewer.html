@@ -349,6 +349,7 @@ function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
+  window.addEventListener('style:ready', () => {
 fetch(ENDPOINT)
   .then(res => res.json())
   .then(data => {
@@ -405,7 +406,8 @@ fetch(ENDPOINT)
       zoomKey: "ctrlKey",
       stack: true
     });
-  }); // ← 正确关闭 then(data => { ... })
+  }); 
+      });// ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
