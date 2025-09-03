@@ -759,6 +759,106 @@ function openFallbackJsonPanel() {
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
 
+// === 面板内存 -> 引擎 state（保存时调用） ===
+function extractStateFromPanel() {
+  const toEngineKey = (t) => ({
+    font: 'fontFamily',        // 容错：有时 UI 会给 'font'
+    fontFamily: 'fontFamily',
+    fontColor: 'textColor',
+    backgroundColor: 'bgColor',
+    borderColor: 'borderColor',
+    lineColor: 'borderColor',  // 线条色暂视为边框色
+    none: 'none'
+  }[t] || t);
+
+  // 1) 绑定类型
+  const boundTypes = {};
+  for (const [attr, t] of Object.entries(boundStyleType)) {
+    boundTypes[attr] = toEngineKey(t || 'none');
+  }
+
+  // 2) 具体规则：attr -> value -> { textColor/bgColor/borderColor/fontFamily/... }
+  const rules = {};
+  for (const [attr, rows] of Object.entries(styleRules)) {
+    if (!rows || rows.length === 0) continue;
+    const attrType = boundTypes[attr];
+    if (!attrType || attrType === 'none') continue;
+
+    for (const row of rows) {
+      const k = toEngineKey(row.type);
+      const styleObj = row.style || {};
+      const values = Array.isArray(row.values) ? row.values : [];
+
+      values.forEach((val) => {
+        if (!val) return;
+        rules[attr] ||= {};
+        rules[attr][val] ||= {};
+        if (k === 'textColor')   rules[attr][val].textColor   = styleObj.fontColor || styleObj.textColor || '#000000';
+        if (k === 'bgColor')     rules[attr][val].bgColor     = styleObj.backgroundColor || styleObj.bgColor;
+        if (k === 'borderColor') rules[attr][val].borderColor = styleObj.borderColor || styleObj.lineColor;
+        if (k === 'fontFamily')  rules[attr][val].fontFamily  = styleObj.fontFamily;
+        // 未来扩展：fontWeight 等
+      });
+    }
+  }
+
+  return { version: 1, boundTypes, rules };
+}
+
+// === 引擎 state -> 面板内存（打开面板/回显时调用） ===
+function injectStateIntoPanel(state) {
+  // 清空面板内存
+  for (const k of Object.keys(boundStyleType)) delete boundStyleType[k];
+  for (const k of Object.keys(styleRules)) delete styleRules[k];
+
+  // 1) 回写绑定类型（把引擎键还原为 UI 键）
+  const fromEngineKey = (t) => ({
+    textColor: 'fontColor',
+    bgColor: 'backgroundColor',
+    borderColor: 'borderColor',
+    fontFamily: 'fontFamily',
+    none: 'none'
+  }[t] || t);
+
+  for (const [attr, t] of Object.entries(state.boundTypes || {})) {
+    boundStyleType[attr] = fromEngineKey(t || 'none');
+  }
+
+  // 2) 根据 rules 生成行：把相同“样式值”尽量合并到一行
+  const rules = state.rules || {};
+  for (const [attr, valMap] of Object.entries(rules)) {
+    const typeUI = boundStyleType[attr] || 'none';
+    if (typeUI === 'none') continue;
+
+    const bucket = ensureBucket(attr);
+    // 分组：把相同 style 配置的 value 合并
+    const groups = new Map(); // key -> { style, values:[] }
+    for (const [val, conf] of Object.entries(valMap || {})) {
+      const styleForUI = {};
+      if (typeUI === 'fontColor' && conf.textColor)    styleForUI.fontColor = conf.textColor;
+      if (typeUI === 'backgroundColor' && conf.bgColor)styleForUI.backgroundColor = conf.bgColor;
+      if (typeUI === 'borderColor' && conf.borderColor)styleForUI.borderColor = conf.borderColor;
+      if (typeUI === 'fontFamily' && conf.fontFamily)  styleForUI.fontFamily = conf.fontFamily;
+
+      const key = JSON.stringify(styleForUI);
+      if (!groups.has(key)) groups.set(key, { style: styleForUI, values: [] });
+      groups.get(key).values.push(val);
+    }
+
+    for (const { style, values } of groups.values()) {
+      bucket.push({
+        id: genId(),
+        type: (typeUI === 'font') ? 'fontFamily' : typeUI, // 容错
+        style,
+        values
+      });
+    }
+  }
+
+  // 3) UI 重绘（如果当前面板打开）
+  if (currentStyleAttr) renderStyleTable(currentStyleAttr);
+}
+
 
 
 
