@@ -4,7 +4,17 @@ import { applyStyleState } from '../style/engine.js';
 
 let _mounted = false;
 let _opts = { selectorBase: '.vis-item.event', titleSelector: '.event-title' };
-
+let currentStyleAttr = null;         // 当前正在编辑的属性
+const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
+let stagedType = 'none';             // 下拉的临时选择（未确认前）
+// 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
+const styleTypeOwner = {};
+/*** 规则内存：每个属性对应一组规则行 ***/
+// 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
+const styleRules = {};
+// 每一行样式行里被选中的属性值集合：{ [rowId]: string[] }
+const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
+// 生成行 id（与 <tr data-row-id> 对应）
 /** 公开：打开样式面板（优先使用你页面里的 #style-window） */
 export function openStylePanel(opts = {}) {
   _opts = { ..._opts, ...opts };
@@ -126,3 +136,4 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
