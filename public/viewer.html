@@ -956,55 +956,6 @@ function confirmAttrPicker() {
 
 
   // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
-function readRowStyleKey(rowEl) {
-  const type = rowEl.querySelector('td:first-child')?.dataset?.styleType || ''; // 'fontFamily'/'fontColor'...
-  let value = '';
-  const td = rowEl.querySelector('td:first-child');
-  if (!td) return `${type}|`;
-
-  // 字体：select
-  const sel = td.querySelector('select');
-  if (sel) value = sel.value || '';
-
-  // 颜色：input[type=color]
-  const color = td.querySelector('input[type="color"]');
-  if (color) value = color.value || value;
-
-  return `${type}|${value}`;
-}
-
-// 集合相等：用于判断“同样式值 + 同一组属性值”是否重复
-function isSameSet(a = [], b = []) {
-  if (a.length !== b.length) return false;
-  const sa = new Set(a), sb = new Set(b);
-  for (const v of sa) if (!sb.has(v)) return false;
-  return true;
-}
-
-// 统计同一属性(attrKey)下，除某行外已被占用的属性值（跨行去重）
-function getTakenValues(attrKey, exceptRowId) {
-  const taken = new Set();
-
-  // 找到同一属性类别（如 'EventType'）下的所有样式行
-  const rows = document.querySelectorAll(
-    `#styleTableBody tr[data-attr-key="${attrKey}"]`
-  );
-
-  rows.forEach(tr => {
-    const rid = tr.dataset.rowId;
-    if (rid === exceptRowId) return;              // 跳过当前正在编辑的行
-
-    // 关键：从全局行选择表里取出该行已选择的属性值数组
-    const vals = (window.styleRowSelections?.[rid]) || [];
-
-    // 累加到已占用集合
-    vals.forEach(v => {
-      if (v != null && v !== '') taken.add(String(v));
-    });
-  });
-
-  return taken;
-}
 
 
 
