@@ -453,7 +453,63 @@ function buildStyleControl(type) {
     color.addEventListener('input', () => {
       hex.value = color.value.toUpperCase();
     });
-    
+
+function buildAttrMultiSelect(attrKey) {
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.className = 'style-attr-select'; // 可选：便于加样式
+
+  // 用过滤系统的取值逻辑复用现有候选
+  const opts = (typeof getFilterOptionsForKey === 'function')
+    ? getFilterOptionsForKey(attrKey)
+    : (allOptions?.[attrKey] || []);
+
+  if (!opts || opts.length === 0) {
+    const o = new Option('（暂无可选项 / 仍在加载）', '');
+    o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    opts.forEach(v => sel.appendChild(new Option(v, v)));
+  }
+
+  // 可选：如果已引入 Choices.js，让多选更好用
+  if (window.Choices) {
+    sel._choices = new Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+  return sel;
+}
+
+// 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
+function addStyleRow() {
+  const bound = boundStyleType[currentStyleAttr];
+  if (!bound || bound === 'none') {
+    alert('请先选择样式类型并“确认绑定”。');
+    return;
+  }
+
+  const bucket = ensureBucket(currentStyleAttr);
+  const rule = {
+    id: genId(),
+    type: bound,            // 'fontFamily' | 'fontColor' | ...
+    style: {},              // 样式值（字体名 / 颜色 HEX）
+    values: []              // 应用到的“属性值”集合（多选）
+  };
+
+  // 给新行一个合理的默认值，便于直观可见
+  if (bound === 'fontFamily') {
+    rule.style.fontFamily = ''; // 让用户自己选
+  } else {
+    rule.style[bound] = '#000000'; // 颜色默认黑
+  }
+
+  bucket.push(rule);
+  renderRuleRow(currentStyleAttr, rule);
+}    
 /** 点击“保存并应用”时：从 UI 读状态 -> 保存 -> 应用 */
 function onSaveFromPanel() {
   const next = extractStateFromPanel();              // ← TODO: 你把“UI→状态”的逻辑粘到这里
@@ -531,6 +587,7 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
 
