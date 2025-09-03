@@ -50,6 +50,55 @@ export function openStylePanel(opts = {}) {
   // 2) 如果没有 #style-window，就用一个临时 JSON 面板（不改你页面结构）
   openFallbackJsonPanel();
 }
+function readRowStyleKey(rowEl) {
+  const type = rowEl.querySelector('td:first-child')?.dataset?.styleType || ''; // 'fontFamily'/'fontColor'...
+  let value = '';
+  const td = rowEl.querySelector('td:first-child');
+  if (!td) return `${type}|`;
+
+  // 字体：select
+  const sel = td.querySelector('select');
+  if (sel) value = sel.value || '';
+
+  // 颜色：input[type=color]
+  const color = td.querySelector('input[type="color"]');
+  if (color) value = color.value || value;
+
+  return `${type}|${value}`;
+}
+
+// 集合相等：用于判断“同样式值 + 同一组属性值”是否重复
+function isSameSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a), sb = new Set(b);
+  for (const v of sa) if (!sb.has(v)) return false;
+  return true;
+}
+
+// 统计同一属性(attrKey)下，除某行外已被占用的属性值（跨行去重）
+function getTakenValues(attrKey, exceptRowId) {
+  const taken = new Set();
+
+  // 找到同一属性类别（如 'EventType'）下的所有样式行
+  const rows = document.querySelectorAll(
+    `#styleTableBody tr[data-attr-key="${attrKey}"]`
+  );
+
+  rows.forEach(tr => {
+    const rid = tr.dataset.rowId;
+    if (rid === exceptRowId) return;              // 跳过当前正在编辑的行
+
+    // 关键：从全局行选择表里取出该行已选择的属性值数组
+    const vals = (window.styleRowSelections?.[rid]) || [];
+
+    // 累加到已占用集合
+    vals.forEach(v => {
+      if (v != null && v !== '') taken.add(String(v));
+    });
+  });
+
+  return taken;
+}
 
 /** 公开：关闭样式面板（仅当存在 #style-window 时有用） */
 export function closeStylePanel() {
@@ -154,5 +203,6 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
