@@ -16,6 +16,24 @@ const styleRules = {};
 const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
 // 生成行 id（与 <tr data-row-id> 对应）
 /** 公开：打开样式面板（优先使用你页面里的 #style-window） */
+
+function genId() {
+  return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
+}
+
+// 取桶
+function ensureBucket(attrKey) {
+  if (!styleRules[attrKey]) styleRules[attrKey] = [];
+  return styleRules[attrKey];
+}
+
+// 根据 id 找规则
+function findRule(attrKey, rowId) {
+  const bucket = styleRules[attrKey] || [];
+  return bucket.find(r => r.id === rowId) || null;
+}
+  // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
+function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 export function openStylePanel(opts = {}) {
   _opts = { ..._opts, ...opts };
 
@@ -136,4 +154,5 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
