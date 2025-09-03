@@ -510,12 +510,7 @@ function addStyleRow() {
   bucket.push(rule);
   renderRuleRow(currentStyleAttr, rule);
 }    
-/** 点击“保存并应用”时：从 UI 读状态 -> 保存 -> 应用 */
-function onSaveFromPanel() {
-  const next = extractStateFromPanel();              // ← TODO: 你把“UI→状态”的逻辑粘到这里
-  const saved = setStyleState(next);
-  applyStyleState(saved, _opts);
-}
+
 function openAttrPicker(rowId, attrKey) {
   attrPickerEditing = { rowId, attrKey };
 
@@ -688,13 +683,19 @@ function clearAttrPicker() {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** 点击“清空并应用” */
+function onSaveFromPanel() {
+  const next = extractStateFromPanel();
+  const saved = setStyleState(next);
+  applyStyleState(saved, _opts); // _opts 由 openStylePanel 传入（selectorBase 等）
+}
+
 function onResetFromPanel() {
   const empty = { version: 1, boundTypes: {}, rules: {} };
   const saved = setStyleState(empty);
   applyStyleState(saved, _opts);
-  injectStateIntoPanel(saved);                       // ← TODO: 把空状态写回 UI
+  injectStateIntoPanel(saved);
 }
+
 
 /** ========= 下面两个函数是你粘贴原逻辑的落脚点 ========= */
 
@@ -858,6 +859,7 @@ function injectStateIntoPanel(state) {
   // 3) UI 重绘（如果当前面板打开）
   if (currentStyleAttr) renderStyleTable(currentStyleAttr);
 }
+
 
 
 
