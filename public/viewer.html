@@ -492,34 +492,8 @@ attrSel.addEventListener("change", () => {
 
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
-let currentStyleAttr = null;         // 当前正在编辑的属性
-const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
-let stagedType = 'none';             // 下拉的临时选择（未确认前）
-// 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
-const styleTypeOwner = {};
-/*** 规则内存：每个属性对应一组规则行 ***/
-// 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
-const styleRules = {};
-// 每一行样式行里被选中的属性值集合：{ [rowId]: string[] }
-const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
-// 生成行 id（与 <tr data-row-id> 对应）
-function genId() {
-  return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
-}
 
-// 取桶
-function ensureBucket(attrKey) {
-  if (!styleRules[attrKey]) styleRules[attrKey] = [];
-  return styleRules[attrKey];
-}
 
-// 根据 id 找规则
-function findRule(attrKey, rowId) {
-  const bucket = styleRules[attrKey] || [];
-  return bucket.find(r => r.id === rowId) || null;
-}
-  // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
-function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 // 把某属性的所有规则渲染到表格
 function renderStyleTable(attrKey) {
   const tbody = document.getElementById('styleTableBody');
