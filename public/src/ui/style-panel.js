@@ -383,7 +383,77 @@ function renderRuleRow(attrKey, rule) {
 
   tbody.appendChild(tr);
 }
+function renderRowAttrChips(rowId, values) {
+  const tr  = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
+  if (!tr) return;
+  const box = tr.querySelector('.attr-chips');
+  if (!box) return;
 
+  const list = Array.isArray(values) ? values : [];
+  box.innerHTML = '';
+
+  if (list.length === 0) {
+    box.innerHTML = '<span style="color:#999;">（未选择）</span>';
+    return;
+  }
+
+  list.forEach(v => {
+    const tag = document.createElement('span');
+    tag.textContent = v;
+    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    box.appendChild(tag);
+  });
+}
+
+
+// 绑定弹窗按钮
+document.getElementById('attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
+document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
+
+  // 根据类型构造控件（这里只造 UI，暂不写任何样式）
+function buildStyleControl(type) {
+  const wrap = document.createElement('div');
+
+  if (type === 'fontFamily') {
+    const fontSel = document.createElement('select');
+    fontSel.innerHTML = `
+      <option value="">请选择字体</option>
+      <option value="STCaiyun">华文彩云 (STCaiyun)</option>
+      <option value="FZShuTi">方正舒体 (FZShuTi)</option>
+      <option value="FZYaoti">方正姚体 (FZYaoti)</option>
+      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
+      <option value="DengXian">等线 (DengXian)</option>
+      <!-- 已按你的计划替换：隶书 / 幼圆 -->
+      <option value="LiSu">隶书 (LiSu)</option>
+      <option value="YouYuan">幼圆 (YouYuan)</option>
+      <option value="SimSun">宋体 (SimSun)</option>
+      <option value="SimHei">黑体 (SimHei)</option>
+      <option value="KaiTi">楷体 (KaiTi)</option>
+    `;
+    wrap.appendChild(fontSel);
+    return wrap;
+  }
+
+  // 颜色相关：提供 取色器 + HEX 文本框 + 预设色块（仅交互，不应用）
+  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    wrap.className = 'color-ui';
+
+    // 1) 原生取色器
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = '#000000';
+
+    // 2) HEX 输入
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.placeholder = '#RRGGBB';
+    hex.value = color.value.toUpperCase();
+
+    // 同步：取色器 -> HEX
+    color.addEventListener('input', () => {
+      hex.value = color.value.toUpperCase();
+    });
+    
 /** 点击“保存并应用”时：从 UI 读状态 -> 保存 -> 应用 */
 function onSaveFromPanel() {
   const next = extractStateFromPanel();              // ← TODO: 你把“UI→状态”的逻辑粘到这里
@@ -461,6 +531,7 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
 
