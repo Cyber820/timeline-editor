@@ -281,6 +281,108 @@ function mountHandlersOnce(root) {
   // const btnAttrPicker = root.querySelector('#open-attr-picker');
   // if (btnAttrPicker) btnAttrPicker.addEventListener('click', openAttrPicker);
 }
+function renderStyleTable(attrKey) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rules = styleRules[attrKey] || [];
+  rules.forEach(rule => renderRuleRow(attrKey, rule));
+}
+
+// 渲染单行（可复用：新增/修改后都可以只重绘本行）
+function renderRuleRow(attrKey, rule) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+
+  const tr = document.createElement('tr');
+  tr.dataset.rowId  = rule.id;
+  tr.dataset.attrKey = attrKey;
+
+  // —— 左：样式控件
+  const tdContent = document.createElement('td');
+  tdContent.dataset.styleType = rule.type;
+  const ctrl = buildStyleControl(rule.type); // 你已有的构造 UI
+  tdContent.appendChild(ctrl);
+  tr.appendChild(tdContent);
+
+  // 初始化控件的“当前值” + 监听修改写回内存
+  if (rule.type === 'fontFamily') {
+    const sel = tdContent.querySelector('select');
+    if (sel) {
+      sel.value = rule.style.fontFamily || '';
+      sel.addEventListener('change', () => {
+        rule.style.fontFamily = sel.value || '';
+      });
+    }
+  } else if (
+    rule.type === 'fontColor' ||
+    rule.type === 'borderColor' ||
+    rule.type === 'backgroundColor' ||
+    rule.type === 'lineColor'
+  ) {
+    const color = tdContent.querySelector('input[type="color"]');
+    const hex   = tdContent.querySelector('input[type="text"]');
+
+    const current = rule.style[rule.type] || '#000000';
+    if (color) color.value = current;
+    if (hex)   hex.value   = current;
+
+    // 同步两边并写回
+    if (color && hex) {
+      color.addEventListener('input', () => {
+        hex.value = color.value.toUpperCase();
+        rule.style[rule.type] = color.value.toUpperCase();
+      });
+      hex.addEventListener('change', () => {
+        // 已在 buildStyleControl 里做过规范化，这里只写回
+        rule.style[rule.type] = hex.value.toUpperCase();
+        if (color.value.toUpperCase() !== hex.value.toUpperCase()) {
+          color.value = hex.value;
+        }
+      });
+    }
+  }
+
+  // —— 中：已选标签 + “添加/修改属性”
+  const tdAttr = document.createElement('td');
+
+  const chips = document.createElement('div');
+  chips.className = 'attr-chips';
+  chips.style.minHeight = '28px';
+  tdAttr.appendChild(chips);
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.textContent = '添加/修改属性';
+  editBtn.style.marginLeft = '8px';
+  editBtn.addEventListener('click', () => {
+    openAttrPicker(rule.id, attrKey);
+  });
+  tdAttr.appendChild(editBtn);
+
+  tr.appendChild(tdAttr);
+
+  // 首次渲染标签
+  renderRowAttrChips(rule.id, rule.values || []);
+
+  // —— 右：删除该行
+  const tdAction = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.textContent = '×';
+  delBtn.title = '删除该样式行';
+  delBtn.addEventListener('click', () => {
+    const bucket = styleRules[attrKey] || [];
+    const idx = bucket.findIndex(r => r.id === rule.id);
+    if (idx >= 0) bucket.splice(idx, 1);
+    tr.remove();
+  });
+  tdAction.appendChild(delBtn);
+  tr.appendChild(tdAction);
+
+  tbody.appendChild(tr);
+}
 
 /** 点击“保存并应用”时：从 UI 读状态 -> 保存 -> 应用 */
 function onSaveFromPanel() {
@@ -359,6 +461,7 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
 
