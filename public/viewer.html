@@ -768,6 +768,13 @@ function openStyleWindow(attr) {
 
 
 // 点击“重置”：清空该属性的绑定与行
+// 关闭/保存：现在变成“保存并应用 + 关闭面板”
+function confirmStyle() {
+  applyCurrentStyles({ persist: true });
+  document.getElementById('style-window').style.display = 'none';
+}
+
+// 重置绑定：清空后立刻应用（相当于撤销该属性的所有样式）
 function onResetBind() {
   const tbody    = document.getElementById('styleTableBody');
   const typeSel  = document.getElementById('style-type');
@@ -787,7 +794,9 @@ function onResetBind() {
   }
 
   boundStyleType[currentStyleAttr] = 'none';
+  (styleRules[currentStyleAttr] || []).length = 0; // 清掉该属性下的规则行
   tbody.innerHTML = '';
+
   typeSel.value = 'none';
   stagedType = 'none';
 
@@ -796,9 +805,12 @@ function onResetBind() {
   if (addBtn)    addBtn.disabled = true;
   if (hint)      hint.textContent = '当前样式：无';
 
-  // 让其它属性重新可选该类型
-  refreshStyleTypeOptions();
+  refreshStyleTypeOptions?.();
+
+  // ⬇️ 立刻应用（并保存）
+  applyCurrentStyles({ persist: true });
 }
+
 
 
 // 仅更新临时选择；未确认前不写入绑定
