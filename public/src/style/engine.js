@@ -41,11 +41,13 @@ export function compileStyleRules(styleState, opts = {}) {
       if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
       if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
       if (type === 'borderColor' && conf.borderColor) css += `${baseSel}{border-color:${conf.borderColor};border-style:solid;}\n`;
+      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`; // ← 新增
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
     }
   }
   return css;
 }
+
 
 /** 把 CSS 文本注入/更新到 <style id="user-style-rules"> */
 export function injectUserStyle(css) {
@@ -62,3 +64,4 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
