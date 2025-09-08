@@ -1220,6 +1220,7 @@ function buildStyleControl(type) {
 
 // 确认按钮
 function confirmStyle() {
+  applyCurrentStyles({ persist: true });
   document.getElementById('style-window').style.display = 'none';
 }
 // === A. 把面板当前内存 → 引擎需要的 state 结构 ===
