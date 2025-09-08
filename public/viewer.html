@@ -1140,6 +1140,7 @@ document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeA
 function buildStyleControl(type) {
   const wrap = document.createElement('div');
 
+  // ====== 字体族 ======
   if (type === 'fontFamily') {
     const fontSel = document.createElement('select');
     fontSel.innerHTML = `
@@ -1149,7 +1150,6 @@ function buildStyleControl(type) {
       <option value="FZYaoti">方正姚体 (FZYaoti)</option>
       <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
       <option value="DengXian">等线 (DengXian)</option>
-      <!-- 已按你的计划替换：隶书 / 幼圆 -->
       <option value="LiSu">隶书 (LiSu)</option>
       <option value="YouYuan">幼圆 (YouYuan)</option>
       <option value="SimSun">宋体 (SimSun)</option>
@@ -1160,7 +1160,7 @@ function buildStyleControl(type) {
     return wrap;
   }
 
-  // 颜色相关：提供 取色器 + HEX 文本框 + 预设色块（仅交互，不应用）
+  // ====== 颜色类：fontColor / borderColor / backgroundColor / lineColor ======
   if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
     wrap.className = 'color-ui';
 
@@ -1168,17 +1168,15 @@ function buildStyleControl(type) {
     const color = document.createElement('input');
     color.type = 'color';
     color.value = '#000000';
+    color.setAttribute('aria-label', '选择颜色');
 
     // 2) HEX 输入
     const hex = document.createElement('input');
     hex.type = 'text';
     hex.placeholder = '#RRGGBB';
     hex.value = color.value.toUpperCase();
-
-    // 同步：取色器 -> HEX
-    color.addEventListener('input', () => {
-      hex.value = color.value.toUpperCase();
-    });
+    hex.inputMode = 'text';
+    hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
 
     // 规范化 & 校验
     function normalizeHex(v) {
@@ -1192,31 +1190,55 @@ function buildStyleControl(type) {
       return null;
     }
 
+    // 同步：取色器 -> HEX
+    color.addEventListener('input', () => {
+      hex.value = color.value.toUpperCase();
+      // 注意：这里不直接改 rule.style，renderRuleRow 里有监听会写回
+    });
+
     // 同步：HEX -> 取色器（无效输入回退）
     hex.addEventListener('change', () => {
       const n = normalizeHex(hex.value);
       if (n) {
         hex.value = n;
-        color.value = n;
+        if (color.value.toUpperCase() !== n) color.value = n;
       } else {
         hex.value = color.value.toUpperCase();
       }
+      // 注意：renderRuleRow 里对 hex 的 'change' 有写回 rule.style
     });
 
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块
+    // 3) 预设色块（点击后同时触发 input/change，让上面的监听写回 rule.style）
     const sw = document.createElement('div');
     sw.className = 'swatches';
-    PRESET_COLORS.forEach(c => {
+
+    const palette = Array.isArray(window.PRESET_COLORS) && window.PRESET_COLORS.length
+      ? window.PRESET_COLORS
+      : [
+          { name: 'Amber-500', hex: '#F59E0B' },
+          { name: 'Violet-500', hex: '#8B5CF6' },
+          { name: 'Sky-500',   hex: '#0EA5E9' },
+          { name: 'Rose-500',  hex: '#F43F5E' },
+          { name: 'Lime-500',  hex: '#84CC16' },
+          { name: 'Zinc-800',  hex: '#27272A' }
+        ];
+
+    palette.forEach(c => {
       const s = document.createElement('div');
       s.className = 'swatch';
       s.title = `${c.name} ${c.hex}`;
+      s.style.cssText = 'display:inline-block;width:18px;height:18px;border-radius:4px;margin:4px;cursor:pointer;border:1px solid rgba(0,0,0,.15);';
       s.style.background = c.hex;
       s.addEventListener('click', () => {
-        color.value = c.hex;
-        hex.value = c.hex;
+        const val = String(c.hex).toUpperCase();
+        color.value = val;
+        hex.value = val;
+        // 关键：分发事件，触发 renderRuleRow 里绑定的监听器去写回 rule.style
+        color.dispatchEvent(new Event('input',  { bubbles: true }));
+        hex.dispatchEvent(new Event('change', { bubbles: true }));
       });
       sw.appendChild(s);
     });
@@ -1229,6 +1251,7 @@ function buildStyleControl(type) {
   wrap.textContent = type + '（待配置）';
   return wrap;
 }
+
 
 // 确认按钮
 function confirmStyle() {
