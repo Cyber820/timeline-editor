@@ -1222,6 +1222,65 @@ function buildStyleControl(type) {
 function confirmStyle() {
   document.getElementById('style-window').style.display = 'none';
 }
+// === A. 把面板当前内存 → 引擎需要的 state 结构 ===
+function buildStyleStateFromUI() {
+  const toEngineKey = (t) => ({
+    font: 'fontFamily',
+    fontFamily: 'fontFamily',
+    fontColor: 'textColor',
+    backgroundColor: 'bgColor',
+    borderColor: 'borderColor',
+    lineColor: 'borderColor', // 线条色并入边框色（你也可以以后单独扩展）
+    none: 'none'
+  }[t] || t);
+
+  // 1) 绑定类型
+  const boundTypes = {};
+  for (const [attr, t] of Object.entries(boundStyleType)) {
+    boundTypes[attr] = toEngineKey(t || 'none');
+  }
+
+  // 2) 具体规则：attr -> value -> { textColor/bgColor/borderColor/fontFamily }
+  const rules = {};
+  for (const [attr, rows] of Object.entries(styleRules)) {
+    if (!rows || rows.length === 0) continue;
+    const attrType = boundTypes[attr];
+    if (!attrType || attrType === 'none') continue;
+
+    for (const row of rows) {
+      const k = toEngineKey(row.type);
+      const st = row.style || {};
+      const values = Array.isArray(row.values) ? row.values : [];
+      values.forEach((val) => {
+        if (!val) return;
+        (rules[attr] ||= {});
+        (rules[attr][val] ||= {});
+        if (k === 'textColor')   rules[attr][val].textColor   = st.fontColor || st.textColor || '#000000';
+        if (k === 'bgColor')     rules[attr][val].bgColor     = st.backgroundColor || st.bgColor;
+        if (k === 'borderColor') rules[attr][val].borderColor = st.borderColor || st.lineColor;
+        if (k === 'fontFamily')  rules[attr][val].fontFamily  = st.fontFamily;
+      });
+    }
+  }
+
+  return { version: 1, boundTypes, rules };
+}
+
+// === B. 一键应用当前样式（可选：同时保存到 localStorage） ===
+function applyCurrentStyles({ persist = true } = {}) {
+  const state = buildStyleStateFromUI();
+
+  // 可选：持久化（若你已经接了 __styleState，也可以用它）
+  if (persist) {
+    try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
+  }
+
+  // 应用：把 state 交给样式引擎（依赖前面已接好的 template/.event/.event-title）
+  window.__styleEngine?.applyStyleState(state, {
+    selectorBase: '.vis-item.event',
+    titleSelector: '.event-title'
+  });
+}
 
   document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
 document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
