@@ -1264,13 +1264,23 @@ function buildStyleControl(type) {
 
 // 确认按钮
 function confirmStyle() {
-  // 生成全量状态 → 注入 CSS →（可选）保存到 localStorage
-  applyCurrentStyles({ persist: true });
+  // 先把状态构建 &（可选）持久化
+  const state = buildStyleStateFromUI();
+  try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
 
-  // 关闭面板
+  // 关闭面板（先关 UI，下一帧再注入样式，避免关闭面板插入/修改样式标签的竞态）
   const root = document.getElementById('style-window');
   if (root) root.style.display = 'none';
+
+  // 下一帧注入样式（保证 <style> 顺序在最后）
+  requestAnimationFrame(() => {
+    window.__styleEngine?.applyStyleState(state, {
+      selectorBase: '.vis-item.event, .vis-item-content.event',
+      titleSelector: '.event-title'
+    });
+  });
 }
+
 
 // === A. 把面板当前内存 → 引擎需要的 state 结构 ===
 function buildStyleStateFromUI() {
