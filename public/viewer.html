@@ -1173,11 +1173,8 @@ function buildStyleControl(type) {
     return wrap;
   }
 
-  // ====== 颜色类：fontColor / borderColor / backgroundColor / lineColor ======
+  // ====== 颜色类：fontColor / borderColor / backgroundColor / haloColor ======
   if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'haloColor') {
-  // …原有颜色 UI（取色器/HEX/色块）保持不变…
-  // 注意：你已经修过“色块点击要 dispatchEvent”那两行，照用就行
-} {
     wrap.className = 'color-ui';
 
     // 1) 原生取色器
@@ -1186,7 +1183,7 @@ function buildStyleControl(type) {
     color.value = '#000000';
     color.setAttribute('aria-label', '选择颜色');
 
-    // 2) HEX 输入
+    // 2) HEX 输入（RGB 代码框）
     const hex = document.createElement('input');
     hex.type = 'text';
     hex.placeholder = '#RRGGBB';
@@ -1194,55 +1191,85 @@ function buildStyleControl(type) {
     hex.inputMode = 'text';
     hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
 
-    // 规范化 & 校验
+    // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
     function normalizeHex(v) {
       let s = String(v || '').trim();
       if (!s) return null;
       if (s[0] !== '#') s = '#' + s;
-      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
-        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-      }
+      if (/^#([0-9a-fA-F]{3})$/.test(s)) s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
       if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
       return null;
     }
+    function textOn(bg) {
+      const n = normalizeHex(bg);
+      if (!n) return '#111';
+      const r = parseInt(n.slice(1,3),16), g = parseInt(n.slice(3,5),16), b = parseInt(n.slice(5,7),16);
+      const L = 0.299*r + 0.587*g + 0.114*b;
+      return L > 180 ? '#111' : '#fff';
+    }
+    function applyPreview(v) {
+      hex.style.background = v;
+      hex.style.color = textOn(v);
+    }
+    applyPreview(hex.value);
 
-    // 同步：取色器 -> HEX
+    // —— 同步：取色器 -> HEX（实时）——
     color.addEventListener('input', () => {
-      hex.value = color.value.toUpperCase();
-      // 注意：这里不直接改 rule.style，renderRuleRow 里有监听会写回
+      const v = color.value.toUpperCase();
+      hex.value = v;
+      applyPreview(v);
+      // 触发 change，交给外层监听写回 rule.style
+      hex.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    // 同步：HEX -> 取色器（无效输入回退）
+    // —— 同步：HEX 输入时预览 + 同步取色器 —— 
+    hex.addEventListener('input', () => {
+      const n = normalizeHex(hex.value);
+      if (n) {
+        color.value = n;
+        applyPreview(n);
+      }
+    });
+    // 失焦校正
     hex.addEventListener('change', () => {
       const n = normalizeHex(hex.value);
       if (n) {
         hex.value = n;
-        if (color.value.toUpperCase() !== n) color.value = n;
+        color.value = n;
+        applyPreview(n);
       } else {
         hex.value = color.value.toUpperCase();
+        applyPreview(hex.value);
       }
-      // 注意：renderRuleRow 里对 hex 的 'change' 有写回 rule.style
+    });
+
+    // —— 点击/聚焦 HEX 框时弹出调色板 —— 
+    hex.addEventListener('focus', () => color.focus());
+    hex.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (typeof color.showPicker === 'function') color.showPicker();
+      else color.click();
     });
 
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块（点击后同时触发 input/change，让上面的监听写回 rule.style）
+    // 3) 预设色块（9 个非黑白）
     const sw = document.createElement('div');
     sw.className = 'swatches';
 
     const palette = Array.isArray(window.PRESET_COLORS) && window.PRESET_COLORS.length
       ? window.PRESET_COLORS
       : [
-  { name: '琥珀',   hex: '#F59E0B' },
-  { name: '靛蓝',   hex: '#6366F1' },
-  { name: '祖母绿', hex: '#10B981' },
-  { name: '玫红',   hex: '#F43F5E' },
-  { name: '天青',   hex: '#0EA5E9' },
-  { name: '紫罗兰', hex: '#8B5CF6' },
-  { name: '青柠',   hex: '#84CC16' },
-  { name: '橙',     hex: '#F97316' },
-  { name: '洋红',   hex: '#D946EF' }
+          { name: '琥珀',   hex: '#F59E0B' },
+          { name: '靛蓝',   hex: '#6366F1' },
+          { name: '祖母绿', hex: '#10B981' },
+          { name: '玫红',   hex: '#F43F5E' },
+          { name: '天青',   hex: '#0EA5E9' },
+          { name: '紫罗兰', hex: '#8B5CF6' },
+          { name: '青柠',   hex: '#84CC16' },
+          { name: '橙',     hex: '#F97316' },
+          { name: '洋红',   hex: '#D946EF' }
         ];
 
     palette.forEach(c => {
@@ -1255,7 +1282,8 @@ function buildStyleControl(type) {
         const val = String(c.hex).toUpperCase();
         color.value = val;
         hex.value = val;
-        // 关键：分发事件，触发 renderRuleRow 里绑定的监听器去写回 rule.style
+        applyPreview(val);
+        // 分发事件，让外层写回 rule.style
         color.dispatchEvent(new Event('input',  { bubbles: true }));
         hex.dispatchEvent(new Event('change', { bubbles: true }));
       });
@@ -1270,6 +1298,7 @@ function buildStyleControl(type) {
   wrap.textContent = type + '（待配置）';
   return wrap;
 }
+
 
 
 // 确认按钮
