@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>电子游戏时间轴</title>
+  <!-- 引入所需样式和库 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <script type="module" src="./src/app.js"></script>
+  <style>
+    #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
+    .vis-tooltip {
+      white-space: normal !important; max-width: 700px !important; min-width: 300px;
+      font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff;
+      border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    }
+    .vis-item {
+      font-size: 10px; padding: 1px 2px; background-color: #f5f5f5;
+      border: 1px solid #aaa; border-radius: 4px; max-width: 300px;
+    }
+    #event-form, #filter-window, #add-filter-window {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #fff; padding: 20px; border: 1px solid #ccc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none;
+      z-index: 2000; max-height: 80vh; overflow: auto;
+    }
+    #add-filter-window { width: 700px; height: 300px; }
+    #filter-window { width: 700px; }
+  /* —— Color UI（轻量样式，仅影响颜色选择控件） 以下style和样式相关—— */
+.color-ui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.color-ui input[type="text"] { width: 110px; padding: 2px 4px; font-size: 12px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatch { width: 18px; height: 18px; border: 1px solid #ccc; cursor: pointer; border-radius: 3px; }
+
+    #style-window .toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+#style-window .toolbar .spacer { flex: 1; }
+#style-window .btn-ghost {
+  background: transparent; border: 0; font-size: 18px; line-height: 1;
+  padding: 2px 6px; cursor: pointer; color: #666;
+}
+#style-window .btn-ghost:hover { color: #000; }
+    
+  </style>
+</head>
+<body>
+  <h2>电子游戏时间轴</h2>
+  <!-- 功能按钮 -->
+  <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
+  <button onclick="openStyleWindow('EventType')">事件样式</button>
+  <button onclick="openStyleWindow('Platform')">平台样式</button>
+  <button onclick="openStyleWindow('ConsolePlatform')">主机样式</button>
+  <button onclick="openStyleWindow('Company')">公司样式</button>
+  <button onclick="openStyleWindow('Region')">地区样式</button>
+  <div id="timeline"></div>
+
+  <!-- 过滤逻辑设置弹窗 -->
+  <div id="filter-window">
+    <h3>过滤标准（和逻辑）</h3>
+    <button onclick="openAddFilter()">增加过滤标准</button>
+    <button onclick="resetFilters()">复原过滤标准</button>
+    <button onclick="applyFilters()">应用和逻辑</button>
+    <button onclick="applyFiltersOr()">应用或逻辑</button>
+    <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
+    <div id="current-filters"></div>
+  </div>
+
+  <!-- 添加过滤标准弹窗 -->
+  <div id="add-filter-window">
+    <h3>新增过滤标准</h3>
+    <label>过滤属性：<select id="filter-attribute"></select></label><br>
+    <label>过滤选项：<select id="filter-options" multiple></select></label><br>
+    <button onclick="confirmAddFilter()">确定</button>
+    <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
+  </div>
+<!-- 属性多选弹窗（复用 Choices，可搜索，可多选） -->
+<div id="attr-picker-window" style="
+  display:none; position:absolute; top:120px; left:50%; transform:translateX(-50%);
+  width:700px; background:#fff; border:1px solid #ccc; padding:16px;
+  box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
+  <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
+  <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
+  
+
+  <!-- 新增：全选 / 全不选按钮 -->
+  <div style="margin:6px 0 8px;">
+    <button id="attr-picker-select-all" type="button">全选</button>
+    <button id="attr-picker-clear" type="button">全不选</button>
+  </div>
+  <!-- /新增 -->
+
+<div style="margin-bottom:8px;">
+  <div id="attr-picker-attrname" style="margin-bottom:6px; color:#333;">属性值</div>
+  <select id="attr-picker-options" multiple></select>
+</div>
+
+
+  <div style="margin-top:10px; text-align:right;">
+    <!-- 左“确定”右“取消” -->
+    <button id="attr-picker-confirm" style="margin-right:8px;">确定</button>
+    <button id="attr-picker-cancel">取消</button>
+  </div>
+</div>
+
+
+  <!-- 样式弹窗（整块替换你当前那一堆散落的控件） -->
+
+<div id="style-window" style="
+  display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%);
+  width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
+  <h3 id="style-title">属性样式</h3>
+
+<div class="toolbar" style="margin-bottom:10px;">
+  <label>自定义样式：
+    <select id="style-type" onchange="onStyleTypeChange()">
+      <option value="none">无</option>
+      <option value="font">字体</option>
+      <option value="fontColor">字体颜色</option>
+      <option value="borderColor">事件框颜色</option>
+      <option value="backgroundColor">事件框填充色</option>
+      <option value="lineColor">连接线颜色</option>
+    </select>
+  </label>
+
+  <span id="bound-type-hint" style="color:#666;">当前样式：无</span>
+  <span class="spacer"></span>
+
+  <button id="style-confirm-btn" disabled>确认绑定</button>
+  <button id="style-reset-btn" style="display:none;">重置</button>
+  <button class="btn-ghost" onclick="closeStyleWindow()" aria-label="关闭">×</button>
+</div>
+
+  <div>
+    <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
+  </div>
+
+  <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th>样式内容</th>
+        <th>应用属性</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="styleTableBody">
+      <!-- 动态添加行 -->
+    </tbody>
+  </table>
+
+<div style="margin-top:10px; text-align:right;">
+  <!-- “确定”：最终保存并应用样式，同时关闭面板 -->
+  <button id="style-save" type="button" class="btn-primary" onclick="confirmStyle()">确定</button>
+  <!-- “取消”：只关闭面板 -->
+  <button id="style-cancel" type="button" onclick="closeStyleWindow()">取消</button>
+</div>
+
+
+
+</div>
+
+<script>
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
+
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let originalItems = [], timeline = null;
+/*标签参数*/
+const attributeLabels = {
+  EventType: "事件类型",
+  Region: "地区",
+  Platform: "平台类型",
+  Company: "公司",
+  ConsolePlatform: "主机类型"
+};
+  // ✅ 让其它地方的 window.attributeLabels 可用
+window.attributeLabels = attributeLabels;
+/*样式参数*/
+const PRESET_COLORS = [
+  { name: '红', hex: '#FF0000' },
+  { name: '橙', hex: '#FF7F00' },
+  { name: '黄', hex: '#FFFF00' },
+  { name: '绿', hex: '#00FF00' },
+  { name: '青', hex: '#00FFFF' },
+  { name: '蓝', hex: '#0000FF' },
+  { name: '紫', hex: '#8B00FF' },
+  { name: '黑', hex: '#000000' },
+  { name: '灰', hex: '#808080' },
+  { name: '白', hex: '#FFFFFF' }
+];
+
+  const STYLE_LABELS = {
+  fontFamily: '字体',
+  fontColor: '字体颜色',
+  borderColor: '事件框颜色',
+  backgroundColor: '事件框填充色',
+  lineColor: '连接线颜色',
+  none: '无'
+};
+function styleLabel(key) {
+  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
+}
+/*过滤相关UI*/
+function openAddEventForm() {
+  document.getElementById('event-form').style.display = 'block';
+  document.getElementById('platform')?.dispatchEvent(new Event('change'));
+}
+
+function openFilterWindow(logic) {
+  filterLogic = logic;
+  document.getElementById('filter-window').style.display = 'block';
+}
+
+function resetFilters() {
+  activeFilters = {};
+  updateFilterList();
+  updateTimelineByFilter();
+}
+
+function updateFilterList() {
+  const div = document.getElementById("current-filters");
+  div.innerHTML = '';
+  for (const [key, values] of Object.entries(activeFilters)) {
+    const d = document.createElement("div");
+    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
+    const btn = document.createElement("button");
+    btn.textContent = '❌';
+    btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
+    d.appendChild(btn);
+    div.appendChild(d);
+  }
+}
+
+function openAddFilter() {
+  document.getElementById("add-filter-window").style.display = 'block';
+  const attrSel = document.getElementById("filter-attribute");
+  attrSel.innerHTML = '';
+  Object.keys(attributeLabels).forEach(key => {
+    const o = document.createElement("option");
+    o.value = key;
+    o.textContent = attributeLabels[key];
+    attrSel.appendChild(o);
+  });
+attrSel.onchange = () => {
+  const key = attrSel.value;
+  const opts = getFilterOptionsForKey(key);   // ✅ 统一拿到数组
+  const sel = document.getElementById("filter-options");
+  sel.innerHTML = '';
+  opts.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = o.textContent = opt;
+    sel.appendChild(o);
+  });
+  if (filterOptionsChoices) filterOptionsChoices.destroy();
+  filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
+};
+  attrSel.dispatchEvent(new Event("change"));
+}
+
+function confirmAddFilter() {
+  const attr = document.getElementById("filter-attribute").value;
+  const selected = Array.from(document.getElementById("filter-options").selectedOptions).map(o => o.value);
+  if (attr && selected.length) {
+    activeFilters[attr] = selected;
+    updateFilterList();
+  }
+  document.getElementById("add-filter-window").style.display = 'none';
+}
+
+function normalizeToArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') return [raw];
+  if (raw && typeof raw === 'object') {
+    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
+    try { return Object.values(raw).flat().filter(Boolean); } catch (e) {
+      // .flat 不可用的极端环境：
+      var out = [];
+      Object.keys(raw).forEach(k => {
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
+        else if (v) out.push(v);
+      });
+      return out;
+    }
+  }
+  return [];
+}
+
+// 根据选择的过滤属性，返回对应的候选数组（已归一）
+function getFilterOptionsForKey(key) {
+  if (key === 'ConsolePlatform') {
+    // 直接返回主机类型数组，不依赖平台
+    return normalizeToArray(allOptions.ConsolePlatform);
+  }
+  return normalizeToArray(allOptions[key]);
+}
+
+/* -------- 通用过滤判断（支持 6 个属性） -------- */
+function valueInSelected(val, selectedArr) {
+  if (val == null) return false;
+  const vArr = Array.isArray(val) ? val : [val];
+  return vArr.some(v => selectedArr.includes(String(v)));
+}
+function passesAndLogicFilters(item, filters) {
+  return Object.entries(filters).every(([key, values]) => valueInSelected(item[key], values));
+}
+function passesOrLogicFilters(item, filters) {
+  return Object.entries(filters).some(([key, values]) => valueInSelected(item[key], values));
+}
+function updateTimelineByFilter() {
+  if (!timeline || !originalItems) return;
+
+  console.groupCollapsed('🧪DEBUG: 过滤执行');
+  console.log('filterLogic:', filterLogic);
+  console.log('activeFilters:', JSON.stringify(activeFilters));
+  console.log('原始事件数量:', originalItems.length);
+
+  const hasFilters = Object.keys(activeFilters).length > 0;
+  const filtered = hasFilters
+    ? originalItems.filter(item => {
+        const pass = (filterLogic === 'and')
+          ? Object.entries(activeFilters).every(([k, vals]) => vals.includes(String(item[k] ?? '')))
+          : Object.entries(activeFilters).some(([k, vals]) => vals.includes(String(item[k] ?? '')));
+
+        // 对前 50 条或全部进行打印（可按需调整）
+        console.debug('条目判定:', {
+          id: item.id,
+          content: item.content,
+          EventType: item.EventType,
+          Region: item.Region,
+          Platform: item.Platform,
+          Company: item.Company,
+          Status: item.Status,
+          ConsolePlatform: item.ConsolePlatform,
+          通过: pass
+        });
+        return pass;
+      })
+    : originalItems;
+
+  console.log('通过过滤的事件数量:', filtered.length);
+  console.groupEnd();
+
+  timeline.setItems(filtered);
+}
+
+function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
+function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
+
+/* -------- 获取事件并渲染（关键替换区） -------- */
+
+window.addEventListener('style:ready', () => {
+  fetch(ENDPOINT)
+    .then(res => res.json())
+    .then(data => {
+      originalItems = data.map((event, i) => {
+        const contentText = event.content ?? event.Title ?? '(无标题)';
+        const Start = event.Start ?? event.start ?? '';
+        const End   = event.End   ?? event.end   ?? '';
+        const blob  = (event.title ?? '').toString();
+
+        const pick = (label) => {
+          if (!blob) return '';
+          const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+          return m ? m[1].trim() : '';
+        };
+
+        const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+        const Region          = event.Region          ?? event.region          ?? pick('地区');
+        const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+        const Company         = event.Company         ?? event.company         ?? pick('公司');
+        const Status          = event.Status          ?? event.status          ?? pick('状态');
+        const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+
+        const TagRaw = event.Tag ?? event.tag ?? pick('标签');
+        const Tag = Array.isArray(TagRaw)
+          ? TagRaw
+          : String(TagRaw || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        const tooltipHtml = blob
+          ? blob.replace(/\n/g, '<br>')
+          : [
+              `事件名称：${contentText}`,
+              `事件类型：${EventType || ''}`,
+              `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+              `状态：${Status || ''}`,
+              `地区：${Region || ''}`,
+              `平台类型：${Platform || ''}`,
+              `主机类型：${ConsolePlatform || ''}`,
+              `公司：${Company || ''}`
+            ].join('<br>');
+
+        return {
+          id: event.id || `auto-${i + 1}`,
+          content: contentText,
+          start: Start,
+          end: End || undefined,
+          title: tooltipHtml,
+          EventType, Region, Platform, Company, Status, ConsolePlatform,
+          Tag
+        };
+      });
+
+      // 初始化 Timeline：把标记打到外层 .vis-item
+      timeline = new vis.Timeline(
+        document.getElementById("timeline"),
+        originalItems,
+        {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 50 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey",
+          stack: true,
+          template: (item, element) => {
+            const host = element?.closest?.('.vis-item') || element; // 外层容器
+            if (host && window.__styleEngine) {
+              window.__styleEngine.attachEventDataAttrs(host, item);
+              host.classList.add('event'); // .vis-item.event
+            }
+            const root = document.createElement('div');
+            const h4 = document.createElement('h4');
+            h4.className = 'event-title';
+            h4.textContent = item.content || '(无标题)';
+            root.appendChild(h4);
+            return root;
+          }
+        }
+      );
+
+      // 初始化后先应用一次已保存样式（若有）
+      try {
+        const saved = localStorage.getItem('timelineStyle.v1');
+        if (saved) {
+          const state = JSON.parse(saved);
+          window.__styleEngine?.applyStyleState(state, {
+            selectorBase: '.vis-item.event, .vis-item-content.event',
+            titleSelector: '.event-title'
+          });
+        }
+      } catch (e) {
+        console.warn('[style] load saved style failed:', e);
+      }
+    });
+});
+
+// ← 正确关闭 then(data => { ... })
+
+/* -------- 获取下拉选项 -------- */
+fetch(ENDPOINT + '?action=options')
+  .then(res => res.json())
+  .then(options => {
+    allOptions = options;
+
+    const fill = (id, list) => {
+      const select = document.getElementById(id);
+      if (!select) return;   // 元素不存在就直接跳过
+      select.innerHTML = ''; // 清空原有内容
+      (list || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        select.appendChild(o);
+      });
+    };
+
+
+
+   
+
+    // 初始化“新增过滤标准”的属性下拉
+    const attrSel = document.getElementById("filter-attribute");
+    attrSel.innerHTML = '';
+    Object.keys(attributeLabels).forEach(key => {
+      const o = document.createElement("option");
+      o.value = key;
+      o.textContent = attributeLabels[key];
+      attrSel.appendChild(o);
+    });
+attrSel.addEventListener("change", () => {
+  const key = attrSel.value;
+  const opts = getFilterOptionsForKey(key);  // ✅ 统一拿到数组
+  const sel = document.getElementById("filter-options");
+  sel.innerHTML = '';
+  opts.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = o.textContent = opt;
+    sel.appendChild(o);
+  });
+  if (filterOptionsChoices) filterOptionsChoices.destroy();
+  filterOptionsChoices = new Choices(sel, { removeItemButton: true, shouldSort: false });
+});
+    attrSel.dispatchEvent(new Event("change"));
+  });
+
+
+/************ 样式绑定：只做交互（不应用 CSS） ************/
+let currentStyleAttr = null;         // 当前正在编辑的属性
+const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
+let stagedType = 'none';             // 下拉的临时选择（未确认前）
+// 全局：样式类型当前被哪个属性占用（如 { fontFamily: 'EventType' }）
+const styleTypeOwner = {};
+/*** 规则内存：每个属性对应一组规则行 ***/
+// 结构：styleRules = { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
+const styleRules = {};
+// 每一行样式行里被选中的属性值集合：{ [rowId]: string[] }
+const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
+// 生成行 id（与 <tr data-row-id> 对应）
+function genId() {
+  return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
+}
+
+// 取桶
+function ensureBucket(attrKey) {
+  if (!styleRules[attrKey]) styleRules[attrKey] = [];
+  return styleRules[attrKey];
+}
+
+// 根据 id 找规则
+function findRule(attrKey, rowId) {
+  const bucket = styleRules[attrKey] || [];
+  return bucket.find(r => r.id === rowId) || null;
+}
+  // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
+function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
+// 把某属性的所有规则渲染到表格
+function renderStyleTable(attrKey) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rules = styleRules[attrKey] || [];
+  rules.forEach(rule => renderRuleRow(attrKey, rule));
+}
+
+// 渲染单行（可复用：新增/修改后都可以只重绘本行）
+function renderRuleRow(attrKey, rule) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+
+  const tr = document.createElement('tr');
+  tr.dataset.rowId  = rule.id;
+  tr.dataset.attrKey = attrKey;
+
+  // —— 左：样式控件
+  const tdContent = document.createElement('td');
+  tdContent.dataset.styleType = rule.type;
+  const ctrl = buildStyleControl(rule.type); // 你已有的构造 UI
+  tdContent.appendChild(ctrl);
+  tr.appendChild(tdContent);
+
+  // 初始化控件的“当前值” + 监听修改写回内存
+  if (rule.type === 'fontFamily') {
+    const sel = tdContent.querySelector('select');
+    if (sel) {
+      sel.value = rule.style.fontFamily || '';
+      sel.addEventListener('change', () => {
+        rule.style.fontFamily = sel.value || '';
+      });
+    }
+  } else if (
+    rule.type === 'fontColor' ||
+    rule.type === 'borderColor' ||
+    rule.type === 'backgroundColor' ||
+    rule.type === 'lineColor'
+  ) {
+    const color = tdContent.querySelector('input[type="color"]');
+    const hex   = tdContent.querySelector('input[type="text"]');
+
+    const current = rule.style[rule.type] || '#000000';
+    if (color) color.value = current;
+    if (hex)   hex.value   = current;
+
+    // 同步两边并写回
+    if (color && hex) {
+      color.addEventListener('input', () => {
+        hex.value = color.value.toUpperCase();
+        rule.style[rule.type] = color.value.toUpperCase();
+      });
+      hex.addEventListener('change', () => {
+        // 已在 buildStyleControl 里做过规范化，这里只写回
+        rule.style[rule.type] = hex.value.toUpperCase();
+        if (color.value.toUpperCase() !== hex.value.toUpperCase()) {
+          color.value = hex.value;
+        }
+      });
+    }
+  }
+
+  // —— 中：已选标签 + “添加/修改属性”
+  const tdAttr = document.createElement('td');
+
+  const chips = document.createElement('div');
+  chips.className = 'attr-chips';
+  chips.style.minHeight = '28px';
+  tdAttr.appendChild(chips);
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.textContent = '添加/修改属性';
+  editBtn.style.marginLeft = '8px';
+  editBtn.addEventListener('click', () => {
+    openAttrPicker(rule.id, attrKey);
+  });
+  tdAttr.appendChild(editBtn);
+
+  tr.appendChild(tdAttr);
+
+  // 首次渲染标签
+  renderRowAttrChips(rule.id, rule.values || []);
+
+  // —— 右：删除该行
+  const tdAction = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.textContent = '×';
+  delBtn.title = '删除该样式行';
+  delBtn.addEventListener('click', () => {
+    const bucket = styleRules[attrKey] || [];
+    const idx = bucket.findIndex(r => r.id === rule.id);
+    if (idx >= 0) bucket.splice(idx, 1);
+    tr.remove();
+  });
+  tdAction.appendChild(delBtn);
+  tr.appendChild(tdAction);
+
+  tbody.appendChild(tr);
+}
+
+// 根据占用关系，刷新“样式类型”下拉的可用性和提示文案
+function refreshStyleTypeOptions() {
+  const sel = document.getElementById('style-type');
+  if (!sel) return;
+
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.dataset.baseText) opt.dataset.baseText = opt.textContent; // 记住原始文案
+    const internal = uiTypeToInternal(opt.value);
+    if (internal === 'none') {
+      opt.disabled = false;
+      opt.textContent = opt.dataset.baseText;
+      return;
+    }
+    const owner = styleTypeOwner[internal];
+    const isMine = owner === currentStyleAttr;
+
+    // 有其它属性占用 -> 禁用并标注“已绑定：XX”
+    opt.disabled = !!(owner && !isMine);
+    opt.textContent = opt.dataset.baseText + (
+      owner && !isMine ? `（已绑定：${(attributeLabels[owner] || owner)}）` : ''
+    );
+  });
+}
+
+function openStyleWindow(attr) {
+  currentStyleAttr = attr;
+  document.getElementById('style-title').textContent =
+    (attributeLabels[attr] || attr) + ' 样式';
+  document.getElementById('style-window').style.display = 'block';
+
+  const typeSel   = document.getElementById('style-type');
+  const tbody     = document.getElementById('styleTableBody');
+  const confirm   = document.getElementById('style-confirm-btn');
+  const resetBtn  = document.getElementById('style-reset-btn');
+  const addBtn    = document.getElementById('add-style-btn');
+  const hint      = document.getElementById('bound-type-hint');
+
+  typeSel.value = 'none';
+  stagedType = 'none';
+
+  tbody.innerHTML = '';
+
+  const bound = boundStyleType[attr] || 'none';
+  if (bound !== 'none') {
+    if (hint)      hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(bound) : bound);
+    if (confirm) { confirm.disabled = true; confirm.style.display = 'none'; }
+    if (resetBtn)  resetBtn.style.display = 'inline-block';
+    if (addBtn)    addBtn.disabled = false;
+  } else {
+    if (hint)      hint.textContent = '当前样式：无';
+    if (confirm) { confirm.disabled = true; confirm.style.display = 'inline-block'; }
+    if (resetBtn)  resetBtn.style.display = 'none';
+    if (addBtn)    addBtn.disabled = true;
+  }
+
+  // ✅ 用内存里的规则重建表格
+  renderStyleTable(attr);
+}
+
+
+
+  function onStyleTypeChange() {
+  const typeSel = document.getElementById('style-type');
+  const confirm = document.getElementById('style-confirm-btn');
+  const hint    = document.getElementById('bound-type-hint');
+
+  const mapped = uiTypeToInternal(typeSel.value); // 'font' -> 'fontFamily'
+  stagedType = mapped;
+
+  // 该属性已绑定某类型 -> 不允许在未重置前切换
+  const already = (boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none');
+  if (already) {
+    typeSel.value = 'none';
+    stagedType = 'none';
+    if (hint)    hint.textContent = '当前绑定：' + (typeof styleLabel === 'function' ? styleLabel(boundStyleType[currentStyleAttr]) : boundStyleType[currentStyleAttr]) + '（如需更改，请先“重置”）';
+    if (confirm) confirm.disabled = true;
+    return;
+  }
+
+  // ✅ 全局唯一：该样式类型是否已被其它属性占用
+  if (mapped !== 'none') {
+    const owner = styleTypeOwner[mapped];
+    if (owner && owner !== currentStyleAttr) {
+      alert(`“${(typeof styleLabel === 'function' ? styleLabel(mapped) : mapped)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+      typeSel.value = 'none';
+      stagedType    = 'none';
+      if (confirm) confirm.disabled = true;
+      // 反映占用状态
+      refreshStyleTypeOptions();
+      return;
+    }
+  }
+
+  if (confirm) confirm.disabled = (stagedType === 'none');
+}
+
+
+ function onConfirmBind() {
+  if (stagedType === 'none') return;
+
+  const tbody    = document.getElementById('styleTableBody');
+  const confirm  = document.getElementById('style-confirm-btn');
+  const resetBtn = document.getElementById('style-reset-btn');
+  const addBtn   = document.getElementById('add-style-btn');
+  const hint     = document.getElementById('bound-type-hint');
+
+  // 再次确认全局唯一占用（防 race）
+  const owner = styleTypeOwner[stagedType];
+  if (owner && owner !== currentStyleAttr) {
+    alert(`“${(typeof styleLabel === 'function' ? styleLabel(stagedType) : stagedType)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+    return;
+  }
+
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && prev !== stagedType) {
+    const ok = window.confirm('切换样式类型将清空该属性下已添加的样式行，是否继续？');
+    if (!ok) return;
+    tbody.innerHTML = '';
+
+    // 释放之前占用的类型
+    if (styleTypeOwner[prev] === currentStyleAttr) {
+      delete styleTypeOwner[prev];
+    }
+  }
+
+  // 写入绑定与占用
+  boundStyleType[currentStyleAttr] = stagedType;
+  styleTypeOwner[stagedType] = currentStyleAttr;
+
+  // UI 状态切换
+  if (confirm)  { confirm.disabled = true; confirm.style.display = 'none'; }
+  if (resetBtn)  resetBtn.style.display = 'inline-block';
+  if (addBtn)    addBtn.disabled = false;
+  if (hint)      hint.textContent = '当前样式：' + (typeof styleLabel === 'function' ? styleLabel(stagedType) : stagedType);
+
+  // 更新下拉可用性（把该类型标记为“已被本属性占用”，其它属性会看到禁用）
+  refreshStyleTypeOptions();
+
+  // 自动新增一行（仅 UI）
+  addStyleRow();
+}
+
+
+// 点击“重置”：清空该属性的绑定与行
+// 关闭/保存：现在变成“保存并应用 + 关闭面板”
+function confirmStyle() {
+  applyCurrentStyles({ persist: true }); // 生成全量样式 -> 注入 CSS -> 保存
+  document.getElementById('style-window')?.style && (document.getElementById('style-window').style.display = 'none');
+}
+
+
+// 重置绑定：清空后立刻应用（相当于撤销该属性的所有样式）
+function onResetBind() {
+  const tbody    = document.getElementById('styleTableBody');
+  const typeSel  = document.getElementById('style-type');
+  const confirm  = document.getElementById('style-confirm-btn');
+  const resetBtn = document.getElementById('style-reset-btn');
+  const addBtn   = document.getElementById('add-style-btn');
+  const hint     = document.getElementById('bound-type-hint');
+
+  const hasRows = tbody.querySelectorAll('tr').length > 0;
+  const ok = !hasRows || window.confirm('重置将清空该属性下所有样式行，是否继续？');
+  if (!ok) return;
+
+  // 释放占用者
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && styleTypeOwner[prev] === currentStyleAttr) {
+    delete styleTypeOwner[prev];
+  }
+
+  boundStyleType[currentStyleAttr] = 'none';
+  (styleRules[currentStyleAttr] || []).length = 0; // 清掉该属性下的规则行
+  tbody.innerHTML = '';
+
+  typeSel.value = 'none';
+  stagedType = 'none';
+
+  if (confirm)  { confirm.disabled = true; confirm.style.display = 'inline-block'; }
+  if (resetBtn)  resetBtn.style.display = 'none';
+  if (addBtn)    addBtn.disabled = true;
+  if (hint)      hint.textContent = '当前样式：无';
+
+  refreshStyleTypeOptions?.();
+
+  // ⬇️ 立刻应用（并保存）
+  applyCurrentStyles({ persist: true });
+}
+
+
+
+// 仅更新临时选择；未确认前不写入绑定
+function closeStyleWindow() {
+  document.getElementById('style-window').style.display = 'none';
+}
+  
+// —— 为样式行生成“应用范围”的多选下拉（复用过滤的数据与函数）——
+// 只负责 UI；不写任何样式逻辑
+function buildAttrMultiSelect(attrKey) {
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.className = 'style-attr-select'; // 可选：便于加样式
+
+  // 用过滤系统的取值逻辑复用现有候选
+  const opts = (typeof getFilterOptionsForKey === 'function')
+    ? getFilterOptionsForKey(attrKey)
+    : (allOptions?.[attrKey] || []);
+
+  if (!opts || opts.length === 0) {
+    const o = new Option('（暂无可选项 / 仍在加载）', '');
+    o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    opts.forEach(v => sel.appendChild(new Option(v, v)));
+  }
+
+  // 可选：如果已引入 Choices.js，让多选更好用
+  if (window.Choices) {
+    sel._choices = new Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+  return sel;
+}
+
+// 新增一行（整合第②步颜色 UI + 第③步属性值多选；仅 UI，不应用样式）
+function addStyleRow() {
+  const bound = boundStyleType[currentStyleAttr];
+  if (!bound || bound === 'none') {
+    alert('请先选择样式类型并“确认绑定”。');
+    return;
+  }
+
+  const bucket = ensureBucket(currentStyleAttr);
+  const rule = {
+    id: genId(),
+    type: bound,            // 'fontFamily' | 'fontColor' | ...
+    style: {},              // 样式值（字体名 / 颜色 HEX）
+    values: []              // 应用到的“属性值”集合（多选）
+  };
+
+  // 给新行一个合理的默认值，便于直观可见
+  if (bound === 'fontFamily') {
+    rule.style.fontFamily = ''; // 让用户自己选
+  } else {
+    rule.style[bound] = '#000000'; // 颜色默认黑
+  }
+
+  bucket.push(rule);
+  renderRuleRow(currentStyleAttr, rule);
+}
+
+
+/************ 样式行-属性选择（仅交互，先不应用 CSS） ************/
+let attrPickerEditing = { rowId: null, attrKey: null };
+let attrPickerChoices = null;
+
+function openAttrPicker(rowId, attrKey) {
+  attrPickerEditing = { rowId, attrKey };
+
+  const modal = document.getElementById('attr-picker-window');
+  const title = document.getElementById('attr-picker-title');
+  const hint  = document.getElementById('attr-picker-hint');
+  const sel   = document.getElementById('attr-picker-options');
+
+  const cn = (window.attributeLabels && window.attributeLabels[attrKey]) || attrKey;
+
+  title.textContent = '选择应用的属性值';
+  hint.textContent  = cn + '：可多选，可搜索';
+
+  // 可选：把“属性值：”三字也换成中文属性名
+  const attrNameSpan = document.getElementById('attr-picker-attrname');
+  if (attrNameSpan) attrNameSpan.textContent = cn;
+
+  // 清掉旧的 Choices 实例 & 旧选项
+  if (attrPickerChoices) {
+    attrPickerChoices.destroy();
+    attrPickerChoices = null;
+  }
+  sel.innerHTML = '';
+
+  // 预选：从持久规则里取（需要你已实现 findRule / styleRules）
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  const pre  = (rule && Array.isArray(rule.values)) ? rule.values : [];
+
+  // 候选集：复用过滤系统
+  const all = (typeof getFilterOptionsForKey === 'function')
+    ? (getFilterOptionsForKey(attrKey) || [])
+    : (window.allOptions?.[attrKey] || []);
+
+  // 跨行去重：排除“同一属性、其它行”已占用的值，但保留本行已选，避免看不到
+  const takenByOthers = (typeof getTakenValues === 'function')
+    ? getTakenValues(attrKey, rowId)
+    : new Set();
+
+  const options = all.filter(v => pre.includes(v) || !takenByOthers.has(v));
+
+  // 构建 <option>，把本行已选的设为 selected，供 Choices 初始化识别
+  options.forEach(v => {
+    sel.appendChild(new Option(v, v, /*defaultSelected*/ false, /*selected*/ pre.includes(v)));
+  });
+
+  // 初始化 Choices（可搜索+多选标签）
+  if (window.Choices) {
+    attrPickerChoices = new Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+
+  // 展示弹窗
+  modal.style.display = 'block';
+}
+
+
+function confirmAttrPicker() {
+  const { rowId, attrKey } = attrPickerEditing || {};
+  const sel = document.getElementById('attr-picker-options');
+
+  // 兜底：编辑状态或控件缺失就直接收起
+  if (!rowId || !attrKey || !sel) {
+    document.getElementById('attr-picker-window').style.display = 'none';
+    attrPickerEditing = { rowId: null, attrKey: null };
+    return;
+  }
+
+  // 读取当前选择并去重
+  const vals = Array.from(sel.selectedOptions).map(o => o.value);
+  const uniqueVals = Array.from(new Set(vals));
+
+  // 终检：与其他行冲突拦截（即使 open 时已过滤，这里再保险一次）
+  if (typeof getTakenValues === 'function') {
+    const takenByOthers = getTakenValues(attrKey, rowId); // Set
+    const conflict = uniqueVals.find(v => takenByOthers.has(v));
+    if (conflict) {
+      alert(`“${conflict}” 已被同属性的其他样式行占用，请取消或更换。`);
+      return;
+    }
+  }
+
+  // 写回到持久规则
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  if (!rule) {
+    // 没找到对应规则行就直接收起（避免顶层 return）
+    document.getElementById('attr-picker-window').style.display = 'none';
+    attrPickerEditing = { rowId: null, attrKey: null };
+    return;
+  }
+  rule.values = uniqueVals;
+
+  // 如仍保留了旧的行内缓存对象，也同步一下（可选）
+  if (window.styleRowSelections) {
+    window.styleRowSelections[rowId] = uniqueVals;
+  }
+
+  // 回填标签
+  if (typeof renderRowAttrChips === 'function') {
+    renderRowAttrChips(rowId, uniqueVals);
+  }
+
+  // 关闭弹窗并重置编辑态
+  document.getElementById('attr-picker-window').style.display = 'none';
+  attrPickerEditing = { rowId: null, attrKey: null };
+}
+
+
+  // 读取某一行的“样式键”，用于“具体样式本身”去重：styleType|styleValue
+function readRowStyleKey(rowEl) {
+  const type = rowEl.querySelector('td:first-child')?.dataset?.styleType || ''; // 'fontFamily'/'fontColor'...
+  let value = '';
+  const td = rowEl.querySelector('td:first-child');
+  if (!td) return `${type}|`;
+
+  // 字体：select
+  const sel = td.querySelector('select');
+  if (sel) value = sel.value || '';
+
+  // 颜色：input[type=color]
+  const color = td.querySelector('input[type="color"]');
+  if (color) value = color.value || value;
+
+  return `${type}|${value}`;
+}
+
+// 集合相等：用于判断“同样式值 + 同一组属性值”是否重复
+function isSameSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a), sb = new Set(b);
+  for (const v of sa) if (!sb.has(v)) return false;
+  return true;
+}
+
+// 统计同一属性(attrKey)下，除某行外已被占用的属性值（跨行去重）
+function getTakenValues(attrKey, exceptRowId) {
+  const taken = new Set();
+
+  // 找到同一属性类别（如 'EventType'）下的所有样式行
+  const rows = document.querySelectorAll(
+    `#styleTableBody tr[data-attr-key="${attrKey}"]`
+  );
+
+  rows.forEach(tr => {
+    const rid = tr.dataset.rowId;
+    if (rid === exceptRowId) return;              // 跳过当前正在编辑的行
+
+    // 关键：从全局行选择表里取出该行已选择的属性值数组
+    const vals = (window.styleRowSelections?.[rid]) || [];
+
+    // 累加到已占用集合
+    vals.forEach(v => {
+      if (v != null && v !== '') taken.add(String(v));
+    });
+  });
+
+  return taken;
+}
+
+
+
+
+
+function closeAttrPicker() {
+  document.getElementById('attr-picker-window').style.display = 'none';
+}
+
+
+
+// —— 全选：把弹窗当前下拉（已过滤后的）所有选项选中 ——
+// 兼容：有 Choices.js 时用实例；没有就设置 <option>.selected
+// 全选：把当前下拉里的所有可选项立即设为选中，并同步 Choices UI
+// 全选：立即把所有可选值选中，并同步 Choices 的 UI
+function selectAllInAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  const vals = Array.from(sel.options).map(o => o.value).filter(Boolean);
+
+  if (attrPickerChoices) { // ✅ 直接用变量，不用 window.*
+    // 先清掉已有 token
+    attrPickerChoices.removeActiveItems();
+
+    // 保障底层 option 也同步为选中
+    Array.from(sel.options).forEach(o => { o.selected = vals.includes(o.value); });
+
+    // 再让 Choices 生成 token（不同版本 API 兼容处理）
+    if (vals.length) {
+      if (typeof attrPickerChoices.setChoiceByValue === 'function') {
+        attrPickerChoices.setChoiceByValue(vals);
+      } else if (typeof attrPickerChoices.setValue === 'function') {
+        attrPickerChoices.setValue(vals);
+      }
+    }
+  } else {
+    // 没用 Choices 的退化情况
+    Array.from(sel.options).forEach(o => { o.selected = true; });
+  }
+
+  // 触发一次 change，确保 UI/状态同步
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// 全不选：清空选中，并同步 Choices 的 UI
+function clearAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  if (attrPickerChoices) {
+    attrPickerChoices.removeActiveItems();
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+  } else {
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+  }
+
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+
+// 事件绑定（放在脚本末尾那堆 addEventListener 附近）
+document.getElementById('attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
+document.getElementById('attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
+
+// 把选中的属性值渲染为“标签”
+function renderRowAttrChips(rowId, values) {
+  const tr  = document.querySelector(`#styleTableBody tr[data-row-id="${rowId}"]`);
+  if (!tr) return;
+  const box = tr.querySelector('.attr-chips');
+  if (!box) return;
+
+  const list = Array.isArray(values) ? values : [];
+  box.innerHTML = '';
+
+  if (list.length === 0) {
+    box.innerHTML = '<span style="color:#999;">（未选择）</span>';
+    return;
+  }
+
+  list.forEach(v => {
+    const tag = document.createElement('span');
+    tag.textContent = v;
+    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    box.appendChild(tag);
+  });
+}
+
+
+// 绑定弹窗按钮
+document.getElementById('attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
+document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
+
+  // 根据类型构造控件（这里只造 UI，暂不写任何样式）
+function buildStyleControl(type) {
+  const wrap = document.createElement('div');
+
+  // ====== 字体族 ======
+  if (type === 'fontFamily') {
+    const fontSel = document.createElement('select');
+    fontSel.innerHTML = `
+      <option value="">请选择字体</option>
+      <option value="STCaiyun">华文彩云 (STCaiyun)</option>
+      <option value="FZShuTi">方正舒体 (FZShuTi)</option>
+      <option value="FZYaoti">方正姚体 (FZYaoti)</option>
+      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
+      <option value="DengXian">等线 (DengXian)</option>
+      <option value="LiSu">隶书 (LiSu)</option>
+      <option value="YouYuan">幼圆 (YouYuan)</option>
+      <option value="SimSun">宋体 (SimSun)</option>
+      <option value="SimHei">黑体 (SimHei)</option>
+      <option value="KaiTi">楷体 (KaiTi)</option>
+    `;
+    wrap.appendChild(fontSel);
+    return wrap;
+  }
+
+  // ====== 颜色类：fontColor / borderColor / backgroundColor / lineColor ======
+  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+    wrap.className = 'color-ui';
+
+    // 1) 原生取色器
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = '#000000';
+    color.setAttribute('aria-label', '选择颜色');
+
+    // 2) HEX 输入
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.placeholder = '#RRGGBB';
+    hex.value = color.value.toUpperCase();
+    hex.inputMode = 'text';
+    hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
+
+    // 规范化 & 校验
+    function normalizeHex(v) {
+      let s = String(v || '').trim();
+      if (!s) return null;
+      if (s[0] !== '#') s = '#' + s;
+      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
+        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
+      }
+      if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
+      return null;
+    }
+
+    // 同步：取色器 -> HEX
+    color.addEventListener('input', () => {
+      hex.value = color.value.toUpperCase();
+      // 注意：这里不直接改 rule.style，renderRuleRow 里有监听会写回
+    });
+
+    // 同步：HEX -> 取色器（无效输入回退）
+    hex.addEventListener('change', () => {
+      const n = normalizeHex(hex.value);
+      if (n) {
+        hex.value = n;
+        if (color.value.toUpperCase() !== n) color.value = n;
+      } else {
+        hex.value = color.value.toUpperCase();
+      }
+      // 注意：renderRuleRow 里对 hex 的 'change' 有写回 rule.style
+    });
+
+    wrap.appendChild(color);
+    wrap.appendChild(hex);
+
+    // 3) 预设色块（点击后同时触发 input/change，让上面的监听写回 rule.style）
+    const sw = document.createElement('div');
+    sw.className = 'swatches';
+
+    const palette = Array.isArray(window.PRESET_COLORS) && window.PRESET_COLORS.length
+      ? window.PRESET_COLORS
+      : [
+          { name: 'Amber-500', hex: '#F59E0B' },
+          { name: 'Violet-500', hex: '#8B5CF6' },
+          { name: 'Sky-500',   hex: '#0EA5E9' },
+          { name: 'Rose-500',  hex: '#F43F5E' },
+          { name: 'Lime-500',  hex: '#84CC16' },
+          { name: 'Zinc-800',  hex: '#27272A' }
+        ];
+
+    palette.forEach(c => {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.title = `${c.name} ${c.hex}`;
+      s.style.cssText = 'display:inline-block;width:18px;height:18px;border-radius:4px;margin:4px;cursor:pointer;border:1px solid rgba(0,0,0,.15);';
+      s.style.background = c.hex;
+      s.addEventListener('click', () => {
+        const val = String(c.hex).toUpperCase();
+        color.value = val;
+        hex.value = val;
+        // 关键：分发事件，触发 renderRuleRow 里绑定的监听器去写回 rule.style
+        color.dispatchEvent(new Event('input',  { bubbles: true }));
+        hex.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      sw.appendChild(s);
+    });
+    wrap.appendChild(sw);
+
+    return wrap;
+  }
+
+  // 其他类型占位
+  wrap.textContent = type + '（待配置）';
+  return wrap;
+}
+
+
+// 确认按钮
+function confirmStyle() {
+  // 先把状态构建 &（可选）持久化
+  const state = buildStyleStateFromUI();
+  try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
+
+  // 关闭面板（先关 UI，下一帧再注入样式，避免关闭面板插入/修改样式标签的竞态）
+  const root = document.getElementById('style-window');
+  if (root) root.style.display = 'none';
+
+  // 下一帧注入样式（保证 <style> 顺序在最后）
+  requestAnimationFrame(() => {
+    window.__styleEngine?.applyStyleState(state, {
+      selectorBase: '.vis-item.event, .vis-item-content.event',
+      titleSelector: '.event-title'
+    });
+  });
+}
+
+
+// === A. 把面板当前内存 → 引擎需要的 state 结构 ===
+function buildStyleStateFromUI() {
+  const toEngineKey = (t) => ({
+    font: 'fontFamily',
+    fontFamily: 'fontFamily',
+    fontColor: 'textColor',
+    backgroundColor: 'bgColor',
+    borderColor: 'borderColor',
+    lineColor: 'borderColor', // 线条色并入边框色（你也可以以后单独扩展）
+    none: 'none'
+  }[t] || t);
+
+  // 1) 绑定类型
+  const boundTypes = {};
+  for (const [attr, t] of Object.entries(boundStyleType)) {
+    boundTypes[attr] = toEngineKey(t || 'none');
+  }
+
+  // 2) 具体规则：attr -> value -> { textColor/bgColor/borderColor/fontFamily }
+  const rules = {};
+  for (const [attr, rows] of Object.entries(styleRules)) {
+    if (!rows || rows.length === 0) continue;
+    const attrType = boundTypes[attr];
+    if (!attrType || attrType === 'none') continue;
+
+    for (const row of rows) {
+      const k = toEngineKey(row.type);
+      const st = row.style || {};
+      const values = Array.isArray(row.values) ? row.values : [];
+      values.forEach((val) => {
+        if (!val) return;
+        (rules[attr] ||= {});
+        (rules[attr][val] ||= {});
+        if (k === 'textColor')   rules[attr][val].textColor   = st.fontColor || st.textColor || '#000000';
+        if (k === 'bgColor')     rules[attr][val].bgColor     = st.backgroundColor || st.bgColor;
+        if (k === 'borderColor') rules[attr][val].borderColor = st.borderColor || st.lineColor;
+        if (k === 'fontFamily')  rules[attr][val].fontFamily  = st.fontFamily;
+      });
+    }
+  }
+
+  return { version: 1, boundTypes, rules };
+}
+
+// === B. 一键应用当前样式（可选：同时保存到 localStorage） ===
+function applyCurrentStyles({ persist = true } = {}) {
+  const state = buildStyleStateFromUI();
+
+  // 可选：持久化（若你已经接了 __styleState，也可以用它）
+  if (persist) {
+    try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
+  }
+
+  // 应用：把 state 交给样式引擎（依赖前面已接好的 template/.event/.event-title）
+  window.__styleEngine?.applyStyleState(state, {
+    selectorBase: '.vis-item.event',
+    titleSelector: '.event-title'
+  });
+}
+
+  document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
+document.getElementById('style-reset-btn')  ?.addEventListener('click', onResetBind);
+  // 让内联 onclick 能找到这些函数（显式挂到全局）
+window.openStyleWindow   = openStyleWindow;
+window.onStyleTypeChange = onStyleTypeChange;
+window.onConfirmBind     = onConfirmBind;
+window.onResetBind       = onResetBind;
+window.addStyleRow       = addStyleRow;
+window.confirmStyle      = confirmStyle;
+window.closeStyleWindow  = closeStyleWindow;
+
+</script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
