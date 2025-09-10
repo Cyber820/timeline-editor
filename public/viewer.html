@@ -353,6 +353,7 @@ function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
 
+
 window.addEventListener('style:ready', () => {
   fetch(ENDPOINT)
     .then(res => res.json())
@@ -434,6 +435,9 @@ window.addEventListener('style:ready', () => {
         }
       );
 
+      // 🔧 TEMP：清掉旧版样式配置（只为迁移一次，刷新后请删除此行）
+      localStorage.removeItem('timelineStyle.v1');
+
       // 初始化后先应用一次已保存样式（若有）
       try {
         const saved = localStorage.getItem('timelineStyle.v1');
@@ -449,6 +453,7 @@ window.addEventListener('style:ready', () => {
       }
     });
 });
+
 
 // ← 正确关闭 then(data => { ... })
 
