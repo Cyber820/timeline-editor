@@ -48,18 +48,21 @@ export function compileStyleRules(styleState, opts = {}) {
         ? `${selectorBase}[data-Tag~=${v}]`
         : `${selectorBase}[data-${attr}=${v}]`;
 
+      // 文字/背景/边框/字体
       if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
       if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
       if (type === 'borderColor' && conf.borderColor) css += `${baseSel}{border-color:${conf.borderColor};border-style:solid;}\n`;
-
-      // ✅ 新增：线条/圆点颜色（“框到轴线”的连线，而不是外框）
-      if (type === 'lineColor'   && conf.lineColor) {
-        css += `${baseSel} .vis-line{background-color:${conf.lineColor};border-color:${conf.lineColor};}\n`;
-        css += `${baseSel} .vis-dot{background-color:${conf.lineColor};border-color:${conf.lineColor};}\n`;
-      }
-
       if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
+
+      // ✅ 光晕颜色（halo）
+      if (type === 'haloColor' && conf.haloColor) {
+        const rgba = hexToRGBA(conf.haloColor, 0.35); // 透明度可调
+        // 外发光 + 细描边
+        css += `${baseSel}{box-shadow: 0 0 0 2px ${rgba}, 0 0 12px 2px ${rgba};}\n`;
+        // 选中态略强化，避免被主题覆盖
+        css += `${baseSel}.vis-selected{box-shadow: 0 0 0 2px ${rgba}, 0 0 14px 3px ${rgba};}\n`;
+      }
     }
   }
   return css;
@@ -86,6 +89,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
