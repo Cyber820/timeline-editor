@@ -1,6 +1,6 @@
 // src/style/engine.js
 export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
-const DEFAULT_BORDER_WIDTH = 6; // ← 想要的全局边框粗细（px）
+const DEFAULT_BORDER_WIDTH = 4; // ← 想要的全局边框粗细（px）
 
 /** 给事件外层元素打 data-* 标，供 CSS 规则匹配 */
 export function attachEventDataAttrs(el, item) {
@@ -104,6 +104,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
