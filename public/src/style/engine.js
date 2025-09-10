@@ -56,13 +56,30 @@ export function compileStyleRules(styleState, opts = {}) {
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
 
       // ✅ 光晕颜色（halo）
-      if (type === 'haloColor' && conf.haloColor) {
-        const rgba = hexToRGBA(conf.haloColor, 0.35); // 透明度可调
-        // 外发光 + 细描边
-        css += `${baseSel}{box-shadow: 0 0 0 2px ${rgba}, 0 0 12px 2px ${rgba};}\n`;
-        // 选中态略强化，避免被主题覆盖
-        css += `${baseSel}.vis-selected{box-shadow: 0 0 0 2px ${rgba}, 0 0 14px 3px ${rgba};}\n`;
-      }
+  if (type === 'haloColor' && conf.haloColor) {
+  const rgbaStrong = hexToRGBA(conf.haloColor, 0.45); // 内圈更实
+  const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30); // 外圈更柔
+
+  // 让阴影不被裁掉（有些主题会给 .vis-item 设 overflow:hidden）
+  css += `${baseSel}{overflow:visible !important;}\n`;
+
+  // 三层光晕：细描边 + 明显的近光环 + 柔和外扩
+  css += `${baseSel}{` +
+         `box-shadow:` +
+           `0 0 0 4px ${rgbaStrong},` +         /* 细描边（4px） */
+           `0 0 0 10px ${rgbaSoft},` +          /* 近光环（向外10px） */
+           `0 0 24px 12px ${rgbaSoft}` +        /* 外扩柔光（模糊24、扩散12） */
+         ` !important;}\n`;
+
+  // 选中态再略加强，避免被主题覆盖
+  css += `${baseSel}.vis-selected{` +
+         `box-shadow:` +
+           `0 0 0 5px ${rgbaStrong},` +
+           `0 0 0 12px ${rgbaSoft},` +
+           `0 0 28px 14px ${rgbaSoft}` +
+         ` !important;}\n`;
+}
+
     }
   }
   return css;
@@ -89,6 +106,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
