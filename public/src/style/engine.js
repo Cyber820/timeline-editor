@@ -34,7 +34,7 @@ function hexToRGBA(hex, a = 0.35) {
 // src/style/engine.js
 
 
-function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
+
 
 // ---- 你的函数（放在 src/style/engine.js，作为 ESM 导出）----
 export function compileStyleRules(styleState, opts = {}) {
@@ -104,6 +104,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
