@@ -349,6 +349,7 @@ function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
+
 window.addEventListener('style:ready', () => {
   fetch(ENDPOINT)
     .then(res => res.json())
@@ -372,7 +373,7 @@ window.addEventListener('style:ready', () => {
         const Status          = event.Status          ?? event.status          ?? pick('状态');
         const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
 
-        // ✅ 新增：Tag（支持数组/逗号分隔/为空）
+        // Tag（支持数组/逗号分隔）
         const TagRaw = event.Tag ?? event.tag ?? pick('标签');
         const Tag = Array.isArray(TagRaw)
           ? TagRaw
@@ -399,13 +400,12 @@ window.addEventListener('style:ready', () => {
           content: contentText,
           start: Start,
           end: End || undefined,
-          title: tooltipHtml, // vis 会用这个作为 tooltip
-          EventType, Region, Platform, Company, Status, ConsolePlatform,
-          Tag // ← 提供给 template 打 data-Tag
+          title: tooltipHtml,
+          EventType, Region, Platform, Company, Status, ConsolePlatform, Tag
         };
       });
 
-      // ✅ 初始化 Timeline，加入 template 钩子
+      // 初始化 Timeline（保留你的配置）
       timeline = new vis.Timeline(
         document.getElementById("timeline"),
         originalItems,
@@ -419,26 +419,65 @@ window.addEventListener('style:ready', () => {
           zoomKey: "ctrlKey",
           stack: true,
 
-          // ⭐ 关键：每条事件渲染时，为容器加 data-* 与类名，并返回内容 DOM
-template: (item, element) => {
-  // ✅ 找到真正的外层容器 .vis-item（有些版本传进来的是 .vis-item-content）
-  const host = element?.closest?.('.vis-item') || element;
-  if (host && window.__styleEngine) {
-    window.__styleEngine.attachEventDataAttrs(host, item); // 在 .vis-item 上打 data-*
-    host.classList.add('event');                            // .vis-item.event
-  }
-
-  // 你的内容区保持不变
-  const root = document.createElement('div');
-  const h4 = document.createElement('h4');
-  h4.className = 'event-title';
-  h4.textContent = item.content || '(无标题)';
-  root.appendChild(h4);
-  return root;
-}
-
+          // 关键：把 data-* 打到外层 .vis-item
+          template: (item, element) => {
+            const host = element?.closest?.('.vis-item') || element;
+            if (host && window.__styleEngine) {
+              window.__styleEngine.attachEventDataAttrs(host, item);
+              host.classList.add('event'); // .vis-item.event
+            }
+            const root = document.createElement('div');
+            const h4 = document.createElement('h4');
+            h4.className = 'event-title';
+            h4.textContent = item.content || '(无标题)';
+            root.appendChild(h4);
+            return root;
+          }
         }
       );
+
+      // ---- 新增：初始化后先应用一次“已保存样式”（若有）----
+      try {
+        const saved = localStorage.getItem('timelineStyle.v1');
+        if (saved) {
+          const state = JSON.parse(saved);
+          window.__styleEngine?.applyStyleState(state, {
+            // 兼容 .vis-item-content.event（双保险）
+            selectorBase: '.vis-item.event, .vis-item-content.event',
+            titleSelector: '.event-title'
+          });
+        }
+      } catch (e) {
+        console.warn('[style] load saved style failed:', e);
+      }
+
+      // ---- 新增：绑定“确定/保存并应用”按钮，点击立即生效 ----
+      // 请把下面的选择器替换成你页面里“确定/保存”的真实 ID（任选一个命中即可）
+      const confirmBtn = document.querySelector('#style-confirm, #style-confirm-btn, #style-save');
+      if (confirmBtn && !confirmBtn.dataset.bound) {
+        confirmBtn.addEventListener('click', () => {
+          // 从当前面板内存生成全量状态 → 注入 CSS → 保存 localStorage
+          applyCurrentStyles({ persist: true });
+
+          // 关闭面板（若你有 closeStyleWindow 就用它）
+          const root = document.getElementById('style-window');
+          if (root) root.style.display = 'none';
+        });
+        confirmBtn.dataset.bound = '1';
+      }
+
+      // （可选）绑定“重置”按钮：清空某属性后也立即应用全量样式
+      const resetBtn = document.querySelector('#style-reset, #style-reset-btn');
+      if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.addEventListener('click', () => {
+          // 你的 onResetBind 会改内存；我们随后把“剩余配置”再次编译应用
+          setTimeout(() => applyCurrentStyles({ persist: true }), 0);
+        });
+        resetBtn.dataset.bound = '1';
+      }
+    });
+});
+
 
       // ✅ 初始化后立即应用当前样式（没有配置也不会报错）
       const state = window.__styleState?.getStyleState?.() || { version:1, boundTypes:{}, rules:{} };
@@ -776,10 +815,17 @@ function openStyleWindow(attr) {
 // 点击“重置”：清空该属性的绑定与行
 // 关闭/保存：现在变成“保存并应用 + 关闭面板”
 function confirmStyle() {
+  // 1) 生成全量样式状态 → 注入 CSS → 保存到 localStorage
   applyCurrentStyles({ persist: true });
-  document.getElementById('style-window').style.display = 'none';
-}
 
+  // 2) 关闭面板（用你已有的关闭函数即可）
+  if (typeof closeStyleWindow === 'function') {
+    closeStyleWindow();
+  } else {
+    const root = document.getElementById('style-window');
+    if (root) root.style.display = 'none';
+  }
+}
 // 重置绑定：清空后立刻应用（相当于撤销该属性的所有样式）
 function onResetBind() {
   const tbody    = document.getElementById('styleTableBody');
@@ -815,6 +861,7 @@ function onResetBind() {
 
   // ⬇️ 立刻应用（并保存）
   applyCurrentStyles({ persist: true });
+
 }
 
 
