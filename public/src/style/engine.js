@@ -32,14 +32,8 @@ function hexToRGBA(hex, a = 0.35) {
 }
 /** 把样式状态编译成一段 CSS 文本 */
 // src/style/engine.js
-// 顶部确保有这些（若已存在可忽略）
-const DEFAULT_BORDER_WIDTH = 4; // 全局默认边框粗细 px
-function hexToRGBA(hex, a = 0.35) {
-  const s = String(hex || '').replace('#','').trim();
-  const to255 = (h) => parseInt(h.length===1 ? h+h : h, 16);
-  const r = to255(s.slice(0,2) || '0'), g = to255(s.slice(2,4) || '0'), b = to255(s.slice(4,6) || '0');
-  return `rgba(${r},${g},${b},${a})`;
-}
+
+
 function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
 
 // ---- 你的函数（放在 src/style/engine.js，作为 ESM 导出）----
@@ -110,6 +104,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
