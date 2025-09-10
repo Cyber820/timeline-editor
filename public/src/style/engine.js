@@ -22,6 +22,7 @@ export function attachEventDataAttrs(el, item) {
 function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
 
 /** 把样式状态编译成一段 CSS 文本 */
+// src/style/engine.js
 export function compileStyleRules(styleState, opts = {}) {
   const selectorBase = opts.selectorBase || '.vis-item.event';
   const titleSel     = opts.titleSelector || '.event-title';
@@ -32,6 +33,7 @@ export function compileStyleRules(styleState, opts = {}) {
     const type = styleState?.boundTypes?.[attr];
     if (!type || type === 'none') continue;
     const map = styleState?.rules?.[attr] || {};
+
     for (const [val, conf] of Object.entries(map)) {
       const v = `"${cssEscape(val)}"`;
       const baseSel = attr === 'Tag'
@@ -41,12 +43,20 @@ export function compileStyleRules(styleState, opts = {}) {
       if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
       if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
       if (type === 'borderColor' && conf.borderColor) css += `${baseSel}{border-color:${conf.borderColor};border-style:solid;}\n`;
-      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`; // ← 新增
+
+      // ✅ 新增：线条/圆点颜色（“框到轴线”的连线，而不是外框）
+      if (type === 'lineColor'   && conf.lineColor) {
+        css += `${baseSel} .vis-line{background-color:${conf.lineColor};border-color:${conf.lineColor};}\n`;
+        css += `${baseSel} .vis-dot{background-color:${conf.lineColor};border-color:${conf.lineColor};}\n`;
+      }
+
+      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
     }
   }
   return css;
 }
+
 
 
 /** 把 CSS 文本注入/更新到 <style id="user-style-rules"> */
@@ -68,5 +78,6 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
