@@ -55,13 +55,18 @@ export function injectUserStyle(css) {
   if (!el) {
     el = document.createElement('style');
     el.id = 'user-style-rules';
-    document.head.appendChild(el);
+  } else if (el.parentNode) {
+    // 先移除，等会儿再 append，确保总是在 <head> 的最后
+    el.parentNode.removeChild(el);
   }
   el.textContent = css || '';
+  document.head.appendChild(el); // 放到最后，压过其它样式
 }
+
 
 /** 入口：根据状态直接应用样式（编译 + 注入） */
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
