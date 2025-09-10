@@ -350,6 +350,7 @@ function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
 
+
 window.addEventListener('style:ready', () => {
   fetch(ENDPOINT)
     .then(res => res.json())
@@ -373,14 +374,10 @@ window.addEventListener('style:ready', () => {
         const Status          = event.Status          ?? event.status          ?? pick('状态');
         const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
 
-        // Tag（支持数组/逗号分隔）
         const TagRaw = event.Tag ?? event.tag ?? pick('标签');
         const Tag = Array.isArray(TagRaw)
           ? TagRaw
-          : String(TagRaw || '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean);
+          : String(TagRaw || '').split(',').map(s => s.trim()).filter(Boolean);
 
         const tooltipHtml = blob
           ? blob.replace(/\n/g, '<br>')
@@ -405,7 +402,7 @@ window.addEventListener('style:ready', () => {
         };
       });
 
-      // 初始化 Timeline（保留你的配置）
+      // 初始化 Timeline
       timeline = new vis.Timeline(
         document.getElementById("timeline"),
         originalItems,
@@ -418,13 +415,11 @@ window.addEventListener('style:ready', () => {
           verticalScroll: true,
           zoomKey: "ctrlKey",
           stack: true,
-
-          // 关键：把 data-* 打到外层 .vis-item
           template: (item, element) => {
             const host = element?.closest?.('.vis-item') || element;
             if (host && window.__styleEngine) {
               window.__styleEngine.attachEventDataAttrs(host, item);
-              host.classList.add('event'); // .vis-item.event
+              host.classList.add('event');
             }
             const root = document.createElement('div');
             const h4 = document.createElement('h4');
@@ -436,13 +431,12 @@ window.addEventListener('style:ready', () => {
         }
       );
 
-      // ---- 新增：初始化后先应用一次“已保存样式”（若有）----
+      // 初始化后应用一次已保存样式
       try {
         const saved = localStorage.getItem('timelineStyle.v1');
         if (saved) {
           const state = JSON.parse(saved);
           window.__styleEngine?.applyStyleState(state, {
-            // 兼容 .vis-item-content.event（双保险）
             selectorBase: '.vis-item.event, .vis-item-content.event',
             titleSelector: '.event-title'
           });
@@ -451,43 +445,30 @@ window.addEventListener('style:ready', () => {
         console.warn('[style] load saved style failed:', e);
       }
 
-      // ---- 新增：绑定“确定/保存并应用”按钮，点击立即生效 ----
-      // 请把下面的选择器替换成你页面里“确定/保存”的真实 ID（任选一个命中即可）
+      // 绑定“确定/保存并应用”
       const confirmBtn = document.querySelector('#style-confirm, #style-confirm-btn, #style-save');
       if (confirmBtn && !confirmBtn.dataset.bound) {
         confirmBtn.addEventListener('click', () => {
-          // 从当前面板内存生成全量状态 → 注入 CSS → 保存 localStorage
           applyCurrentStyles({ persist: true });
-
-          // 关闭面板（若你有 closeStyleWindow 就用它）
-          const root = document.getElementById('style-window');
-          if (root) root.style.display = 'none';
+          // 关闭面板
+          if (typeof closeStyleWindow === 'function') closeStyleWindow();
+          else document.getElementById('style-window')?.style && (document.getElementById('style-window').style.display = 'none');
         });
         confirmBtn.dataset.bound = '1';
       }
 
-      // （可选）绑定“重置”按钮：清空某属性后也立即应用全量样式
+      // （可选）绑定“重置”
       const resetBtn = document.querySelector('#style-reset, #style-reset-btn');
       if (resetBtn && !resetBtn.dataset.bound) {
         resetBtn.addEventListener('click', () => {
-          // 你的 onResetBind 会改内存；我们随后把“剩余配置”再次编译应用
           setTimeout(() => applyCurrentStyles({ persist: true }), 0);
         });
         resetBtn.dataset.bound = '1';
       }
     });
-});
+}); // ← 这里只闭合一次
 
-
-      // ✅ 初始化后立即应用当前样式（没有配置也不会报错）
-      const state = window.__styleState?.getStyleState?.() || { version:1, boundTypes:{}, rules:{} };
-window.__styleEngine?.applyStyleState(state, {
-  selectorBase: '.vis-item.event, .vis-item-content.event',  // ✅ 放宽
-  titleSelector: '.event-title'
-});
-
-    });
-});// ← 正确关闭 then(data => { ... })
+// ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
