@@ -154,9 +154,12 @@
   </table>
 
 <div style="margin-top:10px; text-align:right;">
-  <button onclick="confirmStyle()" class="btn-primary">确定</button>
-  <button onclick="closeStyleWindow()">取消</button>
+  <!-- “确定”：最终保存并应用样式，同时关闭面板 -->
+  <button id="style-save" type="button" class="btn-primary" onclick="confirmStyle()">确定</button>
+  <!-- “取消”：只关闭面板 -->
+  <button id="style-cancel" type="button" onclick="closeStyleWindow()">取消</button>
 </div>
+
 
 
 </div>
@@ -349,6 +352,7 @@ function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
+
 window.addEventListener('style:ready', () => {
   fetch(ENDPOINT)
     .then(res => res.json())
@@ -372,14 +376,10 @@ window.addEventListener('style:ready', () => {
         const Status          = event.Status          ?? event.status          ?? pick('状态');
         const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
 
-        // ✅ 新增：Tag（支持数组/逗号分隔/为空）
         const TagRaw = event.Tag ?? event.tag ?? pick('标签');
         const Tag = Array.isArray(TagRaw)
           ? TagRaw
-          : String(TagRaw || '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean);
+          : String(TagRaw || '').split(',').map(s => s.trim()).filter(Boolean);
 
         const tooltipHtml = blob
           ? blob.replace(/\n/g, '<br>')
@@ -399,13 +399,13 @@ window.addEventListener('style:ready', () => {
           content: contentText,
           start: Start,
           end: End || undefined,
-          title: tooltipHtml, // vis 会用这个作为 tooltip
+          title: tooltipHtml,
           EventType, Region, Platform, Company, Status, ConsolePlatform,
-          Tag // ← 提供给 template 打 data-Tag
+          Tag
         };
       });
 
-      // ✅ 初始化 Timeline，加入 template 钩子
+      // 初始化 Timeline：把标记打到外层 .vis-item
       timeline = new vis.Timeline(
         document.getElementById("timeline"),
         originalItems,
@@ -418,31 +418,39 @@ window.addEventListener('style:ready', () => {
           verticalScroll: true,
           zoomKey: "ctrlKey",
           stack: true,
-
-          // ⭐ 关键：每条事件渲染时，为容器加 data-* 与类名，并返回内容 DOM
           template: (item, element) => {
-            if (element && window.__styleEngine) {
-              window.__styleEngine.attachEventDataAttrs(element, item); // data-EventType / data-Tag 等
-              element.classList.add('event'); // 统一锚点：.vis-item.event
+            const host = element?.closest?.('.vis-item') || element; // 外层容器
+            if (host && window.__styleEngine) {
+              window.__styleEngine.attachEventDataAttrs(host, item);
+              host.classList.add('event'); // .vis-item.event
             }
             const root = document.createElement('div');
             const h4 = document.createElement('h4');
             h4.className = 'event-title';
             h4.textContent = item.content || '(无标题)';
             root.appendChild(h4);
-            return root; // 也可以 return 字符串 HTML
+            return root;
           }
         }
       );
 
-      // ✅ 初始化后立即应用当前样式（没有配置也不会报错）
-      const state = window.__styleState?.getStyleState?.() || { version:1, boundTypes:{}, rules:{} };
-      window.__styleEngine?.applyStyleState(state, {
-        selectorBase: '.vis-item.event',
-        titleSelector: '.event-title'
-      });
+      // 初始化后先应用一次已保存样式（若有）
+      try {
+        const saved = localStorage.getItem('timelineStyle.v1');
+        if (saved) {
+          const state = JSON.parse(saved);
+          window.__styleEngine?.applyStyleState(state, {
+            selectorBase: '.vis-item.event, .vis-item-content.event',
+            titleSelector: '.event-title'
+          });
+        }
+      } catch (e) {
+        console.warn('[style] load saved style failed:', e);
+      }
     });
-});// ← 正确关闭 then(data => { ... })
+});
+
+// ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
@@ -770,9 +778,10 @@ function openStyleWindow(attr) {
 // 点击“重置”：清空该属性的绑定与行
 // 关闭/保存：现在变成“保存并应用 + 关闭面板”
 function confirmStyle() {
-  applyCurrentStyles({ persist: true });
-  document.getElementById('style-window').style.display = 'none';
+  applyCurrentStyles({ persist: true }); // 生成全量样式 -> 注入 CSS -> 保存
+  document.getElementById('style-window')?.style && (document.getElementById('style-window').style.display = 'none');
 }
+
 
 // 重置绑定：清空后立刻应用（相当于撤销该属性的所有样式）
 function onResetBind() {
@@ -1255,9 +1264,14 @@ function buildStyleControl(type) {
 
 // 确认按钮
 function confirmStyle() {
+  // 生成全量状态 → 注入 CSS →（可选）保存到 localStorage
   applyCurrentStyles({ persist: true });
-  document.getElementById('style-window').style.display = 'none';
+
+  // 关闭面板
+  const root = document.getElementById('style-window');
+  if (root) root.style.display = 'none';
 }
+
 // === A. 把面板当前内存 → 引擎需要的 state 结构 ===
 function buildStyleStateFromUI() {
   const toEngineKey = (t) => ({
