@@ -1234,12 +1234,15 @@ function buildStyleControl(type) {
     const palette = Array.isArray(window.PRESET_COLORS) && window.PRESET_COLORS.length
       ? window.PRESET_COLORS
       : [
-          { name: 'Amber-500', hex: '#F59E0B' },
-          { name: 'Violet-500', hex: '#8B5CF6' },
-          { name: 'Sky-500',   hex: '#0EA5E9' },
-          { name: 'Rose-500',  hex: '#F43F5E' },
-          { name: 'Lime-500',  hex: '#84CC16' },
-          { name: 'Zinc-800',  hex: '#27272A' }
+  { name: '琥珀',   hex: '#F59E0B' },
+  { name: '靛蓝',   hex: '#6366F1' },
+  { name: '祖母绿', hex: '#10B981' },
+  { name: '玫红',   hex: '#F43F5E' },
+  { name: '天青',   hex: '#0EA5E9' },
+  { name: '紫罗兰', hex: '#8B5CF6' },
+  { name: '青柠',   hex: '#84CC16' },
+  { name: '橙',     hex: '#F97316' },
+  { name: '洋红',   hex: '#D946EF' }
         ];
 
     palette.forEach(c => {
