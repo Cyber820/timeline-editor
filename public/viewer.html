@@ -1284,13 +1284,14 @@ function confirmStyle() {
 
 // === A. 把面板当前内存 → 引擎需要的 state 结构 ===
 function buildStyleStateFromUI() {
+  // UI 类型 -> 引擎键
   const toEngineKey = (t) => ({
     font: 'fontFamily',
     fontFamily: 'fontFamily',
     fontColor: 'textColor',
     backgroundColor: 'bgColor',
     borderColor: 'borderColor',
-    lineColor: 'borderColor', // 线条色并入边框色（你也可以以后单独扩展）
+    lineColor: 'lineColor',   // ✅ 独立出来
     none: 'none'
   }[t] || t);
 
@@ -1300,31 +1301,35 @@ function buildStyleStateFromUI() {
     boundTypes[attr] = toEngineKey(t || 'none');
   }
 
-  // 2) 具体规则：attr -> value -> { textColor/bgColor/borderColor/fontFamily }
+  // 2) 具体规则：attr -> value -> { textColor/bgColor/borderColor/lineColor/fontFamily }
   const rules = {};
   for (const [attr, rows] of Object.entries(styleRules)) {
     if (!rows || rows.length === 0) continue;
-    const attrType = boundTypes[attr];
-    if (!attrType || attrType === 'none') continue;
+    const mappedType = boundTypes[attr];
+    if (!mappedType || mappedType === 'none') continue;
 
     for (const row of rows) {
-      const k = toEngineKey(row.type);
+      const k  = toEngineKey(row.type);
       const st = row.style || {};
-      const values = Array.isArray(row.values) ? row.values : [];
-      values.forEach((val) => {
+      const vals = Array.isArray(row.values) ? row.values : [];
+
+      vals.forEach((val) => {
         if (!val) return;
         (rules[attr] ||= {});
-        (rules[attr][val] ||= {});
-        if (k === 'textColor')   rules[attr][val].textColor   = st.fontColor || st.textColor || '#000000';
-        if (k === 'bgColor')     rules[attr][val].bgColor     = st.backgroundColor || st.bgColor;
-        if (k === 'borderColor') rules[attr][val].borderColor = st.borderColor || st.lineColor;
-        if (k === 'fontFamily')  rules[attr][val].fontFamily  = st.fontFamily;
+        const slot = (rules[attr][val] ||= {});
+
+        if (k === 'textColor'   && st.fontColor)       slot.textColor   = st.fontColor;
+        if (k === 'bgColor'     && st.backgroundColor) slot.bgColor     = st.backgroundColor;
+        if (k === 'borderColor' && st.borderColor)     slot.borderColor = st.borderColor;
+        if (k === 'lineColor'   && st.lineColor)       slot.lineColor   = st.lineColor;   // ✅ 独立存储
+        if (k === 'fontFamily'  && st.fontFamily)      slot.fontFamily  = st.fontFamily;
       });
     }
   }
 
   return { version: 1, boundTypes, rules };
 }
+
 
 // === B. 一键应用当前样式（可选：同时保存到 localStorage） ===
 function applyCurrentStyles({ persist = true } = {}) {
