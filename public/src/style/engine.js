@@ -75,7 +75,7 @@ export function compileStyleRules(styleState, opts = {}) {
         const rgbaStrong = hexToRGBA(conf.haloColor, 0.45);
         const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30);
         css += `${baseSel}{overflow:visible !important;}\n`;
-        css += `${baseSel}{box-shadow:0 0 0 4px ${rgbaStrong}, 0 0 0 10px ${rgbaSoft}, 0 0 24px 12px ${rgbaSoft} !important;}\n`;
+        css += `${baseSel}{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 10px ${rgbaSoft}, 0 0 24px 12px ${rgbaSoft} !important;}\n`;
         css += `${baseSel}.vis-selected{box-shadow:0 0 0 5px ${rgbaStrong}, 0 0 0 12px ${rgbaSoft}, 0 0 28px 14px ${rgbaSoft} !important;}\n`;
       }
     }
@@ -104,6 +104,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
