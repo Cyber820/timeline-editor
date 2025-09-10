@@ -21,6 +21,14 @@ export function attachEventDataAttrs(el, item) {
 /** 简易转义，保证值能放进 CSS 选择器引号里 */
 function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
 
+function hexToRGBA(hex, a = 0.35) {
+  const s = String(hex || '').replace('#','').trim();
+  const to255 = (h) => parseInt(h.length===1 ? h+h : h, 16);
+  const r = to255(s.slice(0,2) || '0');
+  const g = to255(s.slice(2,4) || '0');
+  const b = to255(s.slice(4,6) || '0');
+  return `rgba(${r},${g},${b},${a})`;
+}
 /** 把样式状态编译成一段 CSS 文本 */
 // src/style/engine.js
 export function compileStyleRules(styleState, opts = {}) {
@@ -78,6 +86,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
