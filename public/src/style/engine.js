@@ -1,5 +1,6 @@
 // src/style/engine.js
 export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
+const DEFAULT_BORDER_WIDTH = 4; // ← 想要的全局边框粗细（px）
 
 /** 给事件外层元素打 data-* 标，供 CSS 规则匹配 */
 export function attachEventDataAttrs(el, item) {
@@ -31,6 +32,17 @@ function hexToRGBA(hex, a = 0.35) {
 }
 /** 把样式状态编译成一段 CSS 文本 */
 // src/style/engine.js
+// 顶部确保有这些（若已存在可忽略）
+const DEFAULT_BORDER_WIDTH = 4; // 全局默认边框粗细 px
+function hexToRGBA(hex, a = 0.35) {
+  const s = String(hex || '').replace('#','').trim();
+  const to255 = (h) => parseInt(h.length===1 ? h+h : h, 16);
+  const r = to255(s.slice(0,2) || '0'), g = to255(s.slice(2,4) || '0'), b = to255(s.slice(4,6) || '0');
+  return `rgba(${r},${g},${b},${a})`;
+}
+function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
+
+// ---- 你的函数（放在 src/style/engine.js，作为 ESM 导出）----
 export function compileStyleRules(styleState, opts = {}) {
   const selectorBase = opts.selectorBase || '.vis-item.event';
   const titleSel     = opts.titleSelector || '.event-title';
@@ -48,38 +60,30 @@ export function compileStyleRules(styleState, opts = {}) {
         ? `${selectorBase}[data-Tag~=${v}]`
         : `${selectorBase}[data-${attr}=${v}]`;
 
-      // 文字/背景/边框/字体
+      // 文字/背景/字体粗细/字体族
       if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
       if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
-      if (type === 'borderColor' && conf.borderColor) css += `${baseSel}{border-color:${conf.borderColor};border-style:solid;}\n`;
       if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
 
-      // ✅ 光晕颜色（halo）
-  if (type === 'haloColor' && conf.haloColor) {
-  const rgbaStrong = hexToRGBA(conf.haloColor, 0.45); // 内圈更实
-  const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30); // 外圈更柔
+      // 统一边框宽度（即便只想加粗不改色也适用）
+      if (type === 'borderColor') {
+        const parts = [];
+        if (conf.borderColor) parts.push(`border-color:${conf.borderColor};`);
+        parts.push('border-style:solid;');
+        parts.push(`border-width:${DEFAULT_BORDER_WIDTH}px;`);
+        parts.push('box-sizing:border-box;');
+        css += `${baseSel}{${parts.join('')}}\n`;
+      }
 
-  // 让阴影不被裁掉（有些主题会给 .vis-item 设 overflow:hidden）
-  css += `${baseSel}{overflow:visible !important;}\n`;
-
-  // 三层光晕：细描边 + 明显的近光环 + 柔和外扩
-  css += `${baseSel}{` +
-         `box-shadow:` +
-           `0 0 0 4px ${rgbaStrong},` +         /* 细描边（4px） */
-           `0 0 0 10px ${rgbaSoft},` +          /* 近光环（向外10px） */
-           `0 0 24px 12px ${rgbaSoft}` +        /* 外扩柔光（模糊24、扩散12） */
-         ` !important;}\n`;
-
-  // 选中态再略加强，避免被主题覆盖
-  css += `${baseSel}.vis-selected{` +
-         `box-shadow:` +
-           `0 0 0 5px ${rgbaStrong},` +
-           `0 0 0 12px ${rgbaSoft},` +
-           `0 0 28px 14px ${rgbaSoft}` +
-         ` !important;}\n`;
-}
-
+      // 光晕（halo）
+      if (type === 'haloColor' && conf.haloColor) {
+        const rgbaStrong = hexToRGBA(conf.haloColor, 0.45);
+        const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30);
+        css += `${baseSel}{overflow:visible !important;}\n`;
+        css += `${baseSel}{box-shadow:0 0 0 4px ${rgbaStrong}, 0 0 0 10px ${rgbaSoft}, 0 0 24px 12px ${rgbaSoft} !important;}\n`;
+        css += `${baseSel}.vis-selected{box-shadow:0 0 0 5px ${rgbaStrong}, 0 0 0 12px ${rgbaSoft}, 0 0 28px 14px ${rgbaSoft} !important;}\n`;
+      }
     }
   }
   return css;
@@ -106,6 +110,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
