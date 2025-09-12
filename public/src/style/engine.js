@@ -81,7 +81,7 @@ export function compileStyleRules(styleState, opts = {}) {
 if (type === 'haloColor' && conf.haloColor) {
   // rgbaStrong：较“实”的内圈颜色（高透明度）
   // rgbaSoft  ：较“柔”的外圈颜色（低透明度）
-  const rgbaStrong = hexToRGBA(conf.haloColor, 0.7); // α=0.45（更亮）
+  const rgbaStrong = hexToRGBA(conf.haloColor, 0.2); // α=0.45（更亮）
   const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30); // α=0.30（更柔）
 
   // 一些主题会给 .vis-item 设置 overflow:hidden，导致阴影被裁掉
@@ -141,6 +141,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
