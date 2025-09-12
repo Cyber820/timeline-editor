@@ -1,6 +1,6 @@
 // src/style/engine.js
 export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
-const DEFAULT_BORDER_WIDTH = 4; // ← 想要的全局边框粗细（px）
+const DEFAULT_BORDER_WIDTH = 2; // ← 想要的全局边框粗细（px）
 
 /** 给事件外层元素打 data-* 标，供 CSS 规则匹配 */
 export function attachEventDataAttrs(el, item) {
@@ -97,7 +97,7 @@ if (type === 'haloColor' && conf.haloColor) {
       `box-shadow:` +
         `0 0 0 0px ${rgbaStrong}, ` +   // 内圈描边：清晰、贴边
         `0 0 0 0px ${rgbaSoft}, ` +    // 近光环：粗一些
-        `0 0 24px 12px ${rgbaSoft}` +   // 外圈柔光：更柔、更外扩
+        `0 0 12px 6px ${rgbaSoft}` +   // 外圈柔光：更柔、更外扩
       ` !important;` +
     `}\n`;
 
@@ -141,6 +141,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
