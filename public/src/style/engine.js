@@ -109,8 +109,8 @@ if (type === 'haloColor' && conf.haloColor) {
     `${baseSel}.vis-selected{` +
       `box-shadow:` +
         `0 0 0 0px ${rgbaStrong}, ` +  // 更粗的内圈描边
-        `0 0 0 0px ${rgbaSoft}, ` +   // 更粗的近光环
-        `0 0 14px 10px ${rgbaSoft}` +  // 更外扩的柔光
+        `0 0 0 6px ${rgbaSoft}, ` +   // 更粗的近光环
+        `0 0 28px 14px ${rgbaSoft}` +  // 更外扩的柔光
       ` !important;` +
     `}\n`;
 }
@@ -141,6 +141,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
