@@ -96,7 +96,7 @@ if (type === 'haloColor' && conf.haloColor) {
     `${baseSel}{` +
       `box-shadow:` +
         `0 0 0 0px ${rgbaStrong}, ` +   // 内圈描边：清晰、贴边
-        `0 0 0 10px ${rgbaSoft}, ` +    // 近光环：粗一些
+        `0 0 0 0px ${rgbaSoft}, ` +    // 近光环：粗一些
         `0 0 24px 12px ${rgbaSoft}` +   // 外圈柔光：更柔、更外扩
       ` !important;` +
     `}\n`;
@@ -108,8 +108,8 @@ if (type === 'haloColor' && conf.haloColor) {
   css +=
     `${baseSel}.vis-selected{` +
       `box-shadow:` +
-        `0 0 0 5px ${rgbaStrong}, ` +  // 更粗的内圈描边
-        `0 0 0 12px ${rgbaSoft}, ` +   // 更粗的近光环
+        `0 0 0 0px ${rgbaStrong}, ` +  // 更粗的内圈描边
+        `0 0 0 0px ${rgbaSoft}, ` +   // 更粗的近光环
         `0 0 28px 14px ${rgbaSoft}` +  // 更外扩的柔光
       ` !important;` +
     `}\n`;
@@ -141,6 +141,7 @@ export function injectUserStyle(css) {
 export function applyStyleState(styleState, opts) {
   injectUserStyle(compileStyleRules(styleState, opts));
 }
+
 
 
 
