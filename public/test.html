@@ -10,6 +10,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <script type="module" src="./src/app.js"></script>
   <style>
     #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
     .vis-tooltip {
@@ -123,7 +124,7 @@
       <option value="fontColor">字体颜色</option>
       <option value="borderColor">事件框颜色</option>
       <option value="backgroundColor">事件框填充色</option>
-      <option value="lineColor">连接线颜色</option>
+      <option value="haloColor">光晕颜色</option>
     </select>
   </label>
 
@@ -153,9 +154,12 @@
   </table>
 
 <div style="margin-top:10px; text-align:right;">
-  <button onclick="confirmStyle()" class="btn-primary">确定</button>
-  <button onclick="closeStyleWindow()">取消</button>
+  <!-- “确定”：最终保存并应用样式，同时关闭面板 -->
+  <button id="style-save" type="button" class="btn-primary" onclick="confirmStyle()">确定</button>
+  <!-- “取消”：只关闭面板 -->
+  <button id="style-cancel" type="button" onclick="closeStyleWindow()">取消</button>
 </div>
+
 
 
 </div>
@@ -177,16 +181,15 @@ const attributeLabels = {
 window.attributeLabels = attributeLabels;
 /*样式参数*/
 const PRESET_COLORS = [
-  { name: '红', hex: '#FF0000' },
-  { name: '橙', hex: '#FF7F00' },
-  { name: '黄', hex: '#FFFF00' },
-  { name: '绿', hex: '#00FF00' },
-  { name: '青', hex: '#00FFFF' },
-  { name: '蓝', hex: '#0000FF' },
-  { name: '紫', hex: '#8B00FF' },
-  { name: '黑', hex: '#000000' },
-  { name: '灰', hex: '#808080' },
-  { name: '白', hex: '#FFFFFF' }
+  { name: '琥珀',   hex: '#F59E0B' },
+  { name: '靛蓝',   hex: '#6366F1' },
+  { name: '祖母绿', hex: '#10B981' },
+  { name: '玫红',   hex: '#F43F5E' },
+  { name: '天青',   hex: '#0EA5E9' },
+  { name: '紫罗兰', hex: '#8B5CF6' },
+  { name: '青柠',   hex: '#84CC16' },
+  { name: '橙',     hex: '#F97316' },
+  { name: '洋红',   hex: '#D946EF' }
 ];
 
   const STYLE_LABELS = {
@@ -194,7 +197,7 @@ const PRESET_COLORS = [
   fontColor: '字体颜色',
   borderColor: '事件框颜色',
   backgroundColor: '事件框填充色',
-  lineColor: '连接线颜色',
+  haloColor: '光晕颜色',
   none: '无'
 };
 function styleLabel(key) {
@@ -348,63 +351,110 @@ function applyFilters() { filterLogic = 'and'; updateTimelineByFilter(); }
 function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 /* -------- 获取事件并渲染（关键替换区） -------- */
-fetch(ENDPOINT)
-  .then(res => res.json())
-  .then(data => {
-    originalItems = data.map((event, i) => {
-      const contentText = event.content ?? event.Title ?? '(无标题)';
-      const Start = event.Start ?? event.start ?? '';
-      const End   = event.End   ?? event.end   ?? '';
-      const blob  = (event.title ?? '').toString();
 
-      const pick = (label) => {
-        if (!blob) return '';
-        const m = new RegExp(label + '：([^\\n]+)').exec(blob);
-        return m ? m[1].trim() : '';
-      };
 
-      const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
-      const Region          = event.Region          ?? event.region          ?? pick('地区');
-      const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
-      const Company         = event.Company         ?? event.company         ?? pick('公司');
-      const Status          = event.Status          ?? event.status          ?? pick('状态');
-      const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+window.addEventListener('style:ready', () => {
+  fetch(ENDPOINT)
+    .then(res => res.json())
+    .then(data => {
+      originalItems = data.map((event, i) => {
+        const contentText = event.content ?? event.Title ?? '(无标题)';
+        const Start = event.Start ?? event.start ?? '';
+        const End   = event.End   ?? event.end   ?? '';
+        const blob  = (event.title ?? '').toString();
 
-      const tooltipHtml = blob
-        ? blob.replace(/\n/g, '<br>')
-        : [
-            `事件名称：${contentText}`,
-            `事件类型：${EventType || ''}`,
-            `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
-            `状态：${Status || ''}`,
-            `地区：${Region || ''}`,
-            `平台类型：${Platform || ''}`,
-            `主机类型：${ConsolePlatform || ''}`,
-            `公司：${Company || ''}`
-          ].join('<br>');
+        const pick = (label) => {
+          if (!blob) return '';
+          const m = new RegExp(label + '：([^\\n]+)').exec(blob);
+          return m ? m[1].trim() : '';
+        };
 
-      return {
-        id: event.id || `auto-${i + 1}`,
-        content: contentText,
-        start: Start,
-        end: End || undefined,
-        title: tooltipHtml,
-        EventType, Region, Platform, Company, Status, ConsolePlatform
-      };
+        const EventType       = event.EventType       ?? event.eventType       ?? pick('事件类型');
+        const Region          = event.Region          ?? event.region          ?? pick('地区');
+        const Platform        = event.Platform        ?? event.platform        ?? pick('平台类型');
+        const Company         = event.Company         ?? event.company         ?? pick('公司');
+        const Status          = event.Status          ?? event.status          ?? pick('状态');
+        const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? pick('主机类型');
+
+        const TagRaw = event.Tag ?? event.tag ?? pick('标签');
+        const Tag = Array.isArray(TagRaw)
+          ? TagRaw
+          : String(TagRaw || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        const tooltipHtml = blob
+          ? blob.replace(/\n/g, '<br>')
+          : [
+              `事件名称：${contentText}`,
+              `事件类型：${EventType || ''}`,
+              `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
+              `状态：${Status || ''}`,
+              `地区：${Region || ''}`,
+              `平台类型：${Platform || ''}`,
+              `主机类型：${ConsolePlatform || ''}`,
+              `公司：${Company || ''}`
+            ].join('<br>');
+
+        return {
+          id: event.id || `auto-${i + 1}`,
+          content: contentText,
+          start: Start,
+          end: End || undefined,
+          title: tooltipHtml,
+          EventType, Region, Platform, Company, Status, ConsolePlatform,
+          Tag
+        };
+      });
+
+      // 初始化 Timeline：把标记打到外层 .vis-item
+      timeline = new vis.Timeline(
+        document.getElementById("timeline"),
+        originalItems,
+        {
+          locale: "zh-cn",
+          editable: false,
+          margin: { item: 10, axis: 50 },
+          orientation: { axis: 'bottom', item: 'bottom' },
+          tooltip: { followMouse: true, overflowMethod: 'flip' },
+          verticalScroll: true,
+          zoomKey: "ctrlKey",
+          stack: true,
+          template: (item, element) => {
+            const host = element?.closest?.('.vis-item') || element; // 外层容器
+            if (host && window.__styleEngine) {
+              window.__styleEngine.attachEventDataAttrs(host, item);
+              host.classList.add('event'); // .vis-item.event
+            }
+            const root = document.createElement('div');
+            const h4 = document.createElement('h4');
+            h4.className = 'event-title';
+            h4.textContent = item.content || '(无标题)';
+            root.appendChild(h4);
+            return root;
+          }
+        }
+      );
+
+      // 🔧 TEMP：清掉旧版样式配置（只为迁移一次，刷新后请删除此行）
+      localStorage.removeItem('timelineStyle.v1');
+
+      // 初始化后先应用一次已保存样式（若有）
+      try {
+        const saved = localStorage.getItem('timelineStyle.v1');
+        if (saved) {
+          const state = JSON.parse(saved);
+          window.__styleEngine?.applyStyleState(state, {
+            selectorBase: '.vis-item.event, .vis-item-content.event',
+            titleSelector: '.event-title'
+          });
+        }
+      } catch (e) {
+        console.warn('[style] load saved style failed:', e);
+      }
     });
+});
 
-    // ✅ 把 Timeline 初始化放在 then 内部
-    timeline = new vis.Timeline(document.getElementById("timeline"), originalItems, {
-      locale: "zh-cn",
-      editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      tooltip: { followMouse: true, overflowMethod: 'flip' },
-      verticalScroll: true,
-      zoomKey: "ctrlKey",
-      stack: true
-    });
-  }); // ← 正确关闭 then(data => { ... })
+
+// ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
 fetch(ENDPOINT + '?action=options')
@@ -521,7 +571,7 @@ function renderRuleRow(attrKey, rule) {
     rule.type === 'fontColor' ||
     rule.type === 'borderColor' ||
     rule.type === 'backgroundColor' ||
-    rule.type === 'lineColor'
+    rule.type === 'haloColor'
   ) {
     const color = tdContent.querySelector('input[type="color"]');
     const hex   = tdContent.querySelector('input[type="text"]');
@@ -730,6 +780,14 @@ function openStyleWindow(attr) {
 
 
 // 点击“重置”：清空该属性的绑定与行
+// 关闭/保存：现在变成“保存并应用 + 关闭面板”
+function confirmStyle() {
+  applyCurrentStyles({ persist: true }); // 生成全量样式 -> 注入 CSS -> 保存
+  document.getElementById('style-window')?.style && (document.getElementById('style-window').style.display = 'none');
+}
+
+
+// 重置绑定：清空后立刻应用（相当于撤销该属性的所有样式）
 function onResetBind() {
   const tbody    = document.getElementById('styleTableBody');
   const typeSel  = document.getElementById('style-type');
@@ -749,7 +807,9 @@ function onResetBind() {
   }
 
   boundStyleType[currentStyleAttr] = 'none';
+  (styleRules[currentStyleAttr] || []).length = 0; // 清掉该属性下的规则行
   tbody.innerHTML = '';
+
   typeSel.value = 'none';
   stagedType = 'none';
 
@@ -758,9 +818,12 @@ function onResetBind() {
   if (addBtn)    addBtn.disabled = true;
   if (hint)      hint.textContent = '当前样式：无';
 
-  // 让其它属性重新可选该类型
-  refreshStyleTypeOptions();
+  refreshStyleTypeOptions?.();
+
+  // ⬇️ 立刻应用（并保存）
+  applyCurrentStyles({ persist: true });
 }
+
 
 
 // 仅更新临时选择；未确认前不写入绑定
@@ -1090,6 +1153,7 @@ document.getElementById('attr-picker-cancel') ?.addEventListener('click', closeA
 function buildStyleControl(type) {
   const wrap = document.createElement('div');
 
+  // ====== 字体族 ======
   if (type === 'fontFamily') {
     const fontSel = document.createElement('select');
     fontSel.innerHTML = `
@@ -1099,7 +1163,6 @@ function buildStyleControl(type) {
       <option value="FZYaoti">方正姚体 (FZYaoti)</option>
       <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
       <option value="DengXian">等线 (DengXian)</option>
-      <!-- 已按你的计划替换：隶书 / 幼圆 -->
       <option value="LiSu">隶书 (LiSu)</option>
       <option value="YouYuan">幼圆 (YouYuan)</option>
       <option value="SimSun">宋体 (SimSun)</option>
@@ -1110,63 +1173,119 @@ function buildStyleControl(type) {
     return wrap;
   }
 
-  // 颜色相关：提供 取色器 + HEX 文本框 + 预设色块（仅交互，不应用）
-  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'lineColor') {
+  // ====== 颜色类：fontColor / borderColor / backgroundColor / haloColor ======
+  if (type === 'fontColor' || type === 'borderColor' || type === 'backgroundColor' || type === 'haloColor') {
     wrap.className = 'color-ui';
 
     // 1) 原生取色器
     const color = document.createElement('input');
     color.type = 'color';
     color.value = '#000000';
+    color.setAttribute('aria-label', '选择颜色');
 
-    // 2) HEX 输入
+    // 2) HEX 输入（RGB 代码框）
     const hex = document.createElement('input');
     hex.type = 'text';
     hex.placeholder = '#RRGGBB';
     hex.value = color.value.toUpperCase();
+    hex.inputMode = 'text';
+    hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
 
-    // 同步：取色器 -> HEX
-    color.addEventListener('input', () => {
-      hex.value = color.value.toUpperCase();
-    });
-
-    // 规范化 & 校验
+    // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
     function normalizeHex(v) {
       let s = String(v || '').trim();
       if (!s) return null;
       if (s[0] !== '#') s = '#' + s;
-      if (/^#([0-9a-fA-F]{3})$/.test(s)) {
-        s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-      }
+      if (/^#([0-9a-fA-F]{3})$/.test(s)) s = '#' + s.slice(1).split('').map(ch => ch + ch).join('');
       if (/^#([0-9a-fA-F]{6})$/.test(s)) return s.toUpperCase();
       return null;
     }
+    function textOn(bg) {
+      const n = normalizeHex(bg);
+      if (!n) return '#111';
+      const r = parseInt(n.slice(1,3),16), g = parseInt(n.slice(3,5),16), b = parseInt(n.slice(5,7),16);
+      const L = 0.299*r + 0.587*g + 0.114*b;
+      return L > 180 ? '#111' : '#fff';
+    }
+    function applyPreview(v) {
+      hex.style.background = v;
+      hex.style.color = textOn(v);
+    }
+    applyPreview(hex.value);
 
-    // 同步：HEX -> 取色器（无效输入回退）
+    // —— 同步：取色器 -> HEX（实时）——
+    color.addEventListener('input', () => {
+      const v = color.value.toUpperCase();
+      hex.value = v;
+      applyPreview(v);
+      // 触发 change，交给外层监听写回 rule.style
+      hex.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // —— 同步：HEX 输入时预览 + 同步取色器 —— 
+    hex.addEventListener('input', () => {
+      const n = normalizeHex(hex.value);
+      if (n) {
+        color.value = n;
+        applyPreview(n);
+      }
+    });
+    // 失焦校正
     hex.addEventListener('change', () => {
       const n = normalizeHex(hex.value);
       if (n) {
         hex.value = n;
         color.value = n;
+        applyPreview(n);
       } else {
         hex.value = color.value.toUpperCase();
+        applyPreview(hex.value);
       }
+    });
+
+    // —— 点击/聚焦 HEX 框时弹出调色板 —— 
+    hex.addEventListener('focus', () => color.focus());
+    hex.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (typeof color.showPicker === 'function') color.showPicker();
+      else color.click();
     });
 
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块
+    // 3) 预设色块（9 个非黑白）
     const sw = document.createElement('div');
     sw.className = 'swatches';
-    PRESET_COLORS.forEach(c => {
+
+    const palette = Array.isArray(window.PRESET_COLORS) && window.PRESET_COLORS.length
+      ? window.PRESET_COLORS
+      : [
+          { name: '琥珀',   hex: '#F59E0B' },
+          { name: '靛蓝',   hex: '#6366F1' },
+          { name: '祖母绿', hex: '#10B981' },
+          { name: '玫红',   hex: '#F43F5E' },
+          { name: '天青',   hex: '#0EA5E9' },
+          { name: '紫罗兰', hex: '#8B5CF6' },
+          { name: '青柠',   hex: '#84CC16' },
+          { name: '橙',     hex: '#F97316' },
+          { name: '洋红',   hex: '#D946EF' }
+        ];
+
+    palette.forEach(c => {
       const s = document.createElement('div');
       s.className = 'swatch';
       s.title = `${c.name} ${c.hex}`;
+      s.style.cssText = 'display:inline-block;width:18px;height:18px;border-radius:4px;margin:4px;cursor:pointer;border:1px solid rgba(0,0,0,.15);';
       s.style.background = c.hex;
       s.addEventListener('click', () => {
-        color.value = c.hex;
-        hex.value = c.hex;
+        const val = String(c.hex).toUpperCase();
+        color.value = val;
+        hex.value = val;
+        applyPreview(val);
+        // 分发事件，让外层写回 rule.style
+        color.dispatchEvent(new Event('input',  { bubbles: true }));
+        hex.dispatchEvent(new Event('change', { bubbles: true }));
       });
       sw.appendChild(s);
     });
@@ -1180,9 +1299,90 @@ function buildStyleControl(type) {
   return wrap;
 }
 
+
+
 // 确认按钮
 function confirmStyle() {
-  document.getElementById('style-window').style.display = 'none';
+  // 先把状态构建 &（可选）持久化
+  const state = buildStyleStateFromUI();
+  try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
+
+  // 关闭面板（先关 UI，下一帧再注入样式，避免关闭面板插入/修改样式标签的竞态）
+  const root = document.getElementById('style-window');
+  if (root) root.style.display = 'none';
+
+  // 下一帧注入样式（保证 <style> 顺序在最后）
+  requestAnimationFrame(() => {
+    window.__styleEngine?.applyStyleState(state, {
+      selectorBase: '.vis-item.event, .vis-item-content.event',
+      titleSelector: '.event-title'
+    });
+  });
+}
+
+
+// === A. 把面板当前内存 → 引擎需要的 state 结构 ===
+function buildStyleStateFromUI() {
+  const toEngineKey = (t) => ({
+    font: 'fontFamily',
+    fontFamily: 'fontFamily',
+    fontColor: 'textColor',
+    backgroundColor: 'bgColor',
+    borderColor: 'borderColor',
+    haloColor: 'haloColor',   // ✅ 只保留 haloColor
+    none: 'none'
+  }[t] || t);
+
+  // 1) 绑定类型
+  const boundTypes = {};
+  for (const [attr, t] of Object.entries(boundStyleType)) {
+    boundTypes[attr] = toEngineKey(t || 'none');
+  }
+
+  // 2) 规则映射
+  const rules = {};
+  for (const [attr, rows] of Object.entries(styleRules)) {
+    if (!rows || rows.length === 0) continue;
+    const mappedType = boundTypes[attr];
+    if (!mappedType || mappedType === 'none') continue;
+
+    for (const row of rows) {
+      const k  = toEngineKey(row.type);
+      const st = row.style || {};
+      const vals = Array.isArray(row.values) ? row.values : [];
+
+      vals.forEach((val) => {
+        if (!val) return;
+        (rules[attr] ||= {});
+        const slot = (rules[attr][val] ||= {});
+
+        if (k === 'textColor'   && st.fontColor)       slot.textColor   = st.fontColor;
+        if (k === 'bgColor'     && st.backgroundColor) slot.bgColor     = st.backgroundColor;
+        if (k === 'borderColor' && st.borderColor)     slot.borderColor = st.borderColor;
+        if (k === 'haloColor'   && st.haloColor)       slot.haloColor   = st.haloColor; // ✅
+        if (k === 'fontFamily'  && st.fontFamily)      slot.fontFamily  = st.fontFamily;
+      });
+    }
+  }
+
+  return { version: 1, boundTypes, rules };
+}
+
+
+// === B. 一键应用当前样式（可选：同时保存到 localStorage） ===
+function applyCurrentStyles({ persist = true } = {}) {
+  const state = buildStyleStateFromUI();
+
+  // 可选：持久化（若你已经接了 __styleState，也可以用它）
+  if (persist) {
+    try { localStorage.setItem('timelineStyle.v1', JSON.stringify(state)); } catch {}
+  }
+
+  // 应用：把 state 交给样式引擎（依赖前面已接好的 template/.event/.event-title）
+  window.__styleEngine?.applyStyleState(state, {
+    selectorBase: '.vis-item.event',
+    titleSelector: '.event-title'
+  });
 }
 
   document.getElementById('style-confirm-btn')?.addEventListener('click', onConfirmBind);
@@ -1197,5 +1397,6 @@ window.confirmStyle      = confirmStyle;
 window.closeStyleWindow  = closeStyleWindow;
 
 </script>
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
