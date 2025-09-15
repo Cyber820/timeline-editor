@@ -138,9 +138,37 @@ export function injectUserStyle(css) {
 
 
 /** 入口：根据状态直接应用样式（编译 + 注入） */
-export function applyStyleState(styleState, opts) {
-  injectUserStyle(compileStyleRules(styleState, opts));
+// 远程优先 + 本地兜底
+export async function applyStyleState(styleState, opts = {}) {
+  const payload = {
+    state: styleState,
+    engineVersion: 1,
+    options: {
+      selectorBase: opts.selectorBase || '.vis-item.event, .vis-item-content.event',
+      titleSelector: opts.titleSelector || '.event-title'
+    }
+  };
+
+  try {
+    const res = await fetch('/api/compile-style', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const css = await res.text();
+    injectUserStyle(css);                    // ✅ 使用后端返回的 CSS
+  } catch (e) {
+    console.warn('[style] remote compile failed, fallback to local:', e);
+    try {
+      const css = compileStyleRules(styleState, opts); // 🛟 兜底：沿用你现在的本地编译
+      injectUserStyle(css);
+    } catch (e2) {
+      console.error('[style] local compile also failed:', e2);
+    }
+  }
 }
+
 
 
 
