@@ -29,6 +29,9 @@ function compileStyleRules(styleState, opts = {}) {
   const titleSel     = opts.titleSelector || '.event-title';
   const priority     = opts.attrPriority || ATTR_KEYS;
 
+  // 把基选择器拆成数组（支持 ".vis-item.event, .vis-item-content.event"）
+  const baseList = String(selectorBase).split(',').map(s => s.trim()).filter(Boolean);
+
   let css = '';
   for (const attr of priority) {
     const type = styleState?.boundTypes?.[attr];
@@ -37,14 +40,21 @@ function compileStyleRules(styleState, opts = {}) {
 
     for (const [val, conf] of Object.entries(map)) {
       const v = `"${cssEscape(val)}"`;
-      const baseSel = attr === 'Tag'
-        ? `${selectorBase}[data-Tag~=${v}]`
-        : `${selectorBase}[data-${attr}=${v}]`;
 
-      if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
-      if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
-      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
-      if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
+      // 逐个基选择器拼接属性过滤（Tag 用 ~=，其余用 =）
+      const filteredList = (attr === 'Tag')
+        ? baseList.map(b => `${b}[data-Tag~=${v}]`)
+        : baseList.map(b => `${b}[data-${attr}=${v}]`);
+
+      // 容器自身生效的规则（背景、边框、光晕等）
+      const sel = filteredList.join(', ');
+      // 作用到标题子的规则（文本色、字体族、粗细）
+      const selTitle = filteredList.map(s => `${s} ${titleSel}`).join(', ');
+
+      if (type === 'textColor'   && conf.textColor)   css += `${selTitle}{color:${conf.textColor};}\n`;
+      if (type === 'bgColor'     && conf.bgColor)     css += `${sel}{background-color:${conf.bgColor};}\n`;
+      if (type === 'fontFamily'  && conf.fontFamily)  css += `${selTitle}{font-family:${conf.fontFamily};}\n`;
+      if (type === 'fontWeight'  && conf.fontWeight)  css += `${selTitle}{font-weight:${conf.fontWeight};}\n`;
 
       if (type === 'borderColor') {
         const parts = [];
@@ -52,20 +62,21 @@ function compileStyleRules(styleState, opts = {}) {
         parts.push('border-style:solid;');
         parts.push(`border-width:${DEFAULT_BORDER_WIDTH}px;`);
         parts.push('box-sizing:border-box;');
-        css += `${baseSel}{${parts.join('')}}\n`;
+        css += `${sel}{${parts.join('')}}\n`;
       }
 
       if (type === 'haloColor' && conf.haloColor) {
         const rgbaStrong = hexToRGBA(conf.haloColor, 0.2);
         const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30);
-        css += `${baseSel}{overflow:visible !important;}\n`;
-        css += `${baseSel}{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 0px ${rgbaSoft}, 0 0 12px 6px ${rgbaSoft} !important;}\n`;
-        css += `${baseSel}.vis-selected{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 6px ${rgbaSoft}, 0 0 28px 14px ${rgbaSoft} !important;}\n`;
+        css += `${sel}{overflow:visible !important;}\n`;
+        css += `${sel}{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 0px ${rgbaSoft}, 0 0 12px 6px ${rgbaSoft} !important;}\n`;
+        css += `${sel}.vis-selected{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 6px ${rgbaSoft}, 0 0 28px 14px ${rgbaSoft} !important;}\n`;
       }
     }
   }
   return css;
 }
+
 
 // ✅ 静态文件（public 里放 viewer.html 等）
 app.use(express.static(path.join(__dirname, 'public')));
