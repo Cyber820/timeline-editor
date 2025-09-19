@@ -109,3 +109,13 @@ export function renderFilterOptions(selectEl, options, useChoices = false, oldCh
   return { choices };
 }
 
+// 追加到 public/src/_staging/style-ui.js
+export function renderSimpleOptions(selectEl, list) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  (list || []).forEach(opt => {
+    const o = document.createElement('option');
+    o.value = o.textContent = opt;
+    selectEl.appendChild(o);
+  });
+}
