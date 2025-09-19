@@ -219,3 +219,12 @@ export function canBindStyleType(boundMap, attrKey, nextType) {
   const owner = Object.entries(boundMap).find(([k, v]) => v === nextType && k !== attrKey);
   return !owner; // 该样式类型还未被其他属性占用
 }
+
+// 通用 ID 生成器：优先用 UUID，回退到时间戳+随机
+export function genId(prefix = 'r_') {
+  const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  return prefix ? `${prefix}${uuid}` : uuid;
+}
+
