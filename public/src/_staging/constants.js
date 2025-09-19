@@ -7,6 +7,19 @@ export const DEFAULTS = {
   BORDER_WIDTH_PX: 2,     // 统一边框宽度（仅作为默认；实际以后由后端 compiler/constants.js 控制）
 };
 
+// public/src/_staging/constants.js
+
+export const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
+
+export const attributeLabels = {
+  EventType: "事件类型",
+  Region: "地区",
+  Platform: "平台类型",
+  Company: "公司",
+  ConsolePlatform: "主机类型",
+  Tag: "标签" // 建议补上，面板里常用
+};
+
 export const PRESET_COLORS = [
   { name: '琥珀',   hex: '#F59E0B' },
   { name: '靛蓝',   hex: '#6366F1' },
@@ -16,5 +29,14 @@ export const PRESET_COLORS = [
   { name: '紫罗兰', hex: '#8B5CF6' },
   { name: '青柠',   hex: '#84CC16' },
   { name: '橙',     hex: '#F97316' },
-  { name: '洋红',   hex: '#D946EF' },
+  { name: '洋红',   hex: '#D946EF' }
 ];
+
+export const STYLE_LABELS = {
+  fontFamily: '字体',
+  fontColor: '字体颜色',
+  borderColor: '事件框颜色',
+  backgroundColor: '事件框填充色',
+  haloColor: '光晕颜色',
+  none: '无'
+};
