@@ -46,27 +46,7 @@ export function styleLabel(key) {
   return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
 }
 
-// 工具：把任意输入规整为一维数组（尽量保留原值，不强制转字符串）
-export function normalizeToArray(raw) {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === 'string') return [raw];
-  if (raw && typeof raw === 'object') {
-    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
-    try {
-      return Object.values(raw).flat().filter(Boolean);
-    } catch (e) {
-      // 极端环境无 .flat()
-      var out = [];
-      Object.keys(raw).forEach(k => {
-        var v = raw[k];
-        if (Array.isArray(v)) out = out.concat(v);
-        else if (v) out.push(v);
-      });
-      return out;
-    }
-  }
-  return [];
-}
+
 
 import { normalizeToArray } from './constants.js'; // 若与本文件同源可省略import
 
@@ -79,3 +59,51 @@ export function getFilterOptionsForKeyFrom(options, key) {
   return normalizeToArray(options[key]);
 }
 
+// 若已在本文件里：可直接用；否则用你现有版本
+export function normalizeToArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') return [raw];
+  if (raw && typeof raw === 'object') {
+    try { return Object.values(raw).flat().filter(Boolean); } catch {
+      var out = [];
+      Object.keys(raw).forEach(k => {
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
+        else if (v) out.push(v);
+      });
+      return out;
+    }
+  }
+  return [];
+}
+
+export function normalizeToStringArray(raw) {
+  return normalizeToArray(raw).map(v => (v == null ? '' : String(v)));
+}
+
+// 纯粹：被选集合里是否包含给定值（值可为标量或数组）
+export function valueInSelected(val, selectedArr) {
+  const selected = normalizeToStringArray(selectedArr || []);
+  if (!selected.length) return false;
+  const values = normalizeToStringArray(val);
+  return values.some(v => selected.includes(v));
+}
+
+export function passesAndLogicFilters(item, filters) {
+  return Object.entries(filters || {}).every(([key, values]) =>
+    valueInSelected(item?.[key], values)
+  );
+}
+
+export function passesOrLogicFilters(item, filters) {
+  return Object.entries(filters || {}).some(([key, values]) =>
+    valueInSelected(item?.[key], values)
+  );
+}
+
+// 纯粹：按 filters + logic 过滤 items，返回新数组
+export function filterItems(items, filters, logic = 'and') {
+  if (!filters || !Object.keys(filters).length) return items || [];
+  const fn = logic === 'or' ? passesOrLogicFilters : passesAndLogicFilters;
+  return (items || []).map(it => it).filter(it => fn(it, filters));
+}
