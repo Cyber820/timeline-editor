@@ -125,3 +125,11 @@ export function setRowSelections(selMap, rowId, values) {
   selMap[rowId] = Array.isArray(values) ? values.slice() : [];
   return selMap;
 }
+
+// 纯渲染：把规则数组渲染到传入的 <tbody>
+// rowRender: (attrKey, rule) => void   由调用方提供（保持你现有的 renderRuleRow 逻辑）
+export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  (rules || []).forEach((rule) => rowRender && rowRender(attrKey, rule));
+}
