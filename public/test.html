@@ -206,9 +206,7 @@ const PRESET_COLORS = [
   haloColor: '光晕颜色',
   none: '无'
 };
-function styleLabel(key) {
-  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
-}
+
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -226,6 +224,7 @@ function resetFilters() {
   updateTimelineByFilter();
 }
 
+  //暂时保留之后接线时再修改
 function updateFilterList() {
   const div = document.getElementById("current-filters");
   div.innerHTML = '';
