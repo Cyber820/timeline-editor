@@ -233,3 +233,14 @@ export function ensureBucketIn(rulesMap, attrKey) {
   if (!rulesMap[attrKey]) rulesMap[attrKey] = [];
   return rulesMap[attrKey];
 }
+
+// 在给定规则表中按 attrKey/rowId 查找规则（无全局依赖）
+export function findRuleIn(rulesMap, attrKey, rowId) {
+  const bucket = (rulesMap && rulesMap[attrKey]) || [];
+  return bucket.find(r => r.id === rowId) || null;
+}
+
+// UI 下拉到内部键名映射：'font' => 'fontFamily'
+export function uiTypeToInternal(t) {
+  return (t === 'font') ? 'fontFamily' : t;
+}
