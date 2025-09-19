@@ -40,3 +40,8 @@ export const STYLE_LABELS = {
   haloColor: '光晕颜色',
   none: '无'
 };
+
+// 在 constants.js 里
+export function styleLabel(key) {
+  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
+}
