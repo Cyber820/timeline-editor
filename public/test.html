@@ -548,8 +548,9 @@ function findRule(attrKey, rowId) {
 }//保留结束
   // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
   //迁移
-function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
-// 把某属性的所有规则渲染到表格
+function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }//迁移结束
+//保留
+  // 把某属性的所有规则渲染到表格
 function renderStyleTable(attrKey) {
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
