@@ -228,3 +228,8 @@ export function genId(prefix = 'r_') {
   return prefix ? `${prefix}${uuid}` : uuid;
 }
 
+// 纯函数版本：在给定的规则表上确保 attrKey 存在并返回数组
+export function ensureBucketIn(rulesMap, attrKey) {
+  if (!rulesMap[attrKey]) rulesMap[attrKey] = [];
+  return rulesMap[attrKey];
+}
