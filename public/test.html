@@ -529,6 +529,7 @@ const styleRules = {};
 const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
 // 生成行 id（与 <tr data-row-id> 对应）
   //不替换区结束//
+//迁移
 function genId() {
   return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
 }
