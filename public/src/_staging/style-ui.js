@@ -81,3 +81,31 @@ export function renderFilterList(container, activeFilters, attributeLabels, onRe
   }
 }
 
+// 根据映射渲染属性下拉
+export function renderAttributeSelect(selectEl, attributeLabels) {
+  selectEl.innerHTML = '';
+  Object.keys(attributeLabels).forEach(key => {
+    const o = document.createElement('option');
+    o.value = key;
+    o.textContent = attributeLabels[key];
+    selectEl.appendChild(o);
+  });
+}
+
+// 渲染候选项并可选地初始化 Choices（多选）
+export function renderFilterOptions(selectEl, options, useChoices = false, oldChoicesInstance = null) {
+  selectEl.innerHTML = '';
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = opt;
+    selectEl.appendChild(o);
+  });
+  if (!useChoices) return { choices: null };
+  if (oldChoicesInstance) {
+    try { oldChoicesInstance.destroy(); } catch {}
+  }
+  const choices = new Choices(selectEl, { removeItemButton: true, shouldSort: false });
+  return { choices };
+}
+
