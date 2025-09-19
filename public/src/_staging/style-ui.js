@@ -64,3 +64,20 @@ export function getTakenValues(attrKey, exceptRowId){
   });
   return taken;
 }
+
+// 纯渲染：把当前筛选条件渲染到传入的容器里
+export function renderFilterList(container, activeFilters, attributeLabels, onRemove) {
+  container.innerHTML = '';
+  for (const [key, values] of Object.entries(activeFilters)) {
+    const d = document.createElement('div');
+    d.textContent = `${(attributeLabels && attributeLabels[key]) || key}: ${values.join(', ')}`;
+
+    const btn = document.createElement('button');
+    btn.textContent = '❌';
+    btn.onclick = () => onRemove && onRemove(key);
+
+    d.appendChild(btn);
+    container.appendChild(d);
+  }
+}
+
