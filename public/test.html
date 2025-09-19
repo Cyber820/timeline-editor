@@ -18,7 +18,7 @@
       font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff;
       border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
     }
-.vis-item {
+#timeline .vis-item {
   font-size: 10px;
   /* 强制上下/左右内边距 */
   padding-top: 0 !important;     /* 上 */
@@ -32,7 +32,11 @@
   max-width: 300px;
 }
 #timeline .vis-item .vis-item-content { padding: 1px 0 !important; }
-
+#timeline .vis-item .event-title {
+  margin: 0 !important;
+  line-height: 1 !important; /* 需要更紧凑可以 0.98～1.05 间微调 */
+}
+    
     #event-form, #filter-window, #add-filter-window {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: #fff; padding: 20px; border: 1px solid #ccc;
