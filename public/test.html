@@ -516,6 +516,7 @@ attrSel.addEventListener("change", () => {
 
 
 /************ 样式绑定：只做交互（不应用 CSS） ************/
+//不替换区//
 let currentStyleAttr = null;         // 当前正在编辑的属性
 const boundStyleType = {};           // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
 let stagedType = 'none';             // 下拉的临时选择（未确认前）
@@ -527,6 +528,7 @@ const styleRules = {};
 // 每一行样式行里被选中的属性值集合：{ [rowId]: string[] }
 const styleRowSelections = window.styleRowSelections || (window.styleRowSelections = {});
 // 生成行 id（与 <tr data-row-id> 对应）
+  //不替换区结束//
 function genId() {
   return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
 }
