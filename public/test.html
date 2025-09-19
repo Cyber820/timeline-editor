@@ -545,8 +545,9 @@ function ensureBucket(attrKey) {
 function findRule(attrKey, rowId) {
   const bucket = styleRules[attrKey] || [];
   return bucket.find(r => r.id === rowId) || null;
-}
+}//保留结束
   // UI 下拉的值 -> 内部键：'font' => 'fontFamily'
+  //迁移
 function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 // 把某属性的所有规则渲染到表格
 function renderStyleTable(attrKey) {
