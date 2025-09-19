@@ -45,3 +45,26 @@ export const STYLE_LABELS = {
 export function styleLabel(key) {
   return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
 }
+
+// 工具：把任意输入规整为一维数组（尽量保留原值，不强制转字符串）
+export function normalizeToArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') return [raw];
+  if (raw && typeof raw === 'object') {
+    // 例如 ConsolePlatform 是 { 平台A: [...], 平台B: [...] }
+    try {
+      return Object.values(raw).flat().filter(Boolean);
+    } catch (e) {
+      // 极端环境无 .flat()
+      var out = [];
+      Object.keys(raw).forEach(k => {
+        var v = raw[k];
+        if (Array.isArray(v)) out = out.concat(v);
+        else if (v) out.push(v);
+      });
+      return out;
+    }
+  }
+  return [];
+}
+
