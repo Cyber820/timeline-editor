@@ -532,8 +532,9 @@ const styleRowSelections = window.styleRowSelections || (window.styleRowSelectio
 //迁移
 function genId() {
   return (crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
-}
+}//迁移结束
 
+//保留
 // 取桶
 function ensureBucket(attrKey) {
   if (!styleRules[attrKey]) styleRules[attrKey] = [];
