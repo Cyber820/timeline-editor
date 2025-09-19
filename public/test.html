@@ -208,7 +208,11 @@ const PRESET_COLORS = [
   haloColor: '光晕颜色',
   none: '无'
 };
-//暂时保留区1）/
+  function styleLabel(key) {
+  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
+}
+//暂时保留区1）
+//保留原处区<1
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
@@ -225,8 +229,8 @@ function resetFilters() {
   updateFilterList();
   updateTimelineByFilter();
 }
-
-  //暂时保留之后接线时再修改
+//保留原处区1>
+  //暂时保留区2（
 function updateFilterList() {
   const div = document.getElementById("current-filters");
   div.innerHTML = '';
@@ -240,7 +244,8 @@ function updateFilterList() {
     div.appendChild(d);
   }
 }
-
+//暂时保留区2）
+  //保留原处区2<
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
   const attrSel = document.getElementById("filter-attribute");
@@ -276,7 +281,7 @@ function confirmAddFilter() {
   }
   document.getElementById("add-filter-window").style.display = 'none';
 }
-
+//保留原处区2>
 function normalizeToArray(raw) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string') return [raw];
