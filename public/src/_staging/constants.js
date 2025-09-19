@@ -68,3 +68,14 @@ export function normalizeToArray(raw) {
   return [];
 }
 
+import { normalizeToArray } from './constants.js'; // 若与本文件同源可省略import
+
+// 纯函数：从传入的 options 中取候选，完全不依赖全局
+export function getFilterOptionsForKeyFrom(options, key) {
+  if (!options) return [];
+  if (key === 'ConsolePlatform') {
+    return normalizeToArray(options.ConsolePlatform);
+  }
+  return normalizeToArray(options[key]);
+}
+
