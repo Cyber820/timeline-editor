@@ -200,3 +200,22 @@ export const TIMELINE_DEFAULT_OPTIONS = {
   zoomKey: 'ctrlKey',
   stack: true,
 };
+
+// 生成规则行 id（纯函数/无全局副作用）
+export const createRowId = (() => {
+  let counter = 0;
+  return () => `row-${++counter}`;
+})();
+
+// 简单去重
+export function uniq(arr) {
+  const set = new Set(arr || []);
+  return Array.from(set);
+}
+
+// 校验：同一属性是否允许切换到目标样式类型（保留 'none'）
+export function canBindStyleType(boundMap, attrKey, nextType) {
+  if (nextType === 'none') return true;
+  const owner = Object.entries(boundMap).find(([k, v]) => v === nextType && k !== attrKey);
+  return !owner; // 该样式类型还未被其他属性占用
+}
