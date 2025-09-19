@@ -119,3 +119,9 @@ export function renderSimpleOptions(selectEl, list) {
     selectEl.appendChild(o);
   });
 }
+
+// 把选中的属性值集合写回到行选择表：{ [rowId]: string[] }
+export function setRowSelections(selMap, rowId, values) {
+  selMap[rowId] = Array.isArray(values) ? values.slice() : [];
+  return selMap;
+}
