@@ -171,10 +171,12 @@
 </div>
 
 <script>
+//之后修改
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
-
+//保留原处
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
+ //暂时保留区1（/ 
 /*标签参数*/
 const attributeLabels = {
   EventType: "事件类型",
@@ -206,7 +208,7 @@ const PRESET_COLORS = [
   haloColor: '光晕颜色',
   none: '无'
 };
-
+//暂时保留区1）/
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
