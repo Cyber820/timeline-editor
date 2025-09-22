@@ -674,3 +674,85 @@ export function openAttrPickerFor(rowId, attrKey, deps = {}) {
     {}
   );
 }
+
+// 读取 <select multiple> 的已选值并去重
+export function readUniqueSelections(selectEl) {
+  if (!selectEl) return [];
+  const vals = Array.from(selectEl.selectedOptions || []).map(o => o.value);
+  return Array.from(new Set(vals));
+}
+
+/**
+ * 依赖注入版：确认属性选择结果（等价 confirmAttrPicker 的纯化版本）
+ * - 不依赖全局，不直接 alert；所有依赖由调用方传入
+ */
+export function confirmAttrPickerAction(deps = {}) {
+  const {
+    // 必要数据
+    rowId = null,
+    attrKey = null,
+
+    // DOM
+    selectEl = null,                    // #attr-picker-options
+    modalEl = null,                     // #attr-picker-window
+
+    // 规则访问与持久层
+    rulesMap = null,                    // 相当于 styleRules
+    findRuleInMap = null,               // (rulesMap, attrKey, rowId) => rule | null
+    styleRowSelectionsRef = null,       // 可传 window.styleRowSelections 或自有对象
+
+    // 冲突检测
+    getTakenValues = null,              // (attrKey, exceptRowId) => Set<string>
+
+    // 行内 chips 回填
+    renderRowAttrChips = null,          // (rowId, values) => void
+
+    // 提示方式（替代 alert）
+    notify = (msg) => alert(msg),
+  } = deps;
+
+  // 兜底：编辑态或控件缺失
+  if (!rowId || !attrKey || !selectEl) {
+    if (modalEl && modalEl.style) modalEl.style.display = 'none';
+    return { ok: false, reason: 'invalid-state' };
+  }
+
+  // 读取并去重
+  const uniqueVals = readUniqueSelections(selectEl);
+
+  // 终检：与其他行冲突
+  if (typeof getTakenValues === 'function') {
+    const takenByOthers = getTakenValues(attrKey, rowId); // Set
+    const conflict = uniqueVals.find(v => takenByOthers.has(v));
+    if (conflict) {
+      notify(`“${conflict}” 已被同属性的其他样式行占用，请取消或更换。`);
+      return { ok: false, reason: 'conflict', conflict };
+    }
+  }
+
+  // 写回到规则
+  let rule = null;
+  if (typeof findRuleInMap === 'function') {
+    rule = findRuleInMap(rulesMap, attrKey, rowId);
+  }
+  if (!rule) {
+    if (modalEl && modalEl.style) modalEl.style.display = 'none';
+    return { ok: false, reason: 'rule-not-found' };
+  }
+  rule.values = uniqueVals;
+
+  // 同步（可选）旧的行内缓存
+  if (styleRowSelectionsRef) {
+    styleRowSelectionsRef[rowId] = uniqueVals;
+  }
+
+  // 回填 chips
+  if (typeof renderRowAttrChips === 'function') {
+    renderRowAttrChips(rowId, uniqueVals);
+  }
+
+  // 关闭弹窗
+  if (modalEl && modalEl.style) modalEl.style.display = 'none';
+
+  return { ok: true, values: uniqueVals };
+}
