@@ -298,3 +298,56 @@ export function applyStyleWindowView(rootEls, vm) {
   if (addBtnEl)    addBtnEl.disabled = vm.ui.add.disabled;
 }
 
+// 依赖注入版：处理样式类型切换逻辑（不依赖全局，不直接 alert）
+export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
+  if (!selectEl) return { stagedType: 'none', blockedBy: 'no-select' };
+
+  const {
+    uiTypeToInternal = (v) => v,
+    boundStyleType = {},          // 全局映射：{ [attrKey]: 'fontFamily' | ... | 'none' }
+    currentStyleAttr = null,      // 当前正在编辑的属性 key
+    styleTypeOwner = {},          // 反向占用表：{ [styleType]: attrKey }
+    attributeLabels = {},         // 中文名映射
+    styleLabel = (k) => k,        // 文案函数
+    confirmBtnEl = null,          // 可选：确认按钮节点
+    hintEl = null,                // 可选：提示文本节点
+    refreshOptions = null,        // 可选：函数 -> 刷新下拉占用状态
+    notify = null,                // 可选：替代 alert 的提示函数 (msg)
+  } = deps;
+
+  const disableConfirm = (yes) => { if (confirmBtnEl) confirmBtnEl.disabled = !!yes; };
+  const setHint = (txt) => { if (hintEl) hintEl.textContent = txt; };
+
+  let mapped = uiTypeToInternal(selectEl.value) || 'none';
+  let stagedType = mapped;
+
+  // 该属性已绑定某类型 -> 未重置前禁止切换
+  const already = boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none';
+  if (already) {
+    selectEl.value = 'none';
+    stagedType = 'none';
+    setHint(`当前绑定：${styleLabel(boundStyleType[currentStyleAttr])}（如需更改，请先“重置”）`);
+    disableConfirm(true);
+    return { stagedType, blockedBy: 'self-bound' };
+  }
+
+  // 全局唯一占用检查
+  if (mapped !== 'none') {
+    const owner = styleTypeOwner[mapped];
+    const isMine = owner === currentStyleAttr;
+    if (owner && !isMine) {
+      const msg = `“${styleLabel(mapped)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`;
+      if (typeof notify === 'function') notify(msg);
+      selectEl.value = 'none';
+      stagedType = 'none';
+      disableConfirm(true);
+      if (typeof refreshOptions === 'function') refreshOptions();
+      return { stagedType, blockedBy: 'occupied', owner };
+    }
+  }
+
+  // 正常可选
+  disableConfirm(stagedType === 'none');
+  return { stagedType, blockedBy: null };
+}
+
