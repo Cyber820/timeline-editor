@@ -496,3 +496,40 @@ export function resetBindAction(deps = {}) {
   // 返回给调用方可选地同步 stagedType
   return { ok: true, stagedType: 'none' };
 }
+
+export function hideStyleWindow(styleWindowEl) {
+  if (styleWindowEl && styleWindowEl.style) styleWindowEl.style.display = 'none';
+}
+
+import { getFilterOptionsForKeyFrom } from './constants.js'; // 第二遍接线时才会生效
+
+export function buildAttrMultiSelectFor(attrKey, deps = {}) {
+  const {
+    options = null,                 // 相当于 allOptions
+    getOptions = null,              // 可选：自定义获取器 (attrKey) => string[]
+    useChoices = !!window.Choices,  // 是否启用 Choices
+    choicesConfig = { removeItemButton: true, shouldSort: false, searchPlaceholderValue: '搜索…', position: 'bottom' },
+  } = deps;
+
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.className = 'style-attr-select';
+
+  const opts = (typeof getOptions === 'function')
+    ? (getOptions(attrKey) || [])
+    : (options ? getFilterOptionsForKeyFrom(options, attrKey) : []);
+
+  if (!opts || opts.length === 0) {
+    const o = new Option('（暂无可选项 / 仍在加载）', '');
+    o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    opts.forEach(v => sel.appendChild(new Option(v, v)));
+  }
+
+  if (useChoices && typeof Choices === 'function') {
+    sel._choices = new Choices(sel, choicesConfig);
+  }
+
+  return sel;
+}
