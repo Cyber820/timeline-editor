@@ -244,3 +244,14 @@ export function findRuleIn(rulesMap, attrKey, rowId) {
 export function uiTypeToInternal(t) {
   return (t === 'font') ? 'fontFamily' : t;
 }
+
+// public/src/_staging/constants.js
+export function createEmptyRuleForType(type, idFactory = () => `r_${Date.now()}`) {
+  const rule = { id: idFactory(), type, style: {}, values: [] };
+  if (type === 'fontFamily') {
+    rule.style.fontFamily = '';
+  } else {
+    rule.style[type] = '#000000'; // 颜色默认黑
+  }
+  return rule;
+}
