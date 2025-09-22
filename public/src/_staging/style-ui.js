@@ -351,3 +351,72 @@ export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
   return { stagedType, blockedBy: null };
 }
 
+// 依赖注入版：确认绑定动作（不依赖全局，可测）
+// deps 里传入你现有的运行态 & DOM 引用 & 回调
+export function confirmBindAction(deps = {}) {
+  const {
+    stagedType = 'none',
+    currentStyleAttr = null,
+
+    boundStyleType = {},   // { [attrKey]: 'fontFamily' | ... | 'none' }
+    styleTypeOwner = {},   // { [styleType]: attrKey }
+
+    attributeLabels = {},  // 中文名映射
+    styleLabel = (k) => k, // 文案函数
+
+    // DOM（可选传）
+    tbodyEl = null,
+    confirmBtnEl = null,
+    resetBtnEl = null,
+    addBtnEl = null,
+    hintEl = null,
+
+    // 回调（可选传）
+    refreshOptions = null, // -> refreshStyleTypeOptions
+    addStyleRow = null,    // -> addStyleRow()
+    notify = (msg) => alert(msg), // 替代 alert，可注入自定义提示
+    confirmDialog = (msg) => window.confirm(msg), // 可替换为自定义弹窗
+  } = deps;
+
+  if (stagedType === 'none') {
+    return { ok: false, reason: 'none' };
+  }
+
+  // 再次确认全局唯一占用（防 race）
+  const owner = styleTypeOwner[stagedType];
+  if (owner && owner !== currentStyleAttr) {
+    notify(`“${styleLabel(stagedType)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+    return { ok: false, reason: 'occupied', owner };
+  }
+
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && prev !== stagedType) {
+    const ok = confirmDialog('切换样式类型将清空该属性下已添加的样式行，是否继续？');
+    if (!ok) return { ok: false, reason: 'cancelled' };
+    if (tbodyEl) tbodyEl.innerHTML = '';
+
+    // 释放之前占用的类型
+    if (styleTypeOwner[prev] === currentStyleAttr) {
+      delete styleTypeOwner[prev];
+    }
+  }
+
+  // 写入绑定与占用
+  boundStyleType[currentStyleAttr] = stagedType;
+  styleTypeOwner[stagedType] = currentStyleAttr;
+
+  // UI 状态切换
+  if (confirmBtnEl) { confirmBtnEl.disabled = true; confirmBtnEl.style.display = 'none'; }
+  if (resetBtnEl)   { resetBtnEl.style.display = 'inline-block'; }
+  if (addBtnEl)     { addBtnEl.disabled = false; }
+  if (hintEl)       { hintEl.textContent = `当前样式：${styleLabel(stagedType)}`; }
+
+  // 刷新下拉可用性
+  if (typeof refreshOptions === 'function') refreshOptions();
+
+  // 自动新增一行（仅 UI）
+  if (typeof addStyleRow === 'function') addStyleRow();
+
+  return { ok: true, bound: stagedType, attr: currentStyleAttr };
+}
+
