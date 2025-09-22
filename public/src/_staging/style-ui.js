@@ -562,3 +562,115 @@ export function addStyleRowFor(attrKey, deps = {}) {
 
   return { ok: true, rule };
 }
+
+// —— attr picker：数据准备（候选 / 预选 / 去重）——
+export function buildAttrPickerModel(rowId, attrKey, deps = {}) {
+  const {
+    // 数据来源（任选其一或并用）
+    options = null,                    // 相当于 allOptions
+    getOptions = null,                 // (key) => string[]，如用 getFilterOptionsForKeyFrom
+    getOptionsLegacy = null,           // (key) => string[]，如你现有 getFilterOptionsForKey
+    // 行/规则访问
+    findRuleInMap = null,              // (rulesMap, attrKey, rowId) => rule | null
+    rulesMap = null,                   // 相当于 styleRules
+    getTakenValues = null,             // (attrKey, exceptRowId) => Set<string>
+  } = deps;
+
+  // 预选
+  let pre = [];
+  if (typeof findRuleInMap === 'function' && rulesMap) {
+    const rule = findRuleInMap(rulesMap, attrKey, rowId);
+    pre = (rule && Array.isArray(rule.values)) ? rule.values : [];
+  }
+
+  // 候选
+  let all = [];
+  if (typeof getOptions === 'function') all = getOptions(attrKey) || [];
+  else if (typeof getOptionsLegacy === 'function') all = getOptionsLegacy(attrKey) || [];
+  else if (options) all = options[attrKey] || [];
+
+  // 去重：排除其它行已占用，但保留本行已选
+  const takenByOthers = (typeof getTakenValues === 'function')
+    ? getTakenValues(attrKey, rowId)
+    : new Set();
+
+  const candidates = all.filter(v => pre.includes(v) || !takenByOthers.has(v));
+  return { candidates, preselected: pre };
+}
+
+// —— attr picker：渲染 DOM（含 Choices 可选初始化）——
+export function renderAttrPickerInto(root, vm, deps = {}) {
+  const {
+    titleEl, hintEl, attrNameEl, selectEl, modalEl
+  } = root;
+
+  const {
+    attrCnName = '',          // 中文属性名
+    candidates = [],          // 选项
+    preselected = [],         // 预选
+  } = vm;
+
+  const {
+    useChoices = !!window.Choices,
+    choicesConfig = { removeItemButton: true, shouldSort: false, searchPlaceholderValue: '搜索…', position: 'bottom' }
+  } = deps;
+
+  if (titleEl) titleEl.textContent = '选择应用的属性值';
+  if (hintEl)  hintEl.textContent  = `${attrCnName}：可多选，可搜索`;
+  if (attrNameEl) attrNameEl.textContent = attrCnName;
+
+  // 清理旧实例与旧选项
+  if (selectEl && selectEl._choices && typeof selectEl._choices.destroy === 'function') {
+    try { selectEl._choices.destroy(); } catch {}
+    selectEl._choices = null;
+  }
+  if (selectEl) {
+    selectEl.innerHTML = '';
+    if (!candidates.length) {
+      const o = new Option('（暂无可选项 / 仍在加载）', '');
+      o.disabled = true;
+      selectEl.appendChild(o);
+    } else {
+      candidates.forEach(v => {
+        selectEl.appendChild(new Option(v, v, false, preselected.includes(v)));
+      });
+    }
+    if (useChoices && typeof Choices === 'function') {
+      selectEl._choices = new Choices(selectEl, choicesConfig);
+    }
+  }
+
+  if (modalEl && modalEl.style) modalEl.style.display = 'block';
+}
+
+// —— attr picker：一站式 orchestrator（第二遍才会被接线）——
+export function openAttrPickerFor(rowId, attrKey, deps = {}) {
+  const {
+    // DOM
+    modalEl,
+    titleEl,
+    hintEl,
+    attrNameEl,
+    selectEl,
+    // 文案
+    attributeLabels = {},
+    // 数据与工具
+    options = null,
+    getOptions = null,
+    getOptionsLegacy = null,
+    findRuleInMap = null,
+    rulesMap = null,
+    getTakenValues = null,
+  } = deps;
+
+  const cn = attributeLabels[attrKey] || attrKey;
+  const { candidates, preselected } = buildAttrPickerModel(rowId, attrKey, {
+    options, getOptions, getOptionsLegacy, findRuleInMap, rulesMap, getTakenValues
+  });
+
+  renderAttrPickerInto(
+    { modalEl, titleEl, hintEl, attrNameEl, selectEl },
+    { attrCnName: cn, candidates, preselected },
+    {}
+  );
+}
