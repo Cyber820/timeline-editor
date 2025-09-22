@@ -420,3 +420,79 @@ export function confirmBindAction(deps = {}) {
   return { ok: true, bound: stagedType, attr: currentStyleAttr };
 }
 
+// 1) 关闭样式窗口（纯 DOM 小助手）
+export function hideStyleWindow(styleWindowEl) {
+  if (styleWindowEl && styleWindowEl.style) styleWindowEl.style.display = 'none';
+}
+
+// 2) 确认样式应用动作（依赖注入版）
+export function confirmStyleAction(deps = {}) {
+  const {
+    applyCurrentStyles = () => {}, // 传入你现有的 applyCurrentStyles
+    styleWindowEl = null,          // document.getElementById('style-window')
+  } = deps;
+
+  // 生成全量样式 -> 注入 CSS -> 可选持久化
+  applyCurrentStyles({ persist: true });
+
+  // 关闭窗口（若传入）
+  hideStyleWindow(styleWindowEl);
+
+  return { ok: true };
+}
+
+// 3) 重置绑定动作（依赖注入版；等同 onResetBind 的逻辑）
+export function resetBindAction(deps = {}) {
+  const {
+    // 运行态
+    currentStyleAttr = null,
+    boundStyleType = {},    // { [attrKey]: 'fontFamily' | ... | 'none' }
+    styleTypeOwner = {},    // { [styleType]: attrKey }
+    styleRulesRef = {},     // { [attrKey]: Array<rule> }
+
+    // DOM
+    tbodyEl = null,         // #styleTableBody
+    typeSelEl = null,       // #style-type
+    confirmBtnEl = null,    // #style-confirm-btn
+    resetBtnEl = null,      // #style-reset-btn
+    addBtnEl = null,        // #add-style-btn
+    hintEl = null,          // #bound-type-hint
+
+    // 回调
+    refreshOptions = null,  // refreshStyleTypeOptions
+    applyCurrentStyles = () => {}, // 你现有的 applyCurrentStyles
+    confirmDialog = (msg) => window.confirm(msg), // 可替换为自定义弹窗
+  } = deps;
+
+  // 是否有行
+  const hasRows = !!tbodyEl && tbodyEl.querySelectorAll('tr').length > 0;
+  const ok = !hasRows || confirmDialog('重置将清空该属性下所有样式行，是否继续？');
+  if (!ok) return { ok: false, reason: 'cancelled' };
+
+  // 释放占用者
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && styleTypeOwner[prev] === currentStyleAttr) {
+    delete styleTypeOwner[prev];
+  }
+
+  // 清空该属性规则与绑定
+  boundStyleType[currentStyleAttr] = 'none';
+  if (styleRulesRef[currentStyleAttr]) styleRulesRef[currentStyleAttr].length = 0;
+  if (tbodyEl) tbodyEl.innerHTML = '';
+
+  // 复位控件与提示
+  if (typeSelEl) typeSelEl.value = 'none';
+  if (confirmBtnEl) { confirmBtnEl.disabled = true; confirmBtnEl.style.display = 'inline-block'; }
+  if (resetBtnEl)   resetBtnEl.style.display = 'none';
+  if (addBtnEl)     addBtnEl.disabled = true;
+  if (hintEl)       hintEl.textContent = '当前样式：无';
+
+  // 刷新下拉可用性
+  if (typeof refreshOptions === 'function') refreshOptions();
+
+  // 立刻应用并持久化
+  applyCurrentStyles({ persist: true });
+
+  // 返回给调用方可选地同步 stagedType
+  return { ok: true, stagedType: 'none' };
+}
