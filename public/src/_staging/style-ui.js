@@ -533,3 +533,32 @@ export function buildAttrMultiSelectFor(attrKey, deps = {}) {
 
   return sel;
 }
+
+// public/src/_staging/style-ui.js
+import { createEmptyRuleForType } from './constants.js';
+import { ensureBucketIn } from './constants.js'; // 你已添加过；若无请一并加入 constants.js
+// 或者使用你当前文件里的 stateMem 版本，第二遍时再改成 ensureBucketIn
+
+export function addStyleRowFor(attrKey, deps = {}) {
+  const {
+    boundStyleType = {},    // { [attrKey]: 'fontFamily' | 'fontColor' | ... | 'none' }
+    rulesMap = {},          // { [attrKey]: Array<rule> } → 相当于 styleRules
+    idFactory = null,       // 可传入 genId
+    renderRow = null,       // 渲染函数：renderRuleRow(attrKey, rule)
+  } = deps;
+
+  const bound = boundStyleType[attrKey];
+  if (!bound || bound === 'none') {
+    return { ok: false, reason: 'unbound' };
+  }
+
+  const rule = createEmptyRuleForType(bound, idFactory || (() => crypto.randomUUID?.() || `r_${Date.now()}_${Math.random().toString(36).slice(2)}`));
+  const bucket = ensureBucketIn(rulesMap, attrKey);
+  bucket.push(rule);
+
+  if (typeof renderRow === 'function') {
+    renderRow(attrKey, rule);
+  }
+
+  return { ok: true, rule };
+}
