@@ -255,3 +255,63 @@ export function createEmptyRuleForType(type, idFactory = () => `r_${Date.now()}`
   }
   return rule;
 }
+
+// —— 样式键映射（前端面板 → 引擎）——
+export const ENGINE_KEY_MAP = {
+  font: 'fontFamily',
+  fontFamily: 'fontFamily',
+  fontColor: 'textColor',
+  backgroundColor: 'bgColor',
+  borderColor: 'borderColor',
+  haloColor: 'haloColor',
+  none: 'none'
+};
+
+export function toEngineKey(t, map = ENGINE_KEY_MAP) {
+  return map[t] || t;
+}
+
+/**
+ * 纯函数：把面板内存（boundStyleType + styleRules）转换为引擎所需 state
+ * @param {Object} boundStyleType - { [attrKey]: 'fontColor' | 'backgroundColor' | ... | 'none' }
+ * @param {Object} styleRules - { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
+ * @param {Object} keyMap - 可覆盖 ENGINE_KEY_MAP
+ * @returns {{ version:number, boundTypes:Object, rules:Object }}
+ */
+export function buildEngineStyleState(boundStyleType = {}, styleRules = {}, keyMap = ENGINE_KEY_MAP) {
+  const map = (k) => toEngineKey(k, keyMap);
+
+  // 1) 绑定类型
+  const boundTypes = {};
+  for (const [attr, t] of Object.entries(boundStyleType || {})) {
+    boundTypes[attr] = map(t || 'none');
+  }
+
+  // 2) 规则映射
+  const rules = {};
+  for (const [attr, rows] of Object.entries(styleRules || {})) {
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    const mappedType = boundTypes[attr];
+    if (!mappedType || mappedType === 'none') continue;
+
+    for (const row of rows) {
+      const k  = map(row?.type);
+      const st = row?.style || {};
+      const vals = Array.isArray(row?.values) ? row.values : [];
+
+      vals.forEach((val) => {
+        if (!val) return;
+        (rules[attr] ||= {});
+        const slot = (rules[attr][val] ||= {});
+
+        if (k === 'textColor'   && st.fontColor)       slot.textColor   = st.fontColor;
+        if (k === 'bgColor'     && st.backgroundColor) slot.bgColor     = st.backgroundColor;
+        if (k === 'borderColor' && st.borderColor)     slot.borderColor = st.borderColor;
+        if (k === 'haloColor'   && st.haloColor)       slot.haloColor   = st.haloColor;
+        if (k === 'fontFamily'  && st.fontFamily)      slot.fontFamily  = st.fontFamily;
+      });
+    }
+  }
+
+  return { version: 1, boundTypes, rules };
+}
