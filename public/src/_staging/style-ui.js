@@ -802,3 +802,82 @@ export function confirmAttrPickerAction(deps = {}) {
 
   return { ok: true, values: uniqueVals };
 }
+
+// ========== AttrPicker 批量选择：依赖注入版（不查全局 ID，不触发 alert） ==========
+
+// 全选：把 <select multiple> 的所有可用项选中，并（可选）同步 Choices 实例
+export function selectAllInAttrPickerEl(selectEl, choicesInstance = null) {
+  if (!selectEl) return { ok: false, reason: 'no-select' };
+
+  const vals = Array.from(selectEl.options || [])
+    .map(o => o.value)
+    .filter(Boolean);
+
+  if (choicesInstance) {
+    // 清掉已有 token
+    if (typeof choicesInstance.removeActiveItems === 'function') {
+      choicesInstance.removeActiveItems();
+    }
+    // 保障底层 option 也选中
+    Array.from(selectEl.options || []).forEach(o => { o.selected = vals.includes(o.value); });
+    // 让 Choices 生成 token（兼容不同版本 API）
+    if (vals.length) {
+      if (typeof choicesInstance.setChoiceByValue === 'function') {
+        choicesInstance.setChoiceByValue(vals);
+      } else if (typeof choicesInstance.setValue === 'function') {
+        choicesInstance.setValue(vals);
+      }
+    }
+  } else {
+    // 退化：没有 Choices
+    Array.from(selectEl.options || []).forEach(o => { o.selected = true; });
+  }
+
+  selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true, values: vals };
+}
+
+// 全不选：清空选中，并（可选）同步 Choices 实例
+export function clearAttrPickerEl(selectEl, choicesInstance = null) {
+  if (!selectEl) return { ok: false, reason: 'no-select' };
+
+  if (choicesInstance && typeof choicesInstance.removeActiveItems === 'function') {
+    choicesInstance.removeActiveItems();
+  }
+  Array.from(selectEl.options || []).forEach(o => { o.selected = false; });
+
+  selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true };
+}
+
+// ========== 行内 Chips 渲染：依赖注入版 ==========
+
+// 直接对“chips 容器”渲染（最通用）
+export function renderChipsInto(containerEl, values) {
+  if (!containerEl) return;
+  const list = Array.isArray(values) ? values : [];
+  containerEl.innerHTML = '';
+
+  if (list.length === 0) {
+    containerEl.innerHTML = '<span style="color:#999;">（未选择）</span>';
+    return;
+  }
+  list.forEach(v => {
+    const tag = document.createElement('span');
+    tag.textContent = v;
+    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    containerEl.appendChild(tag);
+  });
+}
+
+// 根据 rowId 在给定 tbody 内找到 .attr-chips 渲染（避免依赖全局 #styleTableBody）
+export function renderRowAttrChipsInTbody(tbodyEl, rowId, values) {
+  if (!tbodyEl) return { ok: false, reason: 'no-tbody' };
+  const tr = tbodyEl.querySelector(`tr[data-row-id="${rowId}"]`);
+  if (!tr) return { ok: false, reason: 'no-row' };
+  const box = tr.querySelector('.attr-chips');
+  if (!box) return { ok: false, reason: 'no-chips' };
+  renderChipsInto(box, values);
+  return { ok: true };
+}
+
