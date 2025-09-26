@@ -80,10 +80,47 @@ export function clearAttrPicker() { /* TODO */ }
 /* =========================
  * 其它工具（可选）
  * ========================= */
-export function readRowStyleKey(_rowEl) {
-  /* 可按需放你的实现 */
-  return null;
+// 替换现有的 readRowStyleKey
+function readRowStyleKey(rowEl) {
+  if (!rowEl) return '|'; // 防御：空节点
+
+  // 样式类型存放在第一列 td 的 data-style-type 上：'fontFamily' / 'fontColor' / ...
+  const firstTd = rowEl.querySelector('td:first-child');
+  const type = firstTd?.dataset?.styleType || '';
+
+  // 默认值
+  let value = '';
+
+  if (!firstTd) return `${type}|`;
+
+  // 字体：select 的 value
+  const sel = firstTd.querySelector('select');
+  if (sel) {
+    value = sel.value?.trim() || '';
+  }
+
+  // 颜色：优先读 <input type="color">，其次读旁边的文本框（十六进制）
+  const color = firstTd.querySelector('input[type="color"]');
+  const hexInput = firstTd.querySelector('input[type="text"]');
+
+  // 规范化 HEX：补齐 #，转大写
+  const normalizeHex = (v) => {
+    if (!v) return '';
+    let s = String(v).trim().toUpperCase();
+    if (!s.startsWith('#')) s = '#' + s;
+    // 简单校验：# + 3/6/8 位十六进制（不强制失败，仅返回规范形）
+    return s;
+  };
+
+  if (color && color.value) {
+    value = normalizeHex(color.value);
+  } else if (hexInput && hexInput.value) {
+    value = normalizeHex(hexInput.value);
+  }
+
+  return `${type}|${value}`;
 }
+
 
 export function isSameSet(a = [], b = []) {
   if (a.length !== b.length) return false;
