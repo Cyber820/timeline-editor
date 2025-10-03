@@ -9,7 +9,7 @@ import {
   styleLabel,
 } from './_staging/constants.js';
 import { renderFilterList } from './_staging/style-ui.js';
-import { attributeLabels } from './_staging/constants.js';
+
 function updateFilterList() {
   const div = document.getElementById('current-filters');
   if (!div) return;
@@ -53,6 +53,7 @@ if (openBtn) {
 
 window.ENDPOINT = ENDPOINT; // 暴露给 test.html 里的旧代码
 window.updateFilterList = updateFilterList;
+
 
 
 
