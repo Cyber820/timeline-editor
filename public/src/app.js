@@ -1,6 +1,22 @@
 // src/app.js
 import { attachEventDataAttrs, applyStyleState } from './style/engine.js';
 import { getStyleState, setStyleState, onStyleStateChange } from './state/styleState.js';
+import {
+  ENDPOINT,
+  attributeLabels,
+  PRESET_COLORS,
+  STYLE_LABELS,
+  styleLabel,
+} from './_staging/constants.js';
+
+// 运行态（保持原有）
+let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
+let originalItems = [], timeline = null;
+
+// 暂时保留全局暴露（有旧代码用到）
+window.attributeLabels = attributeLabels;
+window.PRESET_COLORS  = PRESET_COLORS;
+window.styleLabel     = styleLabel;
 
 // 暴露给现有内联代码使用（避免你现在就重写那段脚本）
 window.__styleEngine = { attachEventDataAttrs, applyStyleState };
@@ -24,3 +40,4 @@ if (openBtn) {
 
 import { ENDPOINT, attributeLabels, PRESET_COLORS, STYLE_LABELS } from './_staging/constants.js';
 window.attributeLabels = attributeLabels; // 如果仍有地方走 window
+
