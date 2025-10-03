@@ -75,6 +75,8 @@
     <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
     <div id="current-filters"></div>
   </div>
+  
+<div id="current-filters"></div>
 
   <!-- 添加过滤标准弹窗 -->
   <div id="add-filter-window">
@@ -230,21 +232,7 @@ function resetFilters() {
   updateTimelineByFilter();
 }
 //保留原处区1>
-  //暂时保留区2（
-function updateFilterList() {
-  const div = document.getElementById("current-filters");
-  div.innerHTML = '';
-  for (const [key, values] of Object.entries(activeFilters)) {
-    const d = document.createElement("div");
-    d.textContent = `${attributeLabels[key] || key}: ${values.join(', ')}`;
-    const btn = document.createElement("button");
-    btn.textContent = '❌';
-    btn.onclick = () => { delete activeFilters[key]; updateFilterList(); updateTimelineByFilter(); };
-    d.appendChild(btn);
-    div.appendChild(d);
-  }
-}
-//暂时保留区2）
+
   //保留原处区2<
 function openAddFilter() {
   document.getElementById("add-filter-window").style.display = 'block';
