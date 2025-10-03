@@ -8,6 +8,19 @@ import {
   STYLE_LABELS,
   styleLabel,
 } from './_staging/constants.js';
+import { renderFilterList } from './_staging/style-ui.js';
+import { attributeLabels } from './_staging/constants.js';
+function updateFilterList() {
+  const div = document.getElementById('current-filters');
+  if (!div) return;
+  // 交给 staging 的纯渲染：只负责把 activeFilters 渲染出来
+  renderFilterList(div, activeFilters, attributeLabels, (key) => {
+    delete activeFilters[key];
+    updateFilterList();
+    // 这句如果你项目里有就保留，没有就删掉问号保护符
+    updateTimelineByFilter?.();
+  });
+}
 
 // 运行态（保持原有）
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
@@ -39,6 +52,8 @@ if (openBtn) {
 }
 
 window.ENDPOINT = ENDPOINT; // 暴露给 test.html 里的旧代码
+window.updateFilterList = updateFilterList;
+
 
 
 
