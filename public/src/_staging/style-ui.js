@@ -5,6 +5,7 @@ import {
   getFilterOptionsForKeyFrom,
   createEmptyRuleForType,
   ensureBucketIn,
+  buildEngineStyleState,
 } from './constants.js';
 
 /* =========================
@@ -45,6 +46,22 @@ export function uiTypeToInternal(t) {
 /* =========================
  * 渲染骨架（占位：二遍时把现有实现粘进来）
  * ========================= */
+
+// ✅ 补丁：renderRuleRow（用你已写好的 fragment 渲染行）
+export function renderRuleRow(attrKey, rule) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+
+  const tr = renderRuleRowFragment(attrKey, rule, {
+    buildStyleControl: (type) => buildStyleControl(type), // 依赖注入版控件
+    openAttrPicker,                                       // 仍为占位，第二遍再接
+    renderRowAttrChips,                                   // 用下方补丁实现
+    styleRulesRef: stateMem.styleRules,                   // 删除行时使用
+  });
+
+  tbody.appendChild(tr);
+}
+
 export function renderStyleTable(attrKey) {
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
@@ -52,11 +69,11 @@ export function renderStyleTable(attrKey) {
   (stateMem.styleRules[attrKey] || []).forEach(rule => renderRuleRow(attrKey, rule));
 }
 
-
-
-
-export function renderRowAttrChips(_rowId, _values) {
-  // TODO: 把你现有的 renderRowAttrChips 粘过来
+// ✅ 补丁：renderRowAttrChips（包一层，复用 InTbody 版本）
+export function renderRowAttrChips(rowId, values) {
+  const tbody = document.getElementById('styleTableBody');
+  if (!tbody) return;
+  renderRowAttrChipsInTbody(tbody, rowId, values);
 }
 
 /* =========================
@@ -102,7 +119,6 @@ function readRowStyleKey(rowEl) {
     if (!v) return '';
     let s = String(v).trim().toUpperCase();
     if (!s.startsWith('#')) s = '#' + s;
-    // 简单校验：# + 3/6/8 位十六进制（不强制失败，仅返回规范形）
     return s;
   };
 
@@ -114,7 +130,6 @@ function readRowStyleKey(rowEl) {
 
   return `${type}|${value}`;
 }
-
 
 export function isSameSet(a = [], b = []) {
   if (a.length !== b.length) return false;
@@ -1025,8 +1040,6 @@ export function buildStyleControl(type, deps = {}) {
   wrap.textContent = type + '（待配置）';
   return wrap;
 }
-
-import { buildEngineStyleState } from './constants.js';
 
 /**
  * 依赖注入版：应用当前样式（可选持久化）
