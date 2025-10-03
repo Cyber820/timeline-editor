@@ -171,48 +171,27 @@
 </div>
 
 <script>
-//之后修改
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec";
-//保留原处
+
+// ✅ 第二遍接线：统一从 staging 常量处引入
+import {
+  ENDPOINT,
+  attributeLabels,
+  PRESET_COLORS,
+  STYLE_LABELS,
+  styleLabel,
+} from './_staging/constants.js';
+
+// 运行态（保留）
 let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
 let originalItems = [], timeline = null;
- //暂时保留区1（/ 
-/*标签参数*/
-const attributeLabels = {
-  EventType: "事件类型",
-  Region: "地区",
-  Platform: "平台类型",
-  Company: "公司",
-  ConsolePlatform: "主机类型"
-};
-  // ✅ 让其它地方的 window.attributeLabels 可用
-window.attributeLabels = attributeLabels;
-/*样式参数*/
-const PRESET_COLORS = [
-  { name: '琥珀',   hex: '#F59E0B' },
-  { name: '靛蓝',   hex: '#6366F1' },
-  { name: '祖母绿', hex: '#10B981' },
-  { name: '玫红',   hex: '#F43F5E' },
-  { name: '天青',   hex: '#0EA5E9' },
-  { name: '紫罗兰', hex: '#8B5CF6' },
-  { name: '青柠',   hex: '#84CC16' },
-  { name: '橙',     hex: '#F97316' },
-  { name: '洋红',   hex: '#D946EF' }
-];
 
-  const STYLE_LABELS = {
-  fontFamily: '字体',
-  fontColor: '字体颜色',
-  borderColor: '事件框颜色',
-  backgroundColor: '事件框填充色',
-  haloColor: '光晕颜色',
-  none: '无'
-};
-  function styleLabel(key) {
-  return STYLE_LABELS[key] || key; // 兜底：未知键名就原样显示
-}
-//暂时保留区1）
-//保留原处区<1
+// 暂时保留对旧代码的全局暴露（有地方直接用 window.attributeLabels / window.PRESET_COLORS / window.styleLabel）
+window.attributeLabels = attributeLabels;
+window.PRESET_COLORS  = PRESET_COLORS;
+window.styleLabel     = styleLabel;
+
+
+
 /*过滤相关UI*/
 function openAddEventForm() {
   document.getElementById('event-form').style.display = 'block';
