@@ -52,14 +52,8 @@ export function renderStyleTable(attrKey) {
   (stateMem.styleRules[attrKey] || []).forEach(rule => renderRuleRow(attrKey, rule));
 }
 
-export function renderRuleRow(_attrKey, _rule) {
-  // TODO: 把你现有的 renderRuleRow 函数体粘过来
-}
 
-export function buildStyleControl(_type) {
-  // TODO: 把你现有的 buildStyleControl 函数体粘过来（含 9 色预设 & 调色板）
-  return document.createElement('div');
-}
+
 
 export function renderRowAttrChips(_rowId, _values) {
   // TODO: 把你现有的 renderRowAttrChips 粘过来
