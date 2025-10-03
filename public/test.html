@@ -325,7 +325,7 @@ function applyFiltersOr() { filterLogic = 'or'; updateTimelineByFilter(); }
 
 
 window.addEventListener('style:ready', () => {
-  fetch(ENDPOINT)
+  fetch(window.ENDPOINT)
     .then(res => res.json())
     .then(data => {
       originalItems = data.map((event, i) => {
@@ -428,7 +428,7 @@ window.addEventListener('style:ready', () => {
 // ← 正确关闭 then(data => { ... })
 
 /* -------- 获取下拉选项 -------- */
-fetch(ENDPOINT + '?action=options')
+fetch(window.ENDPOINT + '?action=options')
   .then(res => res.json())
   .then(options => {
     allOptions = options;
