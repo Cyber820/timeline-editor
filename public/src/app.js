@@ -38,6 +38,7 @@ if (openBtn) {
   });
 }
 
+window.ENDPOINT = ENDPOINT; // 暴露给 test.html 里的旧代码
 
 
 
