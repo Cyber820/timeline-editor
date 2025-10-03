@@ -38,6 +38,6 @@ if (openBtn) {
   });
 }
 
-import { ENDPOINT, attributeLabels, PRESET_COLORS, STYLE_LABELS } from './_staging/constants.js';
-window.attributeLabels = attributeLabels; // 如果仍有地方走 window
+
+
 
