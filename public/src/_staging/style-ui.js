@@ -258,7 +258,7 @@ export function clearAttrPicker() {
  * 其它工具（可选）
  * ========================= */
 // 替换现有的 readRowStyleKey
-function readRowStyleKey(rowEl) {
+export function readRowStyleKey(rowEl) {
   if (!rowEl) return '|'; // 防御：空节点
 
   // 样式类型存放在第一列 td 的 data-style-type 上：'fontFamily' / 'fontColor' / ...
