@@ -204,7 +204,55 @@ export function closeAttrPicker() {
   const m = document.getElementById('attr-picker-window');
   if (m && m.style) m.style.display = 'none';
 }
-export function selectAllInAttrPicker() { /* TODO */ }
+export function selectAllInAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  const vals = Array.from(sel.options || []).map(o => o.value).filter(Boolean);
+
+  if (attrPickerChoices) {
+    // 清空已有 token（防止重复）
+    if (typeof attrPickerChoices.removeActiveItems === 'function') {
+      try { attrPickerChoices.removeActiveItems(); } catch {}
+    }
+
+    // 同步底层 <option>
+    Array.from(sel.options).forEach(o => { o.selected = vals.includes(o.value); });
+
+    // 让 Choices UI 同步（不同版本 API 兼容）
+    if (vals.length) {
+      if (typeof attrPickerChoices.setChoiceByValue === 'function') {
+        attrPickerChoices.setChoiceByValue(vals);
+      } else if (typeof attrPickerChoices.setValue === 'function') {
+        attrPickerChoices.setValue(vals);
+      }
+    }
+  } else {
+    // 没用 Choices 的退化情况
+    Array.from(sel.options).forEach(o => { o.selected = true; });
+  }
+
+  // 触发一次 change，确保 UI 状态同步
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+
+export function clearAttrPicker() {
+  const sel = document.getElementById('attr-picker-options');
+  if (!sel) return;
+
+  if (attrPickerChoices) {
+    if (typeof attrPickerChoices.removeActiveItems === 'function') {
+      try { attrPickerChoices.removeActiveItems(); } catch {}
+    }
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+  } else {
+    Array.from(sel.options).forEach(o => { o.selected = false; });
+  }
+
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 export function clearAttrPicker() { /* TODO */ }
 
 /* =========================
