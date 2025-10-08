@@ -18,7 +18,9 @@ export const stateMem = {
   styleRules: {},           // { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
   styleRowSelections: {},   // { [rowId]: string[] }
 };
-
+// 运行态：属性选择弹窗状态 & Choices 实例
+let attrPickerEditing = { rowId: null, attrKey: null };
+let attrPickerChoices = null;
 /* =========================
  * 通用工具（停机位版本）
  * ========================= */
@@ -79,7 +81,75 @@ export function renderRowAttrChips(rowId, values) {
 /* =========================
  * 属性选择弹窗（骨架）
  * ========================= */
-export function openAttrPicker(_rowId, _attrKey) { /* TODO: 粘你的实现 */ }
+export function openAttrPicker(rowId, attrKey) {
+  // 记录当前正在编辑的行与属性
+  attrPickerEditing = { rowId, attrKey };
+
+  // 拿到弹窗相关 DOM
+  const modal = document.getElementById('attr-picker-window');
+  const title = document.getElementById('attr-picker-title');
+  const hint  = document.getElementById('attr-picker-hint');
+  const sel   = document.getElementById('attr-picker-options');
+
+  if (!modal || !title || !hint || !sel) return; // 防御：DOM 未就绪直接返回
+
+  // 中文属性名（优先用全局 attributeLabels，兜底用 key）
+  const labels = (typeof window !== 'undefined' && window.attributeLabels) || {};
+  const cn = labels[attrKey] || attrKey;
+
+  title.textContent = '选择应用的属性值';
+  hint.textContent  = cn + '：可多选，可搜索';
+
+  // “属性值：xxx” 中的 xxx 也替换成中文属性名（若存在该节点）
+  const attrNameSpan = document.getElementById('attr-picker-attrname');
+  if (attrNameSpan) attrNameSpan.textContent = cn;
+
+  // 清掉旧的 Choices 实例 & 旧选项
+  if (attrPickerChoices && typeof attrPickerChoices.destroy === 'function') {
+    try { attrPickerChoices.destroy(); } catch {}
+    attrPickerChoices = null;
+  }
+  sel.innerHTML = '';
+
+  // 预选：从规则表中找到该行，取它已有的 values
+  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
+  const pre  = (rule && Array.isArray(rule.values)) ? rule.values : [];
+
+  // 候选集：优先用旧的全局函数 getFilterOptionsForKey，否则退回 window.allOptions
+  let all = [];
+  if (typeof window !== 'undefined' && typeof window.getFilterOptionsForKey === 'function') {
+    all = window.getFilterOptionsForKey(attrKey) || [];
+  } else {
+    const opts = (typeof window !== 'undefined' && window.allOptions) ? window.allOptions[attrKey] : [];
+    all = Array.isArray(opts) ? opts : (opts ? Object.values(opts).flat().filter(Boolean) : []);
+  }
+
+  // 去重：排除“同一属性、其它行”已占用的值，但保留本行已选
+  const takenByOthers = (typeof getTakenValues === 'function')
+    ? getTakenValues(attrKey, rowId)
+    : new Set();
+  const options = all.filter(v => pre.includes(v) || !takenByOthers.has(v));
+
+  // 构建 <option>，将本行已选的设为 selected，供 Choices 初始化识别
+  options.forEach(v => {
+    sel.appendChild(new Option(v, v, false, pre.includes(v)));
+  });
+
+  // 初始化 Choices（可搜索 + 多选标签），若库存在才启用
+  if (typeof window !== 'undefined' && typeof window.Choices === 'function') {
+    attrPickerChoices = new window.Choices(sel, {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    });
+  }
+
+  // 展示弹窗
+  modal.style.display = 'block';
+}
+
+
 export function confirmAttrPicker() { /* TODO: 粘你的实现 */ }
 export function closeAttrPicker() {
   const m = document.getElementById('attr-picker-window');
