@@ -253,22 +253,6 @@ export function clearAttrPicker() {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-export function clearAttrPicker() {
-  const sel = document.getElementById('attr-picker-options');
-  if (!sel) return;
-
-  if (attrPickerChoices) {
-    if (typeof attrPickerChoices.removeActiveItems === 'function') {
-      try { attrPickerChoices.removeActiveItems(); } catch {}
-    }
-    Array.from(sel.options).forEach(o => { o.selected = false; });
-  } else {
-    Array.from(sel.options).forEach(o => { o.selected = false; });
-  }
-
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
 
 /* =========================
  * 其它工具（可选）
