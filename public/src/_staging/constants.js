@@ -18,7 +18,24 @@ export const ENDPOINT =
   'https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec';
 
 /* =========================
- * 文案/标签映射 & 颜色预设
+ * 字段映射（供前端读取后端字段名）
+ * —— 若你的表单/Apps Script 返回字段名有变化，只改这里即可
+ * ========================= */
+export const FIELD = {
+  id: 'ID',
+  title: 'Title',
+  start: 'Start',
+  end: 'End',
+  company: 'Company',
+  region: 'Region',
+  platform: 'Platform',
+  consolePlatform: 'ConsolePlatform',
+  eventType: 'EventType',
+  desc: 'Description', // 若你用别名如 'Desc'，在此改成 'Desc'
+};
+
+/* =========================
+ * 文案/标签映射 & 颜色预设（中文对外展示，保持不变）
  * ========================= */
 export const attributeLabels = {
   EventType: '事件类型',
@@ -85,7 +102,6 @@ export function normalizeToStringArray(raw) {
 /* =========================
  * 过滤相关纯函数
  * ========================= */
-// 从传入的 options 中取候选，不依赖全局
 export function getFilterOptionsForKeyFrom(options, key) {
   if (!options) return [];
   if (key === 'ConsolePlatform') {
@@ -94,7 +110,6 @@ export function getFilterOptionsForKeyFrom(options, key) {
   return normalizeToArray(options[key]);
 }
 
-// 被选集合里是否包含给定值（值可为标量或数组）
 export function valueInSelected(val, selectedArr) {
   const selected = normalizeToStringArray(selectedArr || []);
   if (!selected.length) return false;
@@ -114,7 +129,6 @@ export function passesOrLogicFilters(item, filters) {
   );
 }
 
-// 按 filters + logic 过滤 items，返回新数组
 export function filterItems(items, filters, logic = 'and') {
   if (!filters || !Object.keys(filters).length) return items || [];
   const fn = logic === 'or' ? passesOrLogicFilters : passesAndLogicFilters;
@@ -124,14 +138,12 @@ export function filterItems(items, filters, logic = 'and') {
 /* =========================
  * 文本提取 & 事件映射
  * ========================= */
-// 从 blob（如 title 文本）里提取形如 “标签：值” 的中文标注
 export function pickLabeledFromBlob(blob, label) {
   if (!blob) return '';
   const m = new RegExp(`${label}：([^\\n]+)`).exec(String(blob));
   return m ? m[1].trim() : '';
 }
 
-// 统一把 Tag 转为数组
 export function normalizeTagArray(raw) {
   if (Array.isArray(raw)) return raw.filter(Boolean);
   return String(raw || '')
@@ -140,7 +152,6 @@ export function normalizeTagArray(raw) {
     .filter(Boolean);
 }
 
-// 原始事件 → vis item 的“纯函数”映射（无副作用）
 export function mapEventToItem(event, index = 0) {
   const contentText = event.content ?? event.Title ?? '(无标题)';
   const Start = event.Start ?? event.start ?? '';
@@ -207,20 +218,17 @@ export const createRowId = (() => {
   return () => `row-${++counter}`;
 })();
 
-// 简单去重
 export function uniq(arr) {
   const set = new Set(arr || []);
   return Array.from(set);
 }
 
-// 校验：同一属性是否允许切换到目标样式类型（保留 'none'）
 export function canBindStyleType(boundMap, attrKey, nextType) {
   if (nextType === 'none') return true;
   const owner = Object.entries(boundMap).find(([k, v]) => v === nextType && k !== attrKey);
-  return !owner; // 该样式类型还未被其他属性占用
+  return !owner;
 }
 
-// 通用 ID 生成器：优先用 UUID，回退到时间戳+随机
 export function genId(prefix = 'r_') {
   const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
@@ -228,24 +236,20 @@ export function genId(prefix = 'r_') {
   return prefix ? `${prefix}${uuid}` : uuid;
 }
 
-// 纯函数版本：在给定的规则表上确保 attrKey 存在并返回数组
 export function ensureBucketIn(rulesMap, attrKey) {
   if (!rulesMap[attrKey]) rulesMap[attrKey] = [];
   return rulesMap[attrKey];
 }
 
-// 在给定规则表中按 attrKey/rowId 查找规则（无全局依赖）
 export function findRuleIn(rulesMap, attrKey, rowId) {
   const bucket = (rulesMap && rulesMap[attrKey]) || [];
   return bucket.find(r => r.id === rowId) || null;
 }
 
-// UI 下拉到内部键名映射：'font' => 'fontFamily'
 export function uiTypeToInternal(t) {
   return (t === 'font') ? 'fontFamily' : t;
 }
 
-// public/src/_staging/constants.js
 export function createEmptyRuleForType(type, idFactory = () => `r_${Date.now()}`) {
   const rule = { id: idFactory(), type, style: {}, values: [] };
   if (type === 'fontFamily') {
@@ -271,23 +275,14 @@ export function toEngineKey(t, map = ENGINE_KEY_MAP) {
   return map[t] || t;
 }
 
-/**
- * 纯函数：把面板内存（boundStyleType + styleRules）转换为引擎所需 state
- * @param {Object} boundStyleType - { [attrKey]: 'fontColor' | 'backgroundColor' | ... | 'none' }
- * @param {Object} styleRules - { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
- * @param {Object} keyMap - 可覆盖 ENGINE_KEY_MAP
- * @returns {{ version:number, boundTypes:Object, rules:Object }}
- */
 export function buildEngineStyleState(boundStyleType = {}, styleRules = {}, keyMap = ENGINE_KEY_MAP) {
   const map = (k) => toEngineKey(k, keyMap);
 
-  // 1) 绑定类型
   const boundTypes = {};
   for (const [attr, t] of Object.entries(boundStyleType || {})) {
     boundTypes[attr] = map(t || 'none');
   }
 
-  // 2) 规则映射
   const rules = {};
   for (const [attr, rows] of Object.entries(styleRules || {})) {
     if (!Array.isArray(rows) || rows.length === 0) continue;
