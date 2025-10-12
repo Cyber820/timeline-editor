@@ -1,11 +1,18 @@
 // public/src/_staging/style-ui.js
-// ⚠️ 现在不被任何地方引用；只是“停机位”。第二遍接线时再逐步替换现网调用。
+// 当前以“显示时间轴”为目标：拉数据 → 规范化 → 渲染 vis.Timeline
+// 保留你现有的样式/筛选占位逻辑；后续再逐步拆分
 
 import {
+  // 你已有的工具（保留）
   getFilterOptionsForKeyFrom,
   createEmptyRuleForType,
   ensureBucketIn,
   buildEngineStyleState,
+
+  // ✅ 新增：直接从同一 constants 引入 ENDPOINT
+  ENDPOINT,
+  // 若 FIELD 映射也在 constants.js，可一并引入（见下方 FIELD 的使用）
+  FIELD,
 } from './constants.js';
 
 /* =========================
@@ -21,9 +28,152 @@ export const stateMem = {
 // 运行态：属性选择弹窗状态 & Choices 实例
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null;
+
 /* =========================
- * 通用工具（停机位版本）
+ * —— 新增：时间轴最小渲染链路 ——
  * ========================= */
+
+// 让你能在控制台观察到状态
+window.__timelineInit = 'not-started';
+window.__timeline = null;
+window.__timelineItems = null;
+
+function log(...args){ console.log('[timeline]', ...args); }
+
+// 更稳的日期解析：支持 1998-10-21 / 1998/10/21 / 1998.10.21
+function toISO(d) {
+  if (!d) return undefined;
+  const s = String(d).trim();
+  const norm = s.replace(/[./]/g, '-');
+  const dt = new Date(norm);
+  return isNaN(+dt) ? undefined : dt.toISOString();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>\"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+// 将“表单/接口行”规范化为 vis item（只做展示，不含样式绑定）
+export function normalizeItem(row, idx) {
+  if (!row) return null;
+  if (row.start && row.content) return row; // 已是 vis 结构
+
+  // 若你没有在 constants.js 暴露 FIELD，可把下列取值直接写成固定字段名
+  const id = row.id || row[FIELD?.id || 'ID'] || row.ID || idx + 1;
+  const title = row[FIELD?.title || 'Title'] || row.title || row.name || `事件 ${id}`;
+  const start = row[FIELD?.start || 'Start'] || row.start;
+  const end   = row[FIELD?.end || 'End']     || row.end || undefined;
+  const company = row[FIELD?.company || 'Company'] || row.company || '';
+  const region  = row[FIELD?.region  || 'Region']  || row.region  || '';
+  const platform = row[FIELD?.platform || 'Platform'] || row.platform || '';
+  const consolePlatform = row[FIELD?.consolePlatform || 'ConsolePlatform'] || row.consolePlatform || '';
+  const eventType = row[FIELD?.eventType || 'EventType'] || row.eventType || '';
+  const desc = row[FIELD?.desc || 'Description'] || row.description || '';
+
+  const metaLine = [eventType, company, region, platform || consolePlatform]
+    .filter(Boolean).join(' · ');
+
+  return {
+    id,
+    content: [
+      `<h4 class="event-title">${escapeHtml(title)}</h4>`,
+      metaLine ? `<div class="event-meta">${escapeHtml(metaLine)}</div>` : '',
+      desc ? `<div class="event-desc">${escapeHtml(desc)}</div>` : '',
+    ].join(''),
+    start: start ? toISO(start) : undefined,
+    end: end ? toISO(end) : undefined,
+  };
+}
+
+// 拉取后端数据并规范化
+export async function fetchAndNormalize() {
+  log('fetching from', ENDPOINT);
+  const res = await fetch(ENDPOINT, { mode: 'cors' });
+  log('fetch status', res.status, res.statusText);
+  if (!res.ok) throw new Error(`接口请求失败：${res.status} ${res.statusText}`);
+  const json = await res.json();
+  const arr = Array.isArray(json) ? json : (json.items || json.data);
+  if (!Array.isArray(arr)) throw new Error('接口返回数据格式不符：应为数组或包含 items/data 数组');
+
+  const out = arr.map(normalizeItem).filter(Boolean);
+  log('fetched len=', arr.length, 'normalized len=', out.length, 'first raw=', arr[0]);
+  return out;
+}
+
+// 渲染时间轴（只显示，不接筛选/样式）
+export async function mountTimeline(container) {
+  window.__timelineInit = 'mounting';
+  log('mountTimeline start');
+
+  if (!container) {
+    console.error('mountTimeline: 容器不存在');
+    window.__timelineInit = 'container-missing';
+    return;
+  }
+
+  // 先放一个空 DataSet 到全局，便于你在控制台观测
+  window.__timelineItems = new window.vis.DataSet([]);
+  window.__timeline = null;
+
+  const loading = document.createElement('div');
+  loading.textContent = '加载时间轴数据中…';
+  loading.style.cssText = 'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
+  container.appendChild(loading);
+
+  try {
+    const data = await fetchAndNormalize();
+
+    if (!data.length) {
+      container.innerHTML = '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">接口返回 0 条记录：请检查 Title/Start 字段是否存在，以及 Start 是否为可解析日期（如 1998-10-21）。</div>';
+      window.__timelineInit = 'empty-data';
+      return;
+    }
+
+    const items = new window.vis.DataSet(data);
+    window.__timelineItems = items; // ✅ 全局可见
+
+    const times = items.get().map(it => +new Date(it.start || it.end));
+    const minT = Math.min.apply(null, times);
+    const maxT = Math.max.apply(null, times);
+    const pad = Math.max(7, Math.round((maxT - minT) * 0.05));
+
+    const options = {
+      locale: 'zh-cn',
+      stack: true,
+      zoomMin: 1000 * 60 * 60 * 24,          // 可缩到 1 天
+      zoomMax: 1000 * 60 * 60 * 24 * 3660,   // 可拉到约 10 年
+      maxHeight: 720,
+      minHeight: 720,
+      margin: { item: 8, axis: 12 },
+      orientation: 'top',
+      tooltip: { followMouse: true },
+      start: isFinite(minT) ? new Date(minT - pad) : undefined,
+      end:   isFinite(maxT) ? new Date(maxT + pad) : undefined,
+    };
+
+    const timeline = new window.vis.Timeline(container, items, options);
+    window.__timeline = timeline;   // ✅ 全局可见
+
+    window.addEventListener('resize', () => timeline.redraw());
+    window.__timelineInit = 'mounted';
+    log('mounted with items:', items.length);
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err.message)}</div>`;
+    window.__timelineInit = 'error';
+  } finally {
+    loading.remove();
+  }
+}
+
+/* =========================
+ * —— 下面是你原有的样式/筛选占位逻辑 —— 
+ *  （保持不变，方便后续第三/四步继续接线）
+ * ========================= */
+
+// 通用工具
 export function genId() {
   return (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
@@ -149,7 +299,6 @@ export function openAttrPicker(rowId, attrKey) {
   modal.style.display = 'block';
 }
 
-
 export function confirmAttrPicker() {
   const { rowId, attrKey } = attrPickerEditing || {};
   const sel = document.getElementById('attr-picker-options');
@@ -236,7 +385,6 @@ export function selectAllInAttrPicker() {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-
 export function clearAttrPicker() {
   const sel = document.getElementById('attr-picker-options');
   if (!sel) return;
@@ -253,11 +401,9 @@ export function clearAttrPicker() {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-
 /* =========================
  * 其它工具（可选）
  * ========================= */
-// 替换现有的 readRowStyleKey
 export function readRowStyleKey(rowEl) {
   if (!rowEl) return '|'; // 防御：空节点
 
@@ -1236,4 +1382,57 @@ export function applyCurrentStylesInjected({
 
   applyEngine(state, { selectorBase, titleSelector });
   return state;
+}
+
+/* =========================
+ * —— 新增：按钮/弹窗占位绑定 —— 
+ *   保持与你页面 onclick 兼容（可在 app.js 调用）
+ * ========================= */
+export function bindToolbar() {
+  // 过滤
+  window.openFilterWindow = function () {
+    const el = document.getElementById('filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.openAddFilter = function () {
+    const el = document.getElementById('add-filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.resetFilters = function () { alert('已复原过滤标准（占位）'); };
+  window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
+  window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
+
+  // 样式
+  window.openStyleWindow = function (attr) {
+    const el = document.getElementById('style-window');
+    if (!el) return;
+    el.style.display = 'block';
+    const title = document.getElementById('style-title');
+    if (title) title.textContent = (attr || '属性') + ' 样式';
+    const hint = document.getElementById('bound-type-hint');
+    if (hint) hint.textContent = '当前样式：无';
+  };
+  window.closeStyleWindow = function () {
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+  window.addStyleRow = function () { alert('新增样式（占位）'); };
+  window.confirmStyle = function () {
+    alert('样式已保存（占位）');
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+
+  // 属性选择弹窗按钮
+  const picker = document.getElementById('attr-picker-window');
+  const confirmBtn = document.getElementById('attr-picker-confirm');
+  const cancelBtn = document.getElementById('attr-picker-cancel');
+  const selAllBtn = document.getElementById('attr-picker-select-all');
+  const clearBtn = document.getElementById('attr-picker-clear');
+  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
+  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
+  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
+
+  log('toolbar bound');
 }
