@@ -5,162 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>电子游戏时间轴 · 重建版</title>
 
-  <!-- ===== 依用户提供：所需样式与库（保留版本号） ===== -->
+  <!-- 第三方库（保留你现用版本） -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-  <script>
-  // 占位交互：让按钮和弹窗有“反应”（不含真实业务逻辑）。
-  (function(){
-    function show(id){ const el = document.getElementById(id); if(el) el.style.display = 'block'; }
-    function hide(id){ const el = document.getElementById(id); if(el) el.style.display = 'none'; }
 
-    window.openFilterWindow = function(){ show('filter-window'); };
-    window.openAddFilter = function(){ show('add-filter-window'); };
-    window.resetFilters = function(){ alert('已复原过滤标准（占位）'); };
-    window.applyFilters = function(){ alert('已应用 AND 逻辑（占位）'); };
-    window.applyFiltersOr = function(){ alert('已应用 OR 逻辑（占位）'); };
-
-    window.openStyleWindow = function(attr){
-      const el = document.getElementById('style-window');
-      if(!el) return; 
-      el.style.display = 'block';
-      const title = document.getElementById('style-title');
-      if(title) title.textContent = (attr || '属性') + ' 样式';
-      const hint = document.getElementById('bound-type-hint');
-      if(hint) hint.textContent = '当前样式：无';
-    };
-    window.closeStyleWindow = function(){ hide('style-window'); };
-    window.addStyleRow = function(){ alert('新增样式（占位）'); };
-    window.confirmStyle = function(){ alert('样式已保存（占位）'); hide('style-window'); };
-
-    document.addEventListener('DOMContentLoaded', function(){
-      const confirmBtn = document.getElementById('attr-picker-confirm');
-      const cancelBtn = document.getElementById('attr-picker-cancel');
-      const selAllBtn = document.getElementById('attr-picker-select-all');
-      const clearBtn = document.getElementById('attr-picker-clear');
-      const picker = document.getElementById('attr-picker-window');
-      if(confirmBtn) confirmBtn.addEventListener('click', function(){ alert('已选择（占位）'); if(picker) picker.style.display = 'none'; });
-      if(cancelBtn) cancelBtn.addEventListener('click', function(){ if(picker) picker.style.display = 'none'; });
-      if(selAllBtn) selAllBtn.addEventListener('click', function(){ alert('全选（占位）'); });
-      if(clearBtn) clearBtn.addEventListener('click', function(){ alert('全不选（占位）'); });
-    });
-  })();
-</script>
-
-<!-- ===== 仅显示时间轴（使用 constants.js 的 ENDPOINT） ===== -->
-<script type="module">
-  import { ENDPOINT } from './src/constants.js';
-
-  const container = document.getElementById('timeline');
-  if (!container) throw new Error('#timeline 容器不存在');
-
-  async function loadDataStrict() {
-    const url = ENDPOINT;
-    if (!url) throw new Error('未定义 ENDPOINT，请检查 src/constants.js');
-
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error(`接口请求失败：${res.status} ${res.statusText}`);
-
-    const json = await res.json();
-    const arr = Array.isArray(json) ? json : (json.items || json.data);
-    if (!Array.isArray(arr)) throw new Error('接口返回数据格式不符：应为数组，或包含 items/data 数组');
-
-    return arr.map(normalizeItem).filter(Boolean);
-  }
-
-  function normalizeItem(row, idx) {
-    if (!row) return null;
-    if (row.start && row.content) return row; // 已是 vis 结构
-
-    const id = row.id || row.ID || idx + 1;
-    const title = row.Title || row.title || row.name || `事件 ${id}`;
-    const start = row.Start || row.start;
-    const end = row.End || row.end || undefined;
-    const company = row.Company || row.company || '';
-    const region = row.Region || row.region || '';
-    const platform = row.Platform || row.platform || '';
-    const consolePlatform = row.ConsolePlatform || row.consolePlatform || '';
-    const eventType = row.EventType || row.eventType || '';
-    const desc = row.Description || row.description || '';
-
-    const metaLine = [eventType, company, region, platform || consolePlatform].filter(Boolean).join(' · ');
-
-    return {
-      id,
-      content: [
-        `<h4 class="event-title">${escapeHtml(title)}</h4>`,
-        metaLine ? `<div class="event-meta">${escapeHtml(metaLine)}</div>` : '',
-        desc ? `<div class="event-desc">${escapeHtml(desc)}</div>` : ''
-      ].join(''),
-      start: start ? toISO(start) : undefined,
-      end: end ? toISO(end) : undefined
-    };
-  }
-
-  function toISO(d) {
-    const dt = (d instanceof Date) ? d : new Date(String(d));
-    return isNaN(+dt) ? undefined : dt.toISOString();
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  }
-
-  (async function initTimeline(){
-    const loading = document.createElement('div');
-    loading.textContent = '加载时间轴数据中…';
-    loading.style.cssText = 'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
-    container.appendChild(loading);
-
-    try {
-      const data = await loadDataStrict();
-      const items = new vis.DataSet(data);
-
-      const times = items.get().map(it => +new Date(it.start || it.end));
-      const minT = Math.min.apply(null, times);
-      const maxT = Math.max.apply(null, times);
-      const pad = Math.max(7, Math.round((maxT - minT) * 0.05));
-
-      const options = {
-        locale: 'zh-cn',
-        stack: true,
-        zoomMin: 1000 * 60 * 60 * 24,
-        zoomMax: 1000 * 60 * 60 * 24 * 3660,
-        maxHeight: 720,
-        minHeight: 720,
-        margin: { item: 8, axis: 12 },
-        orientation: 'top',
-        tooltip: { followMouse: true },
-        start: isFinite(minT) ? new Date(minT - pad) : undefined,
-        end:   isFinite(maxT) ? new Date(maxT + pad) : undefined
-      };
-
-      const timeline = new vis.Timeline(container, items, options);
-      window.addEventListener('resize', () => timeline.redraw());
-
-      window.__timeline = timeline;   // 预留给后续筛选/样式
-      window.__timelineItems = items; // 预留给后续筛选/样式
-    } catch (err) {
-      console.error(err);
-      container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err.message)}</div>`;
-    } finally {
-      loading.remove();
-    }
-  })();
-</script>
-
-  <!-- ===== 布局与占位样式（重建脚手架） ===== -->
   <style>
-    :root {
-      --gap: 12px;
-      --panel-bg: #f8f9fb;
-      --border: #e5e7eb;
-      --text: #111827;
-    }
+    :root { --gap: 12px; --panel-bg: #f8f9fb; --border: #e5e7eb; --text: #111827; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body { margin: 0; color: var(--text); background: #fff; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; }
@@ -168,30 +22,15 @@
     header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
     .brand { font-weight: 700; }
     #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    #toolbar .btn { height: 30px; padding: 0 10px; border: 1px solid var(--border); background: #fff; border-radius: 6px; cursor: pointer; }
-    #toolbar .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
     main { display: grid; grid-template-columns: 280px 1fr; gap: var(--gap); padding: var(--gap); }
-    #left-panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; min-height: 120px; }
+    #left-panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
     #timeline-panel { border: 1px solid var(--border); border-radius: 10px; padding: 0; min-height: 600px; display: flex; flex-direction: column; }
 
-    /* 来自用户提供的 timeline 与 vis 相关样式 */
     #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
     .vis-tooltip { white-space: normal !important; max-width: 700px !important; min-width: 300px; font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff; border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); }
     .vis-item { font-size: 10px; padding: 1px 2px; background-color: #f5f5f5; border: 1px solid #aaa; border-radius: 4px; max-width: 300px; }
     #timeline .vis-item .event-title { margin: 0 !important; line-height: 1.5 !important; }
-
-    /* 颜色选择 UI（轻量样式，仅影响颜色控件） */
-    .color-ui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .color-ui input[type="text"] { width: 110px; padding: 2px 4px; font-size: 12px; }
-    .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
-    .swatch { width: 18px; height: 18px; border: 1px solid #ccc; cursor: pointer; border-radius: 3px; }
-
-    /* 样式面板 toolbar */
-    #style-window .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    #style-window .toolbar .spacer { flex: 1; }
-    #style-window .btn-ghost { background: transparent; border: 0; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; color: #666; }
-    #style-window .btn-ghost:hover { color: #000; }
 
     .section-title { font-weight: 600; margin: 8px 0; }
     .muted { color: #6b7280; font-size: 12px; }
@@ -200,8 +39,6 @@
 <body>
   <header>
     <div class="brand">电子游戏时间轴 · 重建版</div>
-
-    <!-- Step 1：按钮原封不动迁移到此（保持原 onclick / id / 文案） -->
     <div id="toolbar">
       <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
       <button onclick="openStyleWindow('EventType')">事件样式</button>
@@ -226,12 +63,10 @@
     </aside>
 
     <section id="timeline-panel">
-      <!-- 时间轴容器：与样式配合使用 -->
       <div id="timeline"></div>
     </section>
   </main>
 
-  <!-- ===== 弹窗区：沿用你提供的结构（绝对定位） ===== -->
   <!-- 过滤逻辑设置弹窗 -->
   <div id="filter-window" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #fff; padding: 20px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none; z-index: 2000; max-height: 80vh; overflow: auto; width: 700px;">
     <h3>过滤标准（和逻辑）</h3>
@@ -252,32 +87,28 @@
     <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
   </div>
 
-  <!-- 属性多选弹窗（复用 Choices，可搜索，可多选） -->
+  <!-- 属性多选弹窗 -->
   <div id="attr-picker-window" style="display:none; position:absolute; top:120px; left:50%; transform:translateX(-50%); width:700px; background:#fff; border:1px solid #ccc; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
     <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
     <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
-
     <div style="margin:6px 0 8px;">
       <button id="attr-picker-select-all" type="button">全选</button>
       <button id="attr-picker-clear" type="button">全不选</button>
     </div>
-
     <div style="margin-bottom:8px;">
       <div id="attr-picker-attrname" style="margin-bottom:6px; color:#333;">属性值</div>
       <select id="attr-picker-options" multiple></select>
     </div>
-
     <div style="margin-top:10px; text-align:right;">
       <button id="attr-picker-confirm" style="margin-right:8px;">确定</button>
       <button id="attr-picker-cancel">取消</button>
     </div>
   </div>
 
-  <!-- 样式弹窗（整块替换当前散落控件） -->
+  <!-- 样式弹窗 -->
   <div id="style-window" style="display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%); width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
     <h3 id="style-title">属性样式</h3>
-
-    <div class="toolbar" style="margin-bottom:10px;">
+    <div class="toolbar" style="margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label>自定义样式：
         <select id="style-type" onchange="onStyleTypeChange()">
           <option value="none">无</option>
@@ -288,19 +119,15 @@
           <option value="haloColor">光晕颜色</option>
         </select>
       </label>
-
       <span id="bound-type-hint" style="color:#666;">当前样式：无</span>
-      <span class="spacer"></span>
-
+      <span style="flex:1"></span>
       <button id="style-confirm-btn" disabled>确认绑定</button>
       <button id="style-reset-btn" style="display:none;">重置</button>
-      <button class="btn-ghost" onclick="closeStyleWindow()" aria-label="关闭">×</button>
+      <button class="btn-ghost" onclick="closeStyleWindow()" aria-label="关闭" style="background:transparent;border:0;font-size:18px;line-height:1;padding:2px 6px;cursor:pointer;color:#666;">×</button>
     </div>
-
     <div>
       <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
     </div>
-
     <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
       <thead>
         <tr>
@@ -309,58 +136,15 @@
           <th>操作</th>
         </tr>
       </thead>
-      <tbody id="styleTableBody">
-        <!-- 动态添加行 -->
-      </tbody>
+      <tbody id="styleTableBody"></tbody>
     </table>
-
     <div style="margin-top:10px; text-align:right;">
       <button id="style-save" type="button" class="btn-primary" onclick="confirmStyle()">确定</button>
       <button id="style-cancel" type="button" onclick="closeStyleWindow()">取消</button>
     </div>
   </div>
 
-  
-  <!-- 临时占位脚本：仅用于 Step 1 让按钮“有反应”（不含业务逻辑） -->
-  <script>
-    (function(){
-      function show(id){ const el = document.getElementById(id); if(el) el.style.display = 'block'; }
-      function hide(id){ const el = document.getElementById(id); if(el) el.style.display = 'none'; }
-
-      // —— 过滤弹窗占位 ——
-      window.openFilterWindow = function(mode){ show('filter-window'); };
-      window.openAddFilter = function(){ show('add-filter-window'); };
-      window.resetFilters = function(){ alert('已复原过滤标准（占位）'); };
-      window.applyFilters = function(){ alert('已应用 AND 逻辑（占位）'); };
-      window.applyFiltersOr = function(){ alert('已应用 OR 逻辑（占位）'); };
-
-      // —— 样式弹窗占位 ——
-      window.openStyleWindow = function(attr){
-        const el = document.getElementById('style-window');
-        if(!el) return; 
-        el.style.display = 'block';
-        const title = document.getElementById('style-title');
-        if(title) title.textContent = (attr || '属性') + ' 样式';
-        const hint = document.getElementById('bound-type-hint');
-        if(hint) hint.textContent = '当前样式：无';
-      };
-      window.closeStyleWindow = function(){ hide('style-window'); };
-      window.addStyleRow = function(){ alert('新增样式（占位）'); };
-      window.confirmStyle = function(){ alert('样式已保存（占位）'); hide('style-window'); };
-
-      // —— 属性多选弹窗（占位） ——
-      document.addEventListener('DOMContentLoaded', function(){
-        const confirmBtn = document.getElementById('attr-picker-confirm');
-        const cancelBtn = document.getElementById('attr-picker-cancel');
-        const selAllBtn = document.getElementById('attr-picker-select-all');
-        const clearBtn = document.getElementById('attr-picker-clear');
-        const picker = document.getElementById('attr-picker-window');
-        if(confirmBtn) confirmBtn.addEventListener('click', function(){ alert('已选择（占位）'); if(picker) picker.style.display = 'none'; });
-        if(cancelBtn) cancelBtn.addEventListener('click', function(){ if(picker) picker.style.display = 'none'; });
-        if(selAllBtn) selAllBtn.addEventListener('click', function(){ alert('全选（占位）'); });
-        if(clearBtn) clearBtn.addEventListener('click', function(){ alert('全不选（占位）'); });
-      });
-    })();
-  </script>
+  <!-- 入口脚本（按你的结构）：app.js 会 import _staging/constants & style-ui -->
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
