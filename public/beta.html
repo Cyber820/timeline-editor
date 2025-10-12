@@ -183,5 +183,47 @@
     </div>
   </div>
 
+  
+  <!-- 临时占位脚本：仅用于 Step 1 让按钮“有反应”（不含业务逻辑） -->
+  <script>
+    (function(){
+      function show(id){ const el = document.getElementById(id); if(el) el.style.display = 'block'; }
+      function hide(id){ const el = document.getElementById(id); if(el) el.style.display = 'none'; }
+
+      // —— 过滤弹窗占位 ——
+      window.openFilterWindow = function(mode){ show('filter-window'); };
+      window.openAddFilter = function(){ show('add-filter-window'); };
+      window.resetFilters = function(){ alert('已复原过滤标准（占位）'); };
+      window.applyFilters = function(){ alert('已应用 AND 逻辑（占位）'); };
+      window.applyFiltersOr = function(){ alert('已应用 OR 逻辑（占位）'); };
+
+      // —— 样式弹窗占位 ——
+      window.openStyleWindow = function(attr){
+        const el = document.getElementById('style-window');
+        if(!el) return; 
+        el.style.display = 'block';
+        const title = document.getElementById('style-title');
+        if(title) title.textContent = (attr || '属性') + ' 样式';
+        const hint = document.getElementById('bound-type-hint');
+        if(hint) hint.textContent = '当前样式：无';
+      };
+      window.closeStyleWindow = function(){ hide('style-window'); };
+      window.addStyleRow = function(){ alert('新增样式（占位）'); };
+      window.confirmStyle = function(){ alert('样式已保存（占位）'); hide('style-window'); };
+
+      // —— 属性多选弹窗（占位） ——
+      document.addEventListener('DOMContentLoaded', function(){
+        const confirmBtn = document.getElementById('attr-picker-confirm');
+        const cancelBtn = document.getElementById('attr-picker-cancel');
+        const selAllBtn = document.getElementById('attr-picker-select-all');
+        const clearBtn = document.getElementById('attr-picker-clear');
+        const picker = document.getElementById('attr-picker-window');
+        if(confirmBtn) confirmBtn.addEventListener('click', function(){ alert('已选择（占位）'); if(picker) picker.style.display = 'none'; });
+        if(cancelBtn) cancelBtn.addEventListener('click', function(){ if(picker) picker.style.display = 'none'; });
+        if(selAllBtn) selAllBtn.addEventListener('click', function(){ alert('全选（占位）'); });
+        if(clearBtn) clearBtn.addEventListener('click', function(){ alert('全不选（占位）'); });
+      });
+    })();
+  </script>
 </body>
 </html>
