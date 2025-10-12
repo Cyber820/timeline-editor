@@ -12,9 +12,146 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-  <!-- 暂缓加载应用逻辑，待 Step 2 接线
-  <script type="module" src="./src/app.js"></script>
-  -->
+  <script>
+  // 占位交互：让按钮和弹窗有“反应”（不含真实业务逻辑）。
+  (function(){
+    function show(id){ const el = document.getElementById(id); if(el) el.style.display = 'block'; }
+    function hide(id){ const el = document.getElementById(id); if(el) el.style.display = 'none'; }
+
+    window.openFilterWindow = function(){ show('filter-window'); };
+    window.openAddFilter = function(){ show('add-filter-window'); };
+    window.resetFilters = function(){ alert('已复原过滤标准（占位）'); };
+    window.applyFilters = function(){ alert('已应用 AND 逻辑（占位）'); };
+    window.applyFiltersOr = function(){ alert('已应用 OR 逻辑（占位）'); };
+
+    window.openStyleWindow = function(attr){
+      const el = document.getElementById('style-window');
+      if(!el) return; 
+      el.style.display = 'block';
+      const title = document.getElementById('style-title');
+      if(title) title.textContent = (attr || '属性') + ' 样式';
+      const hint = document.getElementById('bound-type-hint');
+      if(hint) hint.textContent = '当前样式：无';
+    };
+    window.closeStyleWindow = function(){ hide('style-window'); };
+    window.addStyleRow = function(){ alert('新增样式（占位）'); };
+    window.confirmStyle = function(){ alert('样式已保存（占位）'); hide('style-window'); };
+
+    document.addEventListener('DOMContentLoaded', function(){
+      const confirmBtn = document.getElementById('attr-picker-confirm');
+      const cancelBtn = document.getElementById('attr-picker-cancel');
+      const selAllBtn = document.getElementById('attr-picker-select-all');
+      const clearBtn = document.getElementById('attr-picker-clear');
+      const picker = document.getElementById('attr-picker-window');
+      if(confirmBtn) confirmBtn.addEventListener('click', function(){ alert('已选择（占位）'); if(picker) picker.style.display = 'none'; });
+      if(cancelBtn) cancelBtn.addEventListener('click', function(){ if(picker) picker.style.display = 'none'; });
+      if(selAllBtn) selAllBtn.addEventListener('click', function(){ alert('全选（占位）'); });
+      if(clearBtn) clearBtn.addEventListener('click', function(){ alert('全不选（占位）'); });
+    });
+  })();
+</script>
+
+<!-- ===== 仅显示时间轴（使用 constants.js 的 ENDPOINT） ===== -->
+<script type="module">
+  import { ENDPOINT } from './src/constants.js';
+
+  const container = document.getElementById('timeline');
+  if (!container) throw new Error('#timeline 容器不存在');
+
+  async function loadDataStrict() {
+    const url = ENDPOINT;
+    if (!url) throw new Error('未定义 ENDPOINT，请检查 src/constants.js');
+
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error(`接口请求失败：${res.status} ${res.statusText}`);
+
+    const json = await res.json();
+    const arr = Array.isArray(json) ? json : (json.items || json.data);
+    if (!Array.isArray(arr)) throw new Error('接口返回数据格式不符：应为数组，或包含 items/data 数组');
+
+    return arr.map(normalizeItem).filter(Boolean);
+  }
+
+  function normalizeItem(row, idx) {
+    if (!row) return null;
+    if (row.start && row.content) return row; // 已是 vis 结构
+
+    const id = row.id || row.ID || idx + 1;
+    const title = row.Title || row.title || row.name || `事件 ${id}`;
+    const start = row.Start || row.start;
+    const end = row.End || row.end || undefined;
+    const company = row.Company || row.company || '';
+    const region = row.Region || row.region || '';
+    const platform = row.Platform || row.platform || '';
+    const consolePlatform = row.ConsolePlatform || row.consolePlatform || '';
+    const eventType = row.EventType || row.eventType || '';
+    const desc = row.Description || row.description || '';
+
+    const metaLine = [eventType, company, region, platform || consolePlatform].filter(Boolean).join(' · ');
+
+    return {
+      id,
+      content: [
+        `<h4 class="event-title">${escapeHtml(title)}</h4>`,
+        metaLine ? `<div class="event-meta">${escapeHtml(metaLine)}</div>` : '',
+        desc ? `<div class="event-desc">${escapeHtml(desc)}</div>` : ''
+      ].join(''),
+      start: start ? toISO(start) : undefined,
+      end: end ? toISO(end) : undefined
+    };
+  }
+
+  function toISO(d) {
+    const dt = (d instanceof Date) ? d : new Date(String(d));
+    return isNaN(+dt) ? undefined : dt.toISOString();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+
+  (async function initTimeline(){
+    const loading = document.createElement('div');
+    loading.textContent = '加载时间轴数据中…';
+    loading.style.cssText = 'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
+    container.appendChild(loading);
+
+    try {
+      const data = await loadDataStrict();
+      const items = new vis.DataSet(data);
+
+      const times = items.get().map(it => +new Date(it.start || it.end));
+      const minT = Math.min.apply(null, times);
+      const maxT = Math.max.apply(null, times);
+      const pad = Math.max(7, Math.round((maxT - minT) * 0.05));
+
+      const options = {
+        locale: 'zh-cn',
+        stack: true,
+        zoomMin: 1000 * 60 * 60 * 24,
+        zoomMax: 1000 * 60 * 60 * 24 * 3660,
+        maxHeight: 720,
+        minHeight: 720,
+        margin: { item: 8, axis: 12 },
+        orientation: 'top',
+        tooltip: { followMouse: true },
+        start: isFinite(minT) ? new Date(minT - pad) : undefined,
+        end:   isFinite(maxT) ? new Date(maxT + pad) : undefined
+      };
+
+      const timeline = new vis.Timeline(container, items, options);
+      window.addEventListener('resize', () => timeline.redraw());
+
+      window.__timeline = timeline;   // 预留给后续筛选/样式
+      window.__timelineItems = items; // 预留给后续筛选/样式
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err.message)}</div>`;
+    } finally {
+      loading.remove();
+    }
+  })();
+</script>
 
   <!-- ===== 布局与占位样式（重建脚手架） ===== -->
   <style>
