@@ -1,4 +1,4 @@
-// src/app.js
+// public/src/app.js
 import { attachEventDataAttrs, applyStyleState } from './style/engine.js';
 import { getStyleState, setStyleState, onStyleStateChange } from './state/styleState.js';
 import {
@@ -8,7 +8,13 @@ import {
   STYLE_LABELS,
   styleLabel,
 } from './_staging/constants.js';
-import { renderFilterList } from './_staging/style-ui.js';
+
+// ✅ 从 style-ui 引入渲染时间轴 & 工具栏绑定
+import {
+  renderFilterList,
+  bindToolbar,
+  mountTimeline,
+} from './_staging/style-ui.js';
 
 function updateFilterList() {
   const div = document.getElementById('current-filters');
@@ -36,10 +42,10 @@ window.__styleEngine = { attachEventDataAttrs, applyStyleState };
 window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
 
 console.log('app.js loaded (style engine + state ready)');
-// app.js 末尾（在 console.log 之后即可）
+// 旧事件通知
 window.dispatchEvent(new Event('style:ready'));
 
-// src/app.js（在现有内容基础上补充）
+// 旧的按需加载示例（保留）
 const openBtn = document.getElementById('open-style');
 if (openBtn) {
   openBtn.addEventListener('click', async () => {
@@ -54,7 +60,16 @@ if (openBtn) {
 window.ENDPOINT = ENDPOINT; // 暴露给 test.html 里的旧代码
 window.updateFilterList = updateFilterList;
 
+// ✅ 关键：页面就绪后绑定工具栏 & 挂载时间轴
+window.addEventListener('DOMContentLoaded', () => {
+  // 绑定顶部按钮到占位逻辑（避免点击无反应）
+  bindToolbar();
 
-
-
-
+  // 渲染时间轴
+  const el = document.getElementById('timeline');
+  if (!el) {
+    console.error('[timeline] 未找到 #timeline 容器');
+    return;
+  }
+  mountTimeline(el);
+});
