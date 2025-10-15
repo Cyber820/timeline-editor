@@ -75,3 +75,5 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 import { fetchAndNormalize } from './fetch.js';
+import { mountTimeline } from '../timeline/mount.js';
+
