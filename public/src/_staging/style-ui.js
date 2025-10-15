@@ -18,13 +18,7 @@ import {
 /* =========================
  * 内存模型（与面板一致）
  * ========================= */
-export const stateMem = {
-  currentStyleAttr: null,
-  boundStyleType: {},       // { [attrKey]: 'fontColor' | 'borderColor' | 'backgroundColor' | 'fontFamily' | 'haloColor' | 'none' }
-  styleTypeOwner: {},       // { [styleKey]: attrKey }
-  styleRules: {},           // { [attrKey]: Array<{ id, type, style: {}, values: string[] }> }
-  styleRowSelections: {},   // { [rowId]: string[] }
-};
+
 // 运行态：属性选择弹窗状态 & Choices 实例
 let attrPickerEditing = { rowId: null, attrKey: null };
 let attrPickerChoices = null;
