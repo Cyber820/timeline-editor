@@ -19,21 +19,6 @@ import { escapeHtml } from '../utils/dom.js';
 
 import { fetchAndNormalize } from './fetch.js';
 
-
-/* =========================
- * —— 下面是你原有的样式/筛选占位逻辑 —— 
- *  （保持不变，方便后续第三/四步继续接线）
- * ========================= */
-
-
-
-
-
-// UI 下拉到内部键名映射：'font' => 'fontFamily'
-export function uiTypeToInternal(t) {
-  return (t === 'font') ? 'fontFamily' : t;
-}
-
 /* =========================
  * 渲染骨架（占位：二遍时把现有实现粘进来）
  * ========================= */
