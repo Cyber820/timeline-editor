@@ -102,71 +102,124 @@ export async function fetchAndNormalize() {
   return out;
 }
 
-// 渲染时间轴（只显示，不接筛选/样式）
-export async function mountTimeline(container) {
+/**
+ * 渲染时间轴（只负责“展示”）
+ * @param {HTMLElement} container - 承载时间轴的容器（必须存在）
+ * @param {Object} [overrides]    - 可选：覆盖默认 options（例如 { orientation:{axis:'bottom', item:'bottom'} }）
+ *
+ * 可调项速查（都在 defaults 里）：
+ * - orientation：轴线与事件框位置（'top'/'bottom'；可分别控制 axis 与 item）
+ * - margin.item / margin.axis：行距 & 轴线与事件框的垂直间距
+ * - minHeight / maxHeight：整体高度
+ * - stack：是否自动分多行避免重叠
+ * - zoomMin / zoomMax：最小 / 最大缩放范围
+ * - locale：本地化（'zh-cn'）
+ * - tooltip.followMouse：鼠标跟随提示
+ */
+export async function mountTimeline(container, overrides = {}) {
   window.__timelineInit = 'mounting';
   log('mountTimeline start');
 
+  // 0) 前置防御：容器与 vis 是否就绪
   if (!container) {
     console.error('mountTimeline: 容器不存在');
     window.__timelineInit = 'container-missing';
     return;
   }
+  if (!window.vis || !window.vis.Timeline || !window.vis.DataSet) {
+    console.error('mountTimeline: vis.js 未加载（请确认 <script src="...vis.min.js"> 在 app.js 之前）');
+    container.innerHTML = '<div style="padding:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">vis.js 未加载，请检查脚本引入顺序。</div>';
+    window.__timelineInit = 'error';
+    return;
+  }
 
-  // 先放一个空 DataSet 到全局，便于你在控制台观测
-  window.__timelineItems = new window.vis.DataSet([]);
+  // 1) 全局状态初始化（便于在控制台查看）
+  window.__timelineItems = new window.vis.DataSet([]); // 先放空数据集
   window.__timeline = null;
 
+  // 2) 轻量“加载中”提示
   const loading = document.createElement('div');
   loading.textContent = '加载时间轴数据中…';
   loading.style.cssText = 'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
+  // 如果容器不是定位元素，给它一个相对定位，避免小浮层跑偏
+  const needRel = getComputedStyle(container).position === 'static';
+  if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
   try {
+    // 3) 拉取数据并规范化为 vis items
     const data = await fetchAndNormalize();
-
     if (!data.length) {
-      container.innerHTML = '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">接口返回 0 条记录：请检查 Title/Start 字段是否存在，以及 Start 是否为可解析日期（如 1998-10-21）。</div>';
+      container.innerHTML =
+        '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">接口返回 0 条记录：请检查 Title/Start 字段是否存在，以及 Start 是否为可解析日期（如 1998-10-21）。</div>';
       window.__timelineInit = 'empty-data';
       return;
     }
 
+    // 4) 写入 DataSet（可动态增删查改）
     const items = new window.vis.DataSet(data);
-    window.__timelineItems = items; // ✅ 全局可见
+    window.__timelineItems = items; // ✅ 全局暴露，方便调试：__timelineItems.get()
 
+    // 5) 计算初始视窗（根据数据时间范围适度留白）
     const times = items.get().map(it => +new Date(it.start || it.end));
     const minT = Math.min.apply(null, times);
     const maxT = Math.max.apply(null, times);
-    const pad = Math.max(7, Math.round((maxT - minT) * 0.05));
+    const pad = Math.max(7, Math.round((maxT - minT) * 0.05)); // 左右各留 5% 作为缓冲
 
-    const options = {
+    // 6) 默认参数（这里集中可调“味道”）
+    const defaults = {
       locale: 'zh-cn',
-      stack: true,
-      zoomMin: 1000 * 60 * 60 * 24,          // 可缩到 1 天
-      zoomMax: 1000 * 60 * 60 * 24 * 3660,   // 可拉到约 10 年
+      stack: true,                                  // 自动分行避免重叠
+      minHeight: 720,                               // 统一高度（也可只设一个 maxHeight）
       maxHeight: 720,
-      minHeight: 720,
-      margin: { item: 8, axis: 12 },
-      orientation: 'top',
+      // 把事件放到轴线“同侧/下侧”
+      // - 轴线在下、事件在下：{ axis:'bottom', item:'bottom' }
+      // - 轴线在上、事件在上：{ axis:'top', item:'top' }
+      // - 轴线在上、事件在下：{ axis:'top', item:'bottom' }
+      orientation: { axis: 'bottom', item: 'bottom' },
+
+      // 行距（行与行）与轴线间距（轴线与事件框）
+      margin: { item: 12, axis: 14 },
+
+      // 缩放区间
+      zoomMin: 1000 * 60 * 60 * 24,                 // 最小 1 天
+      zoomMax: 1000 * 60 * 60 * 24 * 3660,          // 最大约 10 年
+
+      // 提示跟随
       tooltip: { followMouse: true },
+
+      // 初始可视区域（无数据时让 vis 用默认）
       start: isFinite(minT) ? new Date(minT - pad) : undefined,
       end:   isFinite(maxT) ? new Date(maxT + pad) : undefined,
+
+      // 其他可选项（按需打开）
+      // selectable: false,                           // 禁用框选
+      // multiselect: false,
+      // verticalScroll: true,                        // 超高时允许垂直滚动
     };
 
-    const timeline = new window.vis.Timeline(container, items, options);
-    window.__timeline = timeline;   // ✅ 全局可见
+    // 7) 合并覆盖（浅合并：如要改 margin/orientation，需要整对象传入）
+    const options = { ...defaults, ...overrides };
 
+    // 8) 创建 Timeline
+    const timeline = new window.vis.Timeline(container, items, options);
+    window.__timeline = timeline; // ✅ 全局暴露，便于调试：__timeline.setOptions(...)
+
+    // 9) 自适应：窗口尺寸变更时重绘
     window.addEventListener('resize', () => timeline.redraw());
+
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.length);
   } catch (err) {
     console.error(err);
-    container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err.message)}</div>`;
+    container.innerHTML =
+      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err.message)}</div>`;
     window.__timelineInit = 'error';
   } finally {
     loading.remove();
   }
 }
+
 
 /* =========================
  * —— 下面是你原有的样式/筛选占位逻辑 —— 
