@@ -19,38 +19,8 @@ import { toISO } from '../utils/data.js';
 import { escapeHtml } from '../utils/dom.js';
 
 
+import { fetchAndNormalize } from './fetch.js';
 
-
-
-// 拉取后端数据并规范化
-export async function fetchAndNormalize() {
-  log('fetching from', ENDPOINT);
-  const res = await fetch(ENDPOINT, { mode: 'cors' });
-  log('fetch status', res.status, res.statusText);
-  if (!res.ok) throw new Error(`接口请求失败：${res.status} ${res.statusText}`);
-  const json = await res.json();
-  const arr = Array.isArray(json) ? json : (json.items || json.data);
-  if (!Array.isArray(arr)) throw new Error('接口返回数据格式不符：应为数组或包含 items/data 数组');
-
-  const out = arr.map(normalizeItem).filter(Boolean);
-  log('fetched len=', arr.length, 'normalized len=', out.length, 'first raw=', arr[0]);
-  return out;
-}
-
-/**
- * 渲染时间轴（只负责“展示”）
- * @param {HTMLElement} container - 承载时间轴的容器（必须存在）
- * @param {Object} [overrides]    - 可选：覆盖默认 options（例如 { orientation:{axis:'bottom', item:'bottom'} }）
- *
- * 可调项速查（都在 defaults 里）：
- * - orientation：轴线与事件框位置（'top'/'bottom'；可分别控制 axis 与 item）
- * - margin.item / margin.axis：行距 & 轴线与事件框的垂直间距
- * - minHeight / maxHeight：整体高度
- * - stack：是否自动分多行避免重叠
- * - zoomMin / zoomMax：最小 / 最大缩放范围
- * - locale：本地化（'zh-cn'）
- * - tooltip.followMouse：鼠标跟随提示
- */
 export async function mountTimeline(container, overrides = {}) {
   window.__timelineInit = 'mounting';
   log('mountTimeline start');
