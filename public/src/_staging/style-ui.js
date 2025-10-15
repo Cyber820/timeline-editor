@@ -19,9 +19,7 @@ import {
  * 内存模型（与面板一致）
  * ========================= */
 
-// 运行态：属性选择弹窗状态 & Choices 实例
-let attrPickerEditing = { rowId: null, attrKey: null };
-let attrPickerChoices = null;
+
 
 /* =========================
  * —— 新增：时间轴最小渲染链路 ——
