@@ -2,6 +2,7 @@
 import { getStyleState, setStyleState } from '../state/styleState.js';
 import { applyStyleState } from '../style/engine.js';
 import { genId } from '../utils/id.js';
+import { uiTypeToInternal } from '../_staging/constants.js';
 
 // —— 模块内状态（面板内部用，不再挂 window）——
 let _mounted = false;
@@ -173,7 +174,6 @@ export function findRule(attrKey, rowId) {
   return bucket.find(r => r.id === rowId) || null;
 }
 
-function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 
 function renderStyleTable(attrKey) {
   const tbody = document.getElementById('styleTableBody');
@@ -266,6 +266,7 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
 
