@@ -25,12 +25,7 @@ import {
  * —— 新增：时间轴最小渲染链路 ——
  * ========================= */
 
-// 让你能在控制台观察到状态
-window.__timelineInit = 'not-started';
-window.__timeline = null;
-window.__timelineItems = null;
 
-function log(...args){ console.log('[timeline]', ...args); }
 
 // 更稳的日期解析：支持 1998-10-21 / 1998/10/21 / 1998.10.21
 function toISO(d) {
