@@ -15,32 +15,11 @@ import {
   FIELD,
 } from './constants.js';
 
-/* =========================
- * 内存模型（与面板一致）
- * ========================= */
+import { toISO } from '../utils/data.js';
+import { escapeHtml } from '../utils/dom.js';
 
 
 
-/* =========================
- * —— 新增：时间轴最小渲染链路 ——
- * ========================= */
-
-
-
-// 更稳的日期解析：支持 1998-10-21 / 1998/10/21 / 1998.10.21
-function toISO(d) {
-  if (!d) return undefined;
-  const s = String(d).trim();
-  const norm = s.replace(/[./]/g, '-');
-  const dt = new Date(norm);
-  return isNaN(+dt) ? undefined : dt.toISOString();
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>\"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[c]);
-}
 
 // 将“表单/接口行”规范化为 vis item（只做展示，不含样式绑定）
 export function normalizeItem(row, idx) {
