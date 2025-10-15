@@ -163,8 +163,11 @@ function injectStateIntoPanel(state) {
 }
 
 // ====== 下面是你面板用到的工具 & 渲染函数骨架（把原函数搬进来即可） ======
-function genId() { return crypto.randomUUID?.() || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2)); }
-function ensureBucket(attrKey) { if (!styleRules[attrKey]) styleRules[attrKey] = []; return styleRules[attrKey]; }
+
+export function ensureBucket(attrKey) {
+  if (!stateMem.styleRules[attrKey]) stateMem.styleRules[attrKey] = [];
+  return stateMem.styleRules[attrKey];
+}
 function findRule(attrKey, rowId) { return (styleRules[attrKey] || []).find(r => r.id === rowId) || null; }
 function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 
@@ -259,4 +262,5 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
