@@ -3,16 +3,14 @@
 // 保留你现有的样式/筛选占位逻辑；后续再逐步拆分
 
 import {
-  // 你已有的工具（保留）
   getFilterOptionsForKeyFrom,
   createEmptyRuleForType,
   ensureBucketIn,
   buildEngineStyleState,
-
-  // ✅ 新增：直接从同一 constants 引入 ENDPOINT
-  ENDPOINT,
-  // 若 FIELD 映射也在 constants.js，可一并引入（见下方 FIELD 的使用）
-  FIELD,
+  // 如需中文标签/颜色/样式名，可按需解开：
+  // attributeLabels,
+  // PRESET_COLORS,
+  // styleLabel,
 } from './constants.js';
 
 import { toISO } from '../utils/data.js';
