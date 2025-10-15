@@ -1,6 +1,7 @@
 // src/ui/style-panel.js
 import { getStyleState, setStyleState } from '../state/styleState.js';
 import { applyStyleState } from '../style/engine.js';
+import { genId } from '../utils/id.js';
 
 // —— 模块内状态（面板内部用，不再挂 window）——
 let _mounted = false;
@@ -258,3 +259,4 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
