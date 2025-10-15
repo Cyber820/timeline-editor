@@ -168,7 +168,11 @@ export function ensureBucket(attrKey) {
   if (!stateMem.styleRules[attrKey]) stateMem.styleRules[attrKey] = [];
   return stateMem.styleRules[attrKey];
 }
-function findRule(attrKey, rowId) { return (styleRules[attrKey] || []).find(r => r.id === rowId) || null; }
+export function findRule(attrKey, rowId) {
+  const bucket = stateMem.styleRules[attrKey] || [];
+  return bucket.find(r => r.id === rowId) || null;
+}
+
 function uiTypeToInternal(t) { return (t === 'font') ? 'fontFamily' : t; }
 
 function renderStyleTable(attrKey) {
@@ -262,5 +266,6 @@ function openFallbackJsonPanel() {
   }
   host.querySelector('#sp-json').value = JSON.stringify(getStyleState(), null, 2);
 }
+
 
 
