@@ -21,37 +21,6 @@ import { escapeHtml } from '../utils/dom.js';
 
 
 
-// 将“表单/接口行”规范化为 vis item（只做展示，不含样式绑定）
-export function normalizeItem(row, idx) {
-  if (!row) return null;
-  if (row.start && row.content) return row; // 已是 vis 结构
-
-  // 若你没有在 constants.js 暴露 FIELD，可把下列取值直接写成固定字段名
-  const id = row.id || row[FIELD?.id || 'ID'] || row.ID || idx + 1;
-  const title = row[FIELD?.title || 'Title'] || row.title || row.name || `事件 ${id}`;
-  const start = row[FIELD?.start || 'Start'] || row.start;
-  const end   = row[FIELD?.end || 'End']     || row.end || undefined;
-  const company = row[FIELD?.company || 'Company'] || row.company || '';
-  const region  = row[FIELD?.region  || 'Region']  || row.region  || '';
-  const platform = row[FIELD?.platform || 'Platform'] || row.platform || '';
-  const consolePlatform = row[FIELD?.consolePlatform || 'ConsolePlatform'] || row.consolePlatform || '';
-  const eventType = row[FIELD?.eventType || 'EventType'] || row.eventType || '';
-  const desc = row[FIELD?.desc || 'Description'] || row.description || '';
-
-  const metaLine = [eventType, company, region, platform || consolePlatform]
-    .filter(Boolean).join(' · ');
-
-  return {
-    id,
-    content: [
-      `<h4 class="event-title">${escapeHtml(title)}</h4>`,
-      metaLine ? `<div class="event-meta">${escapeHtml(metaLine)}</div>` : '',
-      desc ? `<div class="event-desc">${escapeHtml(desc)}</div>` : '',
-    ].join(''),
-    start: start ? toISO(start) : undefined,
-    end: end ? toISO(end) : undefined,
-  };
-}
 
 // 拉取后端数据并规范化
 export async function fetchAndNormalize() {
