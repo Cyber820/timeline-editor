@@ -25,22 +25,9 @@ import { fetchAndNormalize } from './fetch.js';
  *  （保持不变，方便后续第三/四步继续接线）
  * ========================= */
 
-// 通用工具
-export function genId() {
-  return (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2));
-}
 
-export function ensureBucket(attrKey) {
-  if (!stateMem.styleRules[attrKey]) stateMem.styleRules[attrKey] = [];
-  return stateMem.styleRules[attrKey];
-}
 
-export function findRule(attrKey, rowId) {
-  const bucket = stateMem.styleRules[attrKey] || [];
-  return bucket.find(r => r.id === rowId) || null;
-}
+
 
 // UI 下拉到内部键名映射：'font' => 'fontFamily'
 export function uiTypeToInternal(t) {
