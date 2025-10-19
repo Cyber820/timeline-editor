@@ -31,10 +31,7 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
  * ========================= */
 
 
-export function setRowSelections(selMap, rowId, values) {
-  selMap[rowId] = Array.isArray(values) ? values.slice() : [];
-  return selMap;
-}
+
 
 export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
   if (!tbody) return;
@@ -960,3 +957,14 @@ export function bindToolbar() {
 
   log('toolbar bound');
 }
+
+export function renderSimpleOptions(selectEl, list) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  (list || []).forEach(opt => {
+    const o = document.createElement('option');
+    o.value = o.textContent = opt;
+    selectEl.appendChild(o);
+  });
+}
+
