@@ -30,3 +30,11 @@ export function setRowSelections(selMap, rowId, values) {
   selMap[rowId] = Array.isArray(values) ? values.slice() : [];
   return selMap;
 }
+
+
+export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  (Array.isArray(rules) ? rules : []).forEach(rule => rowRender && rowRender(attrKey, rule));
+}
+
