@@ -25,3 +25,8 @@ export function renderRowAttrChips(rowId, values) {
   if (!tbody) return;
   renderRowAttrChipsInTbody(tbody, rowId, values);
 }
+
+export function setRowSelections(selMap, rowId, values) {
+  selMap[rowId] = Array.isArray(values) ? values.slice() : [];
+  return selMap;
+}
