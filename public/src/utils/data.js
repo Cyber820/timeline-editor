@@ -12,3 +12,11 @@ export function toISO(d) {
   const dt = new Date(norm);
   return isNaN(+dt) ? undefined : dt.toISOString();
 }
+
+// 比较两个集合是否相同
+export function isSameSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a), sb = new Set(b);
+  for (const v of sa) if (!sb.has(v)) return false;
+  return true;
+}
