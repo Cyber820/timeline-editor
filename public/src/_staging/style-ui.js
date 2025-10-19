@@ -30,15 +30,6 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
  * 过滤面板渲染（纯 UI）
  * ========================= */
 
-export function renderSimpleOptions(selectEl, list) {
-  if (!selectEl) return;
-  selectEl.innerHTML = '';
-  (list || []).forEach(opt => {
-    const o = document.createElement('option');
-    o.value = o.textContent = opt;
-    selectEl.appendChild(o);
-  });
-}
 
 export function setRowSelections(selMap, rowId, values) {
   selMap[rowId] = Array.isArray(values) ? values.slice() : [];
