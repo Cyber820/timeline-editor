@@ -27,81 +27,9 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 
 /* =========================
- * 过滤面板渲染（纯 UI）
- * ========================= */
-
-
-
-
-/* =========================
- * 样式控件 wiring（字体/颜色）
- * ========================= */
-
-/* =========================
  * 表格行片段（纯渲染 + 依赖注入）
  * ========================= */
-export function renderRuleRowFragment(attrKey, rule, deps = {}) {
-  const {
-    buildStyleControl,
-    openAttrPicker,
-    renderRowAttrChips,
-    styleRulesRef,
-  } = deps;
 
-  const tr = document.createElement('tr');
-  tr.dataset.rowId = rule.id;
-  tr.dataset.attrKey = attrKey;
-
-  // 左：样式控件
-  const tdContent = document.createElement('td');
-  tdContent.dataset.styleType = rule.type;
-  const ctrl = buildStyleControl(rule.type);
-  tdContent.appendChild(ctrl);
-  tr.appendChild(tdContent);
-
-  // 控件 wiring
-  if (rule.type === 'fontFamily') {
-    wireFontFamilyControl(tdContent, rule);
-  } else if (['fontColor', 'borderColor', 'backgroundColor', 'haloColor'].includes(rule.type)) {
-    wireColorHexSync(tdContent, rule);
-  }
-
-  // 中：标签 chips + “添加/修改属性”
-  const tdAttr = document.createElement('td');
-  const chips = document.createElement('div');
-  chips.className = 'attr-chips';
-  chips.style.minHeight = '28px';
-  tdAttr.appendChild(chips);
-
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.textContent = '添加/修改属性';
-  editBtn.style.marginLeft = '8px';
-  editBtn.addEventListener('click', () => openAttrPicker(rule.id, attrKey));
-  tdAttr.appendChild(editBtn);
-
-  tr.appendChild(tdAttr);
-
-  // 首次渲染标签
-  renderRowAttrChips(rule.id, rule.values || []);
-
-  // 右：删除行
-  const tdAction = document.createElement('td');
-  const delBtn = document.createElement('button');
-  delBtn.type = 'button';
-  delBtn.title = '删除该样式行';
-  delBtn.textContent = '×';
-  delBtn.addEventListener('click', () => {
-    const bucket = (styleRulesRef && styleRulesRef[attrKey]) || [];
-    const idx = bucket.findIndex(r => r.id === rule.id);
-    if (idx >= 0) bucket.splice(idx, 1);
-    tr.remove();
-  });
-  tdAction.appendChild(delBtn);
-  tr.appendChild(tdAction);
-
-  return tr;
-}
 
 /* =========================
  * 样式类型选择 & 窗口视图
