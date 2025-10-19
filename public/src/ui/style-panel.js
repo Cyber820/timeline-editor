@@ -334,6 +334,59 @@ export function applyStyleWindowView(rootEls, vm) {
   if (addBtnEl)    addBtnEl.disabled = vm.ui.add.disabled;
 }
 
+export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
+  if (!selectEl) return { stagedType: 'none', blockedBy: 'no-select' };
+
+  const {
+    uiTypeToInternal = (v) => v,
+    boundStyleType = {},
+    currentStyleAttr = null,
+    styleTypeOwner = {},
+    attributeLabels = {},
+    styleLabel = (k) => k,
+    confirmBtnEl = null,
+    hintEl = null,
+    refreshOptions = null,
+    notify = null,
+  } = deps;
+
+  const disableConfirm = (yes) => { if (confirmBtnEl) confirmBtnEl.disabled = !!yes; };
+  const setHint = (txt) => { if (hintEl) hintEl.textContent = txt; };
+
+  let mapped = uiTypeToInternal(selectEl.value) || 'none';
+  let stagedType = mapped;
+
+  // 已绑定：未重置前禁止切换
+  const already = boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none';
+  if (already) {
+    selectEl.value = 'none';
+    stagedType = 'none';
+    setHint(`当前绑定：${styleLabel(boundStyleType[currentStyleAttr])}（如需更改，请先“重置”）`);
+    disableConfirm(true);
+    return { stagedType, blockedBy: 'self-bound' };
+  }
+
+  // 全局唯一占用
+  if (mapped !== 'none') {
+    const owner = styleTypeOwner[mapped];
+    const isMine = owner === currentStyleAttr;
+    if (owner && !isMine) {
+      const msg = `“${styleLabel(mapped)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`;
+      if (typeof notify === 'function') notify(msg);
+      selectEl.value = 'none';
+      stagedType = 'none';
+      disableConfirm(true);
+      if (typeof refreshOptions === 'function') refreshOptions();
+      return { stagedType, blockedBy: 'occupied', owner };
+    }
+  }
+
+  // 正常可选
+  disableConfirm(stagedType === 'none');
+  return { stagedType, blockedBy: null };
+}
+
+
 
 
 
