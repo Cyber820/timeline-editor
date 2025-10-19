@@ -23,62 +23,6 @@ import { openAttrPicker } from '../ui/attr-picker.js';
 
 
 
-
-
-
-/* =========================
- * —— 新增：按钮/弹窗占位绑定 —— 
- *   保持与你页面 onclick 兼容（可在 app.js 调用）
- * ========================= */
-export function bindToolbar() {
-  // 过滤
-  window.openFilterWindow = function () {
-    const el = document.getElementById('filter-window');
-    if (el) el.style.display = 'block';
-  };
-  window.openAddFilter = function () {
-    const el = document.getElementById('add-filter-window');
-    if (el) el.style.display = 'block';
-  };
-  window.resetFilters = function () { alert('已复原过滤标准（占位）'); };
-  window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
-  window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
-
-  // 样式
-  window.openStyleWindow = function (attr) {
-    const el = document.getElementById('style-window');
-    if (!el) return;
-    el.style.display = 'block';
-    const title = document.getElementById('style-title');
-    if (title) title.textContent = (attr || '属性') + ' 样式';
-    const hint = document.getElementById('bound-type-hint');
-    if (hint) hint.textContent = '当前样式：无';
-  };
-  window.closeStyleWindow = function () {
-    const el = document.getElementById('style-window');
-    if (el) el.style.display = 'none';
-  };
-  window.addStyleRow = function () { alert('新增样式（占位）'); };
-  window.confirmStyle = function () {
-    alert('样式已保存（占位）');
-    const el = document.getElementById('style-window');
-    if (el) el.style.display = 'none';
-  };
-
-  // 属性选择弹窗按钮
-  const picker = document.getElementById('attr-picker-window');
-  const confirmBtn = document.getElementById('attr-picker-confirm');
-  const cancelBtn = document.getElementById('attr-picker-cancel');
-  const selAllBtn = document.getElementById('attr-picker-select-all');
-  const clearBtn = document.getElementById('attr-picker-clear');
-  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
-  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
-  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
-  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
-
-  log('toolbar bound');
-}
-
 // ✅ 补丁：renderRuleRow（用你已写好的 fragment 渲染行）
 export function renderRuleRow(attrKey, rule) {
   const tbody = document.getElementById('styleTableBody');
@@ -1201,4 +1145,57 @@ export function applyCurrentStylesInjected({
 
   applyEngine(state, { selectorBase, titleSelector });
   return state;
+}
+
+/* =========================
+ * —— 新增：按钮/弹窗占位绑定 —— 
+ *   保持与你页面 onclick 兼容（可在 app.js 调用）
+ * ========================= */
+export function bindToolbar() {
+  // 过滤
+  window.openFilterWindow = function () {
+    const el = document.getElementById('filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.openAddFilter = function () {
+    const el = document.getElementById('add-filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.resetFilters = function () { alert('已复原过滤标准（占位）'); };
+  window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
+  window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
+
+  // 样式
+  window.openStyleWindow = function (attr) {
+    const el = document.getElementById('style-window');
+    if (!el) return;
+    el.style.display = 'block';
+    const title = document.getElementById('style-title');
+    if (title) title.textContent = (attr || '属性') + ' 样式';
+    const hint = document.getElementById('bound-type-hint');
+    if (hint) hint.textContent = '当前样式：无';
+  };
+  window.closeStyleWindow = function () {
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+  window.addStyleRow = function () { alert('新增样式（占位）'); };
+  window.confirmStyle = function () {
+    alert('样式已保存（占位）');
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+
+  // 属性选择弹窗按钮
+  const picker = document.getElementById('attr-picker-window');
+  const confirmBtn = document.getElementById('attr-picker-confirm');
+  const cancelBtn = document.getElementById('attr-picker-cancel');
+  const selAllBtn = document.getElementById('attr-picker-select-all');
+  const clearBtn = document.getElementById('attr-picker-clear');
+  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
+  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
+  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
+
+  log('toolbar bound');
 }
