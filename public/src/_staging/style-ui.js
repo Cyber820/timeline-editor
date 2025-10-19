@@ -23,89 +23,8 @@ import { openAttrPicker } from '../ui/attr-picker.js';
 
 
 
-// ✅ 补丁：renderRuleRow（用你已写好的 fragment 渲染行）
-export function renderRuleRow(attrKey, rule) {
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) return;
 
-  const tr = renderRuleRowFragment(attrKey, rule, {
-    buildStyleControl: (type) => buildStyleControl(type), // 依赖注入版控件
-    openAttrPicker,                                       // 仍为占位，第二遍再接
-    renderRowAttrChips,                                   // 用下方补丁实现
-    styleRulesRef: stateMem.styleRules,                   // 删除行时使用
-  });
 
-  tbody.appendChild(tr);
-}
-
-export function renderStyleTable(attrKey) {
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  (stateMem.styleRules[attrKey] || []).forEach(rule => renderRuleRow(attrKey, rule));
-}
-
-// ✅ 补丁：renderRowAttrChips（包一层，复用 InTbody 版本）
-export function renderRowAttrChips(rowId, values) {
-  const tbody = document.getElementById('styleTableBody');
-  if (!tbody) return;
-  renderRowAttrChipsInTbody(tbody, rowId, values);
-}
-
-export function confirmAttrPicker() {
-  const { rowId, attrKey } = attrPickerEditing || {};
-  const sel = document.getElementById('attr-picker-options');
-  const modal = document.getElementById('attr-picker-window');
-
-  // 防御：缺少编辑状态或控件
-  if (!rowId || !attrKey || !sel) {
-    if (modal && modal.style) modal.style.display = 'none';
-    attrPickerEditing = { rowId: null, attrKey: null };
-    return;
-  }
-
-  // 读取当前选择并去重
-  const vals = Array.from(sel.selectedOptions || []).map(o => o.value);
-  const uniqueVals = Array.from(new Set(vals));
-
-  // 校验冲突（即使 open 时已过滤，这里再保险一次）
-  if (typeof getTakenValues === 'function') {
-    const takenByOthers = getTakenValues(attrKey, rowId); // Set
-    const conflict = uniqueVals.find(v => takenByOthers.has(v));
-    if (conflict) {
-      alert(`“${conflict}” 已被同属性的其他样式行占用，请取消或更换。`);
-      return;
-    }
-  }
-
-  // 写回规则
-  const rule = (typeof findRule === 'function') ? findRule(attrKey, rowId) : null;
-  if (!rule) {
-    if (modal && modal.style) modal.style.display = 'none';
-    attrPickerEditing = { rowId: null, attrKey: null };
-    return;
-  }
-  rule.values = uniqueVals;
-
-  // 同步旧的行缓存（兼容旧结构）
-  if (typeof window !== 'undefined' && window.styleRowSelections) {
-    window.styleRowSelections[rowId] = uniqueVals;
-  }
-
-  // 回填标签
-  if (typeof renderRowAttrChips === 'function') {
-    renderRowAttrChips(rowId, uniqueVals);
-  }
-
-  // 关闭弹窗 & 重置编辑态
-  if (modal && modal.style) modal.style.display = 'none';
-  attrPickerEditing = { rowId: null, attrKey: null };
-}
-
-export function closeAttrPicker() {
-  const m = document.getElementById('attr-picker-window');
-  if (m && m.style) m.style.display = 'none';
-}
 export function selectAllInAttrPicker() {
   const sel = document.getElementById('attr-picker-options');
   if (!sel) return;
