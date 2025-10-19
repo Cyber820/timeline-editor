@@ -716,6 +716,9 @@ export function applyCurrentStylesInjected({
   return state;
 }
 
+/*==================
+staging-ui.js保留位置
+  ===================*/
 /* =========================
  * —— 新增：按钮/弹窗占位绑定 —— 
  *   保持与你页面 onclick 兼容（可在 app.js 调用）
