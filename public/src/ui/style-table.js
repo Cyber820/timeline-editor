@@ -38,3 +38,38 @@ export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
   (Array.isArray(rules) ? rules : []).forEach(rule => rowRender && rowRender(attrKey, rule));
 }
 
+export function wireFontFamilyControl(containerEl, rule) {
+  if (!containerEl || !rule) return;
+  const sel = containerEl.querySelector('select');
+  if (!sel) return;
+  sel.value = rule.style?.fontFamily || '';
+  sel.addEventListener('change', () => {
+    if (!rule.style) rule.style = {};
+    rule.style.fontFamily = sel.value || '';
+  });
+}
+
+export function wireColorHexSync(containerEl, rule) {
+  if (!containerEl || !rule) return;
+  const color = containerEl.querySelector('input[type="color"]');
+  const hex   = containerEl.querySelector('input[type="text"]');
+  const current = (rule.style?.[rule.type]) || '#000000';
+  if (color) color.value = current;
+  if (hex)   hex.value   = current;
+
+  if (color && hex) {
+    color.addEventListener('input', () => {
+      const v = String(color.value || '#000000').toUpperCase();
+      hex.value = v;
+      if (!rule.style) rule.style = {};
+      rule.style[rule.type] = v;
+    });
+    hex.addEventListener('change', () => {
+      const v = String(hex.value || '#000000').toUpperCase();
+      if (!rule.style) rule.style = {};
+      rule.style[rule.type] = v;
+      if (String(color.value || '').toUpperCase() !== v) color.value = v;
+    });
+  }
+}
+
