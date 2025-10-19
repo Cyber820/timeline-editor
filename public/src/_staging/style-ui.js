@@ -27,41 +27,8 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 
 /* =========================
- * 表格行片段（纯渲染 + 依赖注入）
- * ========================= */
-
-
-/* =========================
  * 样式类型选择 & 窗口视图
  * ========================= */
-export function refreshStyleTypeOptionsInSelect(selectEl, deps) {
-  if (!selectEl || !selectEl.options) return;
-  const {
-    uiTypeToInternal,
-    styleTypeOwner = {},
-    currentStyleAttr = null,
-    attributeLabels = {},
-  } = deps || {};
-
-  Array.from(selectEl.options).forEach(opt => {
-    if (!opt.dataset.baseText) opt.dataset.baseText = opt.textContent;
-    const internal = uiTypeToInternal ? uiTypeToInternal(opt.value) : opt.value;
-
-    if (internal === 'none') {
-      opt.disabled = false;
-      opt.textContent = opt.dataset.baseText;
-      return;
-    }
-
-    const owner = styleTypeOwner[internal];
-    const isMine = owner === currentStyleAttr;
-
-    opt.disabled = !!(owner && !isMine);
-    opt.textContent = opt.dataset.baseText + (
-      owner && !isMine ? `（已绑定：${attributeLabels[owner] || owner}）` : ''
-    );
-  });
-}
 
 export function computeStyleWindowViewModel(attr, deps = {}) {
   const {
