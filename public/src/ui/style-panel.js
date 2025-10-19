@@ -386,6 +386,61 @@ export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
   return { stagedType, blockedBy: null };
 }
 
+export function confirmBindAction(deps = {}) {
+  const {
+    stagedType = 'none',
+    currentStyleAttr = null,
+
+    boundStyleType = {},
+    styleTypeOwner = {},
+
+    attributeLabels = {},
+    styleLabel = (k) => k,
+
+    tbodyEl = null,
+    confirmBtnEl = null,
+    resetBtnEl = null,
+    addBtnEl = null,
+    hintEl = null,
+
+    refreshOptions = null,
+    addStyleRow = null,
+    notify = (msg) => alert(msg),
+    confirmDialog = (msg) => window.confirm(msg),
+  } = deps;
+
+  if (stagedType === 'none') return { ok: false, reason: 'none' };
+
+  // 再验占用
+  const owner = styleTypeOwner[stagedType];
+  if (owner && owner !== currentStyleAttr) {
+    notify(`“${styleLabel(stagedType)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+    return { ok: false, reason: 'occupied', owner };
+  }
+
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && prev !== stagedType) {
+    const ok = confirmDialog('切换样式类型将清空该属性下已添加的样式行，是否继续？');
+    if (!ok) return { ok: false, reason: 'cancelled' };
+    if (tbodyEl) tbodyEl.innerHTML = '';
+    if (styleTypeOwner[prev] === currentStyleAttr) delete styleTypeOwner[prev];
+  }
+
+  // 写入绑定与占用
+  boundStyleType[currentStyleAttr] = stagedType;
+  styleTypeOwner[stagedType] = currentStyleAttr;
+
+  // UI
+  if (confirmBtnEl) { confirmBtnEl.disabled = true; confirmBtnEl.style.display = 'none'; }
+  if (resetBtnEl)   { resetBtnEl.style.display = 'inline-block'; }
+  if (addBtnEl)     { addBtnEl.disabled = false; }
+  if (hintEl)       { hintEl.textContent = `当前样式：${styleLabel(stagedType)}`; }
+
+  if (typeof refreshOptions === 'function') refreshOptions();
+  if (typeof addStyleRow === 'function') addStyleRow();
+
+  return { ok: true, bound: stagedType, attr: currentStyleAttr };
+}
 
 
 
