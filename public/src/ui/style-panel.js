@@ -446,3 +446,69 @@ export function confirmBindAction(deps = {}) {
 
 
 
+
+export function hideStyleWindow(styleWindowEl) {
+  if (styleWindowEl && styleWindowEl.style) styleWindowEl.style.display = 'none';
+}
+
+export function confirmStyleAction(deps = {}) {
+  const { applyCurrentStyles = () => {}, styleWindowEl = null } = deps;
+  applyCurrentStyles({ persist: true });
+  hideStyleWindow(styleWindowEl);
+  return { ok: true };
+}
+
+export function resetBindAction(deps = {}) {
+  const {
+    currentStyleAttr = null,
+    boundStyleType = {},
+    styleTypeOwner = {},
+    styleRulesRef = {},
+
+    tbodyEl = null,
+    typeSelEl = null,
+    confirmBtnEl = null,
+    resetBtnEl = null,
+    addBtnEl = null,
+    hintEl = null,
+
+    refreshOptions = null,
+    applyCurrentStyles = () => {},
+    confirmDialog = (msg) => window.confirm(msg),
+  } = deps;
+
+  // 是否有行
+  const hasRows = !!tbodyEl && tbodyEl.querySelectorAll('tr').length > 0;
+  const ok = !hasRows || confirmDialog('重置将清空该属性下所有样式行，是否继续？');
+  if (!ok) return { ok: false, reason: 'cancelled' };
+
+  // 释放占用者
+  const prev = boundStyleType[currentStyleAttr] || 'none';
+  if (prev !== 'none' && styleTypeOwner[prev] === currentStyleAttr) {
+    delete styleTypeOwner[prev];
+  }
+
+  // 清空规则与绑定
+  boundStyleType[currentStyleAttr] = 'none';
+  if (styleRulesRef[currentStyleAttr]) styleRulesRef[currentStyleAttr].length = 0;
+  if (tbodyEl) tbodyEl.innerHTML = '';
+
+  // 复位控件与提示
+  if (typeSelEl) typeSelEl.value = 'none';
+  if (confirmBtnEl) { confirmBtnEl.disabled = true; confirmBtnEl.style.display = 'inline-block'; }
+  if (resetBtnEl)   resetBtnEl.style.display = 'none';
+  if (addBtnEl)     addBtnEl.disabled = true;
+  if (hintEl)       hintEl.textContent = '当前样式：无';
+
+  if (typeof refreshOptions === 'function') refreshOptions();
+
+  // 立即应用并持久化
+  applyCurrentStyles({ persist: true });
+
+  return { ok: true, stagedType: 'none' };
+}
+
+
+
+
+
