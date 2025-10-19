@@ -50,14 +50,7 @@ function mountHandlersOnce(root) {
   btnReset && btnReset.addEventListener('click', onResetFromPanel);
   btnClose && btnClose.addEventListener('click', () => closeStylePanel());
 
-  // 如果有“确认绑定/重置绑定/打开属性选择器”等按钮，也在这里绑定
-  // 例如：root.querySelector('#style-confirm-btn')?.addEventListener('click', onConfirmBind);
-  //       root.querySelector('#add-style-btn')?.addEventListener('click', addStyleRow);
-  //       root.querySelector('#attr-picker-confirm')?.addEventListener('click', confirmAttrPicker);
-  //       root.querySelector('#attr-picker-cancel') ?.addEventListener('click', closeAttrPicker);
-  //       root.querySelector('#attr-picker-select-all')?.addEventListener('click', selectAllInAttrPicker);
-  //       root.querySelector('#attr-picker-clear')     ?.addEventListener('click', clearAttrPicker);
-}
+
 
 // ====== 保存/重置：把面板内存 ↔ 引擎状态 对接 ======
 function onSaveFromPanel() {
@@ -294,6 +287,51 @@ export function refreshStyleTypeOptionsInSelect(selectEl, deps) {
       owner && !isMine ? `（已绑定：${attributeLabels[owner] || owner}）` : ''
     );
   });
+}
+
+export function computeStyleWindowViewModel(attr, deps = {}) {
+  const {
+    boundStyleType = {},
+    attributeLabels = {},
+    styleLabel = (k) => k,
+  } = deps;
+
+  const titleText = `${attributeLabels[attr] || attr} 样式`;
+  const bound = boundStyleType[attr] || 'none';
+  const hasBound = bound !== 'none';
+
+  return {
+    titleText,
+    hintText: hasBound ? `当前样式：${styleLabel(bound)}` : '当前样式：无',
+    ui: {
+      confirm: { disabled: true, display: hasBound ? 'none' : 'inline-block' },
+      reset:   { display: hasBound ? 'inline-block' : 'none' },
+      add:     { disabled: !hasBound },
+      typeSelDefault: 'none',
+      tbodyClear: true,
+      windowDisplay: 'block',
+    }
+  };
+}
+
+export function applyStyleWindowView(rootEls, vm) {
+  const {
+    styleTitleEl, styleWindowEl, typeSelEl, tbodyEl, confirmBtnEl, resetBtnEl, addBtnEl, hintEl
+  } = rootEls;
+
+  if (styleTitleEl) styleTitleEl.textContent = vm.titleText;
+  if (hintEl)       hintEl.textContent = vm.hintText;
+  if (styleWindowEl && styleWindowEl.style) styleWindowEl.style.display = vm.ui.windowDisplay;
+
+  if (typeSelEl) typeSelEl.value = vm.ui.typeSelDefault;
+  if (tbodyEl && vm.ui.tbodyClear) tbodyEl.innerHTML = '';
+
+  if (confirmBtnEl) {
+    confirmBtnEl.disabled = vm.ui.confirm.disabled;
+    confirmBtnEl.style.display = vm.ui.confirm.display;
+  }
+  if (resetBtnEl)  resetBtnEl.style.display = vm.ui.reset.display;
+  if (addBtnEl)    addBtnEl.disabled = vm.ui.add.disabled;
 }
 
 
