@@ -30,50 +30,6 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
  * 样式类型选择 & 窗口视图
  * ========================= */
 
-export function computeStyleWindowViewModel(attr, deps = {}) {
-  const {
-    boundStyleType = {},
-    attributeLabels = {},
-    styleLabel = (k) => k,
-  } = deps;
-
-  const titleText = `${attributeLabels[attr] || attr} 样式`;
-  const bound = boundStyleType[attr] || 'none';
-  const hasBound = bound !== 'none';
-
-  return {
-    titleText,
-    hintText: hasBound ? `当前样式：${styleLabel(bound)}` : '当前样式：无',
-    ui: {
-      confirm: { disabled: true, display: hasBound ? 'none' : 'inline-block' },
-      reset:   { display: hasBound ? 'inline-block' : 'none' },
-      add:     { disabled: !hasBound },
-      typeSelDefault: 'none',
-      tbodyClear: true,
-      windowDisplay: 'block',
-    }
-  };
-}
-
-export function applyStyleWindowView(rootEls, vm) {
-  const {
-    styleTitleEl, styleWindowEl, typeSelEl, tbodyEl, confirmBtnEl, resetBtnEl, addBtnEl, hintEl
-  } = rootEls;
-
-  if (styleTitleEl) styleTitleEl.textContent = vm.titleText;
-  if (hintEl)       hintEl.textContent = vm.hintText;
-  if (styleWindowEl && styleWindowEl.style) styleWindowEl.style.display = vm.ui.windowDisplay;
-
-  if (typeSelEl) typeSelEl.value = vm.ui.typeSelDefault;
-  if (tbodyEl && vm.ui.tbodyClear) tbodyEl.innerHTML = '';
-
-  if (confirmBtnEl) {
-    confirmBtnEl.disabled = vm.ui.confirm.disabled;
-    confirmBtnEl.style.display = vm.ui.confirm.display;
-  }
-  if (resetBtnEl)  resetBtnEl.style.display = vm.ui.reset.display;
-  if (addBtnEl)    addBtnEl.disabled = vm.ui.add.disabled;
-}
 
 /* =========================
  * 样式类型选择变更/确认/重置（依赖注入）
