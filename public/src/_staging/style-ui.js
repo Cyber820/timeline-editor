@@ -33,12 +33,6 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 
 
-export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  (Array.isArray(rules) ? rules : []).forEach(rule => rowRender && rowRender(attrKey, rule));
-}
-
 /* =========================
  * 样式控件 wiring（字体/颜色）
  * ========================= */
