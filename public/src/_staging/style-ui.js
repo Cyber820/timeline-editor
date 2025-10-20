@@ -26,47 +26,6 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 
 
-
-// 根据 rowId 在给定 tbody 内找到 .attr-chips 渲染（避免依赖全局 #styleTableBody）
-
-
-// 依赖注入版：只构造 UI，不直接写 rule.style，不依赖 window.*
-// 用法（第二遍时）：buildStyleControl('fontColor', { PRESET_COLORS })
-
-
-
-
-/**
- * 依赖注入版：应用当前样式（可选持久化）
- * —— 不直接访问 window/localStorage/DOM；由调用方注入
- */
-export function applyCurrentStylesInjected({
-  // 必需内存
-  boundStyleType = {},
-  styleRules = {},
-
-  // 引擎调用
-  applyEngine = (state, opts) => {},
-
-  // 选择器（与现网保持一致，便于第二遍替换）
-  selectorBase = '.vis-item.event, .vis-item-content.event',
-  titleSelector = '.event-title',
-
-  // 持久化
-  persist = true,
-  storageKey = 'timelineStyle.v1',
-  storage = typeof localStorage !== 'undefined' ? localStorage : null,
-} = {}) {
-  const state = buildEngineStyleState(boundStyleType, styleRules);
-
-  if (persist && storage && typeof storage.setItem === 'function') {
-    try { storage.setItem(storageKey, JSON.stringify(state)); } catch {}
-  }
-
-  applyEngine(state, { selectorBase, titleSelector });
-  return state;
-}
-
 /*==================
 staging-ui.js保留位置
   ===================*/
@@ -279,4 +238,31 @@ export function buildStyleControl(type, deps = {}) {
   // 其他类型占位
   wrap.textContent = type + '（待配置）';
   return wrap;
+}
+
+export function applyCurrentStylesInjected({
+  // 必需内存
+  boundStyleType = {},
+  styleRules = {},
+
+  // 引擎调用
+  applyEngine = (state, opts) => {},
+
+  // 选择器（与现网保持一致，便于第二遍替换）
+  selectorBase = '.vis-item.event, .vis-item-content.event',
+  titleSelector = '.event-title',
+
+  // 持久化
+  persist = true,
+  storageKey = 'timelineStyle.v1',
+  storage = typeof localStorage !== 'undefined' ? localStorage : null,
+} = {}) {
+  const state = buildEngineStyleState(boundStyleType, styleRules);
+
+  if (persist && storage && typeof storage.setItem === 'function') {
+    try { storage.setItem(storageKey, JSON.stringify(state)); } catch {}
+  }
+
+  applyEngine(state, { selectorBase, titleSelector });
+  return state;
 }
