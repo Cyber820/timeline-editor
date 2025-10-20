@@ -1,3 +1,6 @@
+import { getFilterOptionsForKeyFrom } from '../_staging/constants.js';
+
+
 export function renderRuleRow(attrKey, rule) {
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
@@ -134,4 +137,40 @@ export function renderRuleRowFragment(attrKey, rule, deps = {}) {
   tr.appendChild(tdAction);
 
   return tr;
+}
+
+export function buildAttrMultiSelectFor(attrKey, deps = {}) {
+  const {
+    options = null,                 // 相当于 allOptions
+    getOptions = null,              // 可选：自定义获取器 (attrKey) => string[]
+    useChoices = !!(typeof Choices === 'function'),
+    choicesConfig = {
+      removeItemButton: true,
+      shouldSort: false,
+      searchPlaceholderValue: '搜索…',
+      position: 'bottom'
+    },
+  } = deps;
+
+  const sel = document.createElement('select');
+  sel.multiple = true;
+  sel.className = 'style-attr-select';
+
+  const opts = (typeof getOptions === 'function')
+    ? (getOptions(attrKey) || [])
+    : (options ? getFilterOptionsForKeyFrom(options, attrKey) : []);
+
+  if (!opts || opts.length === 0) {
+    const o = new Option('（暂无可选项 / 仍在加载）', '');
+    o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    opts.forEach(v => sel.appendChild(new Option(v, v)));
+  }
+
+  if (useChoices) {
+    sel._choices = new Choices(sel, choicesConfig);
+  }
+
+  return sel;
 }
