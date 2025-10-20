@@ -27,28 +27,8 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 
 
-
-
-// ========== AttrPicker 批量选择：依赖注入版（不查全局 ID，不触发 alert） ==========
-
-// 全选：把 <select multiple> 的所有可用项选中，并（可选）同步 Choices 实例
-
-
-// ========== 行内 Chips 渲染：依赖注入版 ==========
-
-// 直接对“chips 容器”渲染（最通用）
-
-
 // 根据 rowId 在给定 tbody 内找到 .attr-chips 渲染（避免依赖全局 #styleTableBody）
-export function renderRowAttrChipsInTbody(tbodyEl, rowId, values) {
-  if (!tbodyEl) return { ok: false, reason: 'no-tbody' };
-  const tr = tbodyEl.querySelector(`tr[data-row-id="${rowId}"]`);
-  if (!tr) return { ok: false, reason: 'no-row' };
-  const box = tr.querySelector('.attr-chips');
-  if (!box) return { ok: false, reason: 'no-chips' };
-  renderChipsInto(box, values);
-  return { ok: true };
-}
+
 
 // 依赖注入版：只构造 UI，不直接写 rule.style，不依赖 window.*
 // 用法（第二遍时）：buildStyleControl('fontColor', { PRESET_COLORS })
