@@ -32,47 +32,7 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
 // 依赖注入版：只构造 UI，不直接写 rule.style，不依赖 window.*
 // 用法（第二遍时）：buildStyleControl('fontColor', { PRESET_COLORS })
-export function buildStyleControl(type, deps = {}) {
-  const { PRESET_COLORS = [] } = deps;
-  const wrap = document.createElement('div');
 
-  // ====== 字体族 ======
-  if (type === 'fontFamily') {
-    const fontSel = document.createElement('select');
-    fontSel.innerHTML = `
-      <option value="">请选择字体</option>
-      <option value="STCaiyun">华文彩云 (STCaiyun)</option>
-      <option value="FZShuTi">方正舒体 (FZShuTi)</option>
-      <option value="FZYaoti">方正姚体 (FZYaoti)</option>
-      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
-      <option value="DengXian">等线 (DengXian)</option>
-      <option value="LiSu">隶书 (LiSu)</option>
-      <option value="YouYuan">幼圆 (YouYuan)</option>
-      <option value="SimSun">宋体 (SimSun)</option>
-      <option value="SimHei">黑体 (SimHei)</option>
-      <option value="KaiTi">楷体 (KaiTi)</option>
-    `;
-    wrap.appendChild(fontSel);
-    return wrap;
-  }
-
-  // ====== 颜色类：fontColor / borderColor / backgroundColor / haloColor ======
-  if (['fontColor', 'borderColor', 'backgroundColor', 'haloColor'].includes(type)) {
-    wrap.className = 'color-ui';
-
-    // 1) 原生取色器
-    const color = document.createElement('input');
-    color.type = 'color';
-    color.value = '#000000';
-    color.setAttribute('aria-label', '选择颜色');
-
-    // 2) HEX 输入
-    const hex = document.createElement('input');
-    hex.type = 'text';
-    hex.placeholder = '#RRGGBB';
-    hex.value = color.value.toUpperCase();
-    hex.inputMode = 'text';
-    hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
 
     // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
     function normalizeHex(v) {
