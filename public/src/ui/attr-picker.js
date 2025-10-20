@@ -319,3 +319,47 @@ export function confirmAttrPickerAction(deps = {}) {
 
   return { ok: true, values: uniqueVals };
 }
+
+export function selectAllInAttrPickerEl(selectEl, choicesInstance = null) {
+  if (!selectEl) return { ok: false, reason: 'no-select' };
+
+  const vals = Array.from(selectEl.options || [])
+    .map(o => o.value)
+    .filter(Boolean);
+
+  if (choicesInstance) {
+    // 清掉已有 token
+    if (typeof choicesInstance.removeActiveItems === 'function') {
+      choicesInstance.removeActiveItems();
+    }
+    // 保障底层 option 也选中
+    Array.from(selectEl.options || []).forEach(o => { o.selected = vals.includes(o.value); });
+    // 让 Choices 生成 token（兼容不同版本 API）
+    if (vals.length) {
+      if (typeof choicesInstance.setChoiceByValue === 'function') {
+        choicesInstance.setChoiceByValue(vals);
+      } else if (typeof choicesInstance.setValue === 'function') {
+        choicesInstance.setValue(vals);
+      }
+    }
+  } else {
+    // 退化：没有 Choices
+    Array.from(selectEl.options || []).forEach(o => { o.selected = true; });
+  }
+
+  selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true, values: vals };
+}
+
+// 全不选：清空选中，并（可选）同步 Choices 实例
+export function clearAttrPickerEl(selectEl, choicesInstance = null) {
+  if (!selectEl) return { ok: false, reason: 'no-select' };
+
+  if (choicesInstance && typeof choicesInstance.removeActiveItems === 'function') {
+    choicesInstance.removeActiveItems();
+  }
+  Array.from(selectEl.options || []).forEach(o => { o.selected = false; });
+
+  selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true };
+}
