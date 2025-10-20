@@ -34,7 +34,147 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 // 用法（第二遍时）：buildStyleControl('fontColor', { PRESET_COLORS })
 
 
-    // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
+
+
+/**
+ * 依赖注入版：应用当前样式（可选持久化）
+ * —— 不直接访问 window/localStorage/DOM；由调用方注入
+ */
+export function applyCurrentStylesInjected({
+  // 必需内存
+  boundStyleType = {},
+  styleRules = {},
+
+  // 引擎调用
+  applyEngine = (state, opts) => {},
+
+  // 选择器（与现网保持一致，便于第二遍替换）
+  selectorBase = '.vis-item.event, .vis-item-content.event',
+  titleSelector = '.event-title',
+
+  // 持久化
+  persist = true,
+  storageKey = 'timelineStyle.v1',
+  storage = typeof localStorage !== 'undefined' ? localStorage : null,
+} = {}) {
+  const state = buildEngineStyleState(boundStyleType, styleRules);
+
+  if (persist && storage && typeof storage.setItem === 'function') {
+    try { storage.setItem(storageKey, JSON.stringify(state)); } catch {}
+  }
+
+  applyEngine(state, { selectorBase, titleSelector });
+  return state;
+}
+
+/*==================
+staging-ui.js保留位置
+  ===================*/
+/* =========================
+ * —— 新增：按钮/弹窗占位绑定 —— 
+ *   保持与你页面 onclick 兼容（可在 app.js 调用）
+ * ========================= */
+export function bindToolbar() {
+  // 过滤
+  window.openFilterWindow = function () {
+    const el = document.getElementById('filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.openAddFilter = function () {
+    const el = document.getElementById('add-filter-window');
+    if (el) el.style.display = 'block';
+  };
+  window.resetFilters = function () { alert('已复原过滤标准（占位）'); };
+  window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
+  window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
+
+  // 样式
+  window.openStyleWindow = function (attr) {
+    const el = document.getElementById('style-window');
+    if (!el) return;
+    el.style.display = 'block';
+    const title = document.getElementById('style-title');
+    if (title) title.textContent = (attr || '属性') + ' 样式';
+    const hint = document.getElementById('bound-type-hint');
+    if (hint) hint.textContent = '当前样式：无';
+  };
+  window.closeStyleWindow = function () {
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+  window.addStyleRow = function () { alert('新增样式（占位）'); };
+  window.confirmStyle = function () {
+    alert('样式已保存（占位）');
+    const el = document.getElementById('style-window');
+    if (el) el.style.display = 'none';
+  };
+
+  // 属性选择弹窗按钮
+  const picker = document.getElementById('attr-picker-window');
+  const confirmBtn = document.getElementById('attr-picker-confirm');
+  const cancelBtn = document.getElementById('attr-picker-cancel');
+  const selAllBtn = document.getElementById('attr-picker-select-all');
+  const clearBtn = document.getElementById('attr-picker-clear');
+  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
+  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
+  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
+
+  log('toolbar bound');
+}
+
+export function renderSimpleOptions(selectEl, list) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  (list || []).forEach(opt => {
+    const o = document.createElement('option');
+    o.value = o.textContent = opt;
+    selectEl.appendChild(o);
+  });
+}
+
+export function buildStyleControl(type, deps = {}) {
+  const { PRESET_COLORS = [] } = deps;
+  const wrap = document.createElement('div');
+
+  // ====== 字体族 ======
+  if (type === 'fontFamily') {
+    const fontSel = document.createElement('select');
+    fontSel.innerHTML = `
+      <option value="">请选择字体</option>
+      <option value="STCaiyun">华文彩云 (STCaiyun)</option>
+      <option value="FZShuTi">方正舒体 (FZShuTi)</option>
+      <option value="FZYaoti">方正姚体 (FZYaoti)</option>
+      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
+      <option value="DengXian">等线 (DengXian)</option>
+      <option value="LiSu">隶书 (LiSu)</option>
+      <option value="YouYuan">幼圆 (YouYuan)</option>
+      <option value="SimSun">宋体 (SimSun)</option>
+      <option value="SimHei">黑体 (SimHei)</option>
+      <option value="KaiTi">楷体 (KaiTi)</option>
+    `;
+    wrap.appendChild(fontSel);
+    return wrap;
+  }
+
+  // ====== 颜色类：fontColor / borderColor / backgroundColor / haloColor ======
+  if (['fontColor', 'borderColor', 'backgroundColor', 'haloColor'].includes(type)) {
+    wrap.className = 'color-ui';
+
+    // 1) 原生取色器
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = '#000000';
+    color.setAttribute('aria-label', '选择颜色');
+
+    // 2) HEX 输入
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.placeholder = '#RRGGBB';
+    hex.value = color.value.toUpperCase();
+    hex.inputMode = 'text';
+    hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
+        // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
     function normalizeHex(v) {
       let s = String(v || '').trim();
       if (!s) return null;
@@ -140,101 +280,3 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
   wrap.textContent = type + '（待配置）';
   return wrap;
 }
-
-/**
- * 依赖注入版：应用当前样式（可选持久化）
- * —— 不直接访问 window/localStorage/DOM；由调用方注入
- */
-export function applyCurrentStylesInjected({
-  // 必需内存
-  boundStyleType = {},
-  styleRules = {},
-
-  // 引擎调用
-  applyEngine = (state, opts) => {},
-
-  // 选择器（与现网保持一致，便于第二遍替换）
-  selectorBase = '.vis-item.event, .vis-item-content.event',
-  titleSelector = '.event-title',
-
-  // 持久化
-  persist = true,
-  storageKey = 'timelineStyle.v1',
-  storage = typeof localStorage !== 'undefined' ? localStorage : null,
-} = {}) {
-  const state = buildEngineStyleState(boundStyleType, styleRules);
-
-  if (persist && storage && typeof storage.setItem === 'function') {
-    try { storage.setItem(storageKey, JSON.stringify(state)); } catch {}
-  }
-
-  applyEngine(state, { selectorBase, titleSelector });
-  return state;
-}
-
-/*==================
-staging-ui.js保留位置
-  ===================*/
-/* =========================
- * —— 新增：按钮/弹窗占位绑定 —— 
- *   保持与你页面 onclick 兼容（可在 app.js 调用）
- * ========================= */
-export function bindToolbar() {
-  // 过滤
-  window.openFilterWindow = function () {
-    const el = document.getElementById('filter-window');
-    if (el) el.style.display = 'block';
-  };
-  window.openAddFilter = function () {
-    const el = document.getElementById('add-filter-window');
-    if (el) el.style.display = 'block';
-  };
-  window.resetFilters = function () { alert('已复原过滤标准（占位）'); };
-  window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
-  window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
-
-  // 样式
-  window.openStyleWindow = function (attr) {
-    const el = document.getElementById('style-window');
-    if (!el) return;
-    el.style.display = 'block';
-    const title = document.getElementById('style-title');
-    if (title) title.textContent = (attr || '属性') + ' 样式';
-    const hint = document.getElementById('bound-type-hint');
-    if (hint) hint.textContent = '当前样式：无';
-  };
-  window.closeStyleWindow = function () {
-    const el = document.getElementById('style-window');
-    if (el) el.style.display = 'none';
-  };
-  window.addStyleRow = function () { alert('新增样式（占位）'); };
-  window.confirmStyle = function () {
-    alert('样式已保存（占位）');
-    const el = document.getElementById('style-window');
-    if (el) el.style.display = 'none';
-  };
-
-  // 属性选择弹窗按钮
-  const picker = document.getElementById('attr-picker-window');
-  const confirmBtn = document.getElementById('attr-picker-confirm');
-  const cancelBtn = document.getElementById('attr-picker-cancel');
-  const selAllBtn = document.getElementById('attr-picker-select-all');
-  const clearBtn = document.getElementById('attr-picker-clear');
-  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
-  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
-  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
-  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
-
-  log('toolbar bound');
-}
-
-export function renderSimpleOptions(selectEl, list) {
-  if (!selectEl) return;
-  selectEl.innerHTML = '';
-  (list || []).forEach(opt => {
-    const o = document.createElement('option');
-    o.value = o.textContent = opt;
-    selectEl.appendChild(o);
-  });
-}
-
