@@ -174,3 +174,31 @@ export function buildAttrMultiSelectFor(attrKey, deps = {}) {
 
   return sel;
 }
+
+export function addStyleRowFor(attrKey, deps = {}) {
+  const {
+    boundStyleType = {},
+    rulesMap = {},
+    idFactory = null,
+    renderRow = null, // (attrKey, rule) => void
+  } = deps;
+
+  const bound = boundStyleType[attrKey];
+  if (!bound || bound === 'none') {
+    return { ok: false, reason: 'unbound' };
+  }
+
+  const rule = createEmptyRuleForType(
+    bound,
+    idFactory || (() => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `r_${Date.now()}_${Math.random().toString(36).slice(2)}`))
+  );
+
+  const bucket = ensureBucketIn(rulesMap, attrKey);
+  bucket.push(rule);
+
+  if (typeof renderRow === 'function') {
+    renderRow(attrKey, rule);
+  }
+
+  return { ok: true, rule };
+}
