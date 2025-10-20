@@ -37,22 +37,7 @@ export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 // ========== 行内 Chips 渲染：依赖注入版 ==========
 
 // 直接对“chips 容器”渲染（最通用）
-export function renderChipsInto(containerEl, values) {
-  if (!containerEl) return;
-  const list = Array.isArray(values) ? values : [];
-  containerEl.innerHTML = '';
 
-  if (list.length === 0) {
-    containerEl.innerHTML = '<span style="color:#999;">（未选择）</span>';
-    return;
-  }
-  list.forEach(v => {
-    const tag = document.createElement('span');
-    tag.textContent = v;
-    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
-    containerEl.appendChild(tag);
-  });
-}
 
 // 根据 rowId 在给定 tbody 内找到 .attr-chips 渲染（避免依赖全局 #styleTableBody）
 export function renderRowAttrChipsInTbody(tbodyEl, rowId, values) {
