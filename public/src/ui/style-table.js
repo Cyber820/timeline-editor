@@ -219,3 +219,13 @@ export function renderChipsInto(containerEl, values) {
     containerEl.appendChild(tag);
   });
 }
+
+export function renderRowAttrChipsInTbody(tbodyEl, rowId, values) {
+  if (!tbodyEl) return { ok: false, reason: 'no-tbody' };
+  const tr = tbodyEl.querySelector(`tr[data-row-id="${rowId}"]`);
+  if (!tr) return { ok: false, reason: 'no-row' };
+  const box = tr.querySelector('.attr-chips');
+  if (!box) return { ok: false, reason: 'no-chips' };
+  renderChipsInto(box, values);
+  return { ok: true };
+}
