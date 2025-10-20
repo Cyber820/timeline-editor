@@ -249,3 +249,73 @@ export function openAttrPickerFor(rowId, attrKey, deps = {}) {
     {}
   );
 }
+
+export function readUniqueSelections(selectEl) {
+  if (!selectEl) return [];
+  const vals = Array.from(selectEl.selectedOptions || []).map(o => o.value);
+  return Array.from(new Set(vals));
+}
+
+export function confirmAttrPickerAction(deps = {}) {
+  const {
+    rowId = null,
+    attrKey = null,
+
+    selectEl = null,      // #attr-picker-options
+    modalEl = null,       // #attr-picker-window
+
+    rulesMap = null,      // styleRules
+    findRuleInMap = null, // (rulesMap, attrKey, rowId) => rule | null
+    styleRowSelectionsRef = null,
+
+    getTakenValues = null,          // (attrKey, exceptRowId) => Set<string>
+    renderRowAttrChips = null,      // (rowId, values) => void
+
+    notify = (msg) => alert(msg),
+  } = deps;
+
+  // 兜底：编辑态或控件缺失
+  if (!rowId || !attrKey || !selectEl) {
+    if (modalEl && modalEl.style) modalEl.style.display = 'none';
+    return { ok: false, reason: 'invalid-state' };
+  }
+
+  // 读取并去重
+  const uniqueVals = readUniqueSelections(selectEl);
+
+  // 终检：与其他行冲突
+  if (typeof getTakenValues === 'function') {
+    const takenByOthers = getTakenValues(attrKey, rowId);
+    const conflict = uniqueVals.find(v => takenByOthers.has(v));
+    if (conflict) {
+      notify(`“${conflict}” 已被同属性的其他样式行占用，请取消或更换。`);
+      return { ok: false, reason: 'conflict', conflict };
+    }
+  }
+
+  // 写回规则
+  let rule = null;
+  if (typeof findRuleInMap === 'function') {
+    rule = findRuleInMap(rulesMap, attrKey, rowId);
+  }
+  if (!rule) {
+    if (modalEl && modalEl.style) modalEl.style.display = 'none';
+    return { ok: false, reason: 'rule-not-found' };
+  }
+  rule.values = uniqueVals;
+
+  // 同步（可选）旧的行内缓存
+  if (styleRowSelectionsRef) {
+    styleRowSelectionsRef[rowId] = uniqueVals;
+  }
+
+  // 回填 chips
+  if (typeof renderRowAttrChips === 'function') {
+    renderRowAttrChips(rowId, uniqueVals);
+  }
+
+  // 关闭弹窗
+  if (modalEl && modalEl.style) modalEl.style.display = 'none';
+
+  return { ok: true, values: uniqueVals };
+}
