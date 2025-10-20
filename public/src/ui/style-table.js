@@ -202,3 +202,20 @@ export function addStyleRowFor(attrKey, deps = {}) {
 
   return { ok: true, rule };
 }
+
+export function renderChipsInto(containerEl, values) {
+  if (!containerEl) return;
+  const list = Array.isArray(values) ? values : [];
+  containerEl.innerHTML = '';
+
+  if (list.length === 0) {
+    containerEl.innerHTML = '<span style="color:#999;">（未选择）</span>';
+    return;
+  }
+  list.forEach(v => {
+    const tag = document.createElement('span');
+    tag.textContent = v;
+    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    containerEl.appendChild(tag);
+  });
+}
