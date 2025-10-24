@@ -1,144 +1,183 @@
 // src/style/engine.js
-export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
-const DEFAULT_BORDER_WIDTH = 2; // ← 想要的全局边框粗细（px）
+// ✅ 作用：将样式状态编译为 CSS，并注入到页面；必要时支持远程编译。
+// ---------------------------------------------------------
+// 依赖提示：建议与 constants.js 搭配使用（BORDER_WIDTH_PX 等）
+// import { DEFAULTS } from '../_staging/constants.js';
 
-/** 给事件外层元素打 data-* 标，供 CSS 规则匹配 */
+export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
+
+/**
+ * 给事件外层元素打 data-* 标，供 CSS 规则匹配。
+ * - Tag 使用空格分隔 token，便于用 [data-Tag~="xxx"] 选择器匹配。
+ */
 export function attachEventDataAttrs(el, item) {
   if (!el || !item) return;
   for (const k of ATTR_KEYS) {
     const v = item[k];
     if (v == null) continue;
+
     if (k === 'Tag') {
-      const tokens = Array.isArray(v) ? v
-        : String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+      const tokens = Array.isArray(v)
+        ? v
+        : String(v || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
       if (tokens.length) el.setAttribute('data-Tag', tokens.join(' ')); // [data-Tag~="xxx"]
     } else {
       el.setAttribute(`data-${k}`, String(v));
     }
   }
-  el.classList.add('event'); // 统一锚点：.vis-item.event
+  // 统一锚点：.vis-item.event
+  el.classList.add('event');
 }
 
-/** 简易转义，保证值能放进 CSS 选择器引号里 */
-function cssEscape(s){ return String(s).replace(/["\\]/g, '\\$&'); }
-
-function hexToRGBA(hex, a = 0.35) {
-  const s = String(hex || '').replace('#','').trim();
-  const to255 = (h) => parseInt(h.length===1 ? h+h : h, 16);
-  const r = to255(s.slice(0,2) || '0');
-  const g = to255(s.slice(2,4) || '0');
-  const b = to255(s.slice(4,6) || '0');
-  return `rgba(${r},${g},${b},${a})`;
+/** 简易 CSS 字符串转义，确保能安全放入选择器引号内 */
+function cssEscape(s) {
+  return String(s).replace(/["\\\n\r\t]/g, m => ({
+    '"': '\\"',
+    '\\': '\\\\',
+    '\n': '\\A ',
+    '\r': '',
+    '\t': '\\9 '
+  })[m]);
 }
-/** 把样式状态编译成一段 CSS 文本 */
-// src/style/engine.js
 
+/**
+ * 颜色 hex → rgba 字符串
+ * - 支持：#RGB / #RGBA / #RRGGBB / #RRGGBBAA
+ * - alpha 取 0~1 之间
+ */
+function hexToRGBA(hex, aOverride) {
+  let s = String(hex || '').trim();
+  if (s.startsWith('#')) s = s.slice(1);
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
+  let r=0,g=0,b=0,a=1;
 
+  if (s.length === 3 || s.length === 4) {
+    r = parseInt(s[0] + s[0], 16);
+    g = parseInt(s[1] + s[1], 16);
+    b = parseInt(s[2] + s[2], 16);
+    if (s.length === 4) a = parseInt(s[3] + s[3], 16) / 255;
+  } else if (s.length === 6 || s.length === 8) {
+    r = parseInt(s.slice(0,2), 16);
+    g = parseInt(s.slice(2,4), 16);
+    b = parseInt(s.slice(4,6), 16);
+    if (s.length === 8) a = parseInt(s.slice(6,8), 16) / 255;
+  }
 
-// ---- 你的函数（放在 src/style/engine.js，作为 ESM 导出）----
+  const alpha = clamp01(aOverride != null ? aOverride : a);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * 将样式状态编译为一段 CSS 文本。
+ * @param {Object} styleState 由 buildEngineStyleState() 返回：{ boundTypes, rules }
+ * @param {Object} opts
+ *  - selectorBase: 事件元素选择器基（默认 '.vis-item.event'）
+ *  - titleSelector: 事件标题选择器（默认 '.event-title'）
+ *  - attrPriority: 属性优先级数组（默认与 ATTR_KEYS 一致）
+ *  - borderWidthPx: 边框宽度（默认 2 或外部 DEFAULTS.BORDER_WIDTH_PX）
+ * @returns {string} CSS
+ */
 export function compileStyleRules(styleState, opts = {}) {
   const selectorBase = opts.selectorBase || '.vis-item.event';
   const titleSel     = opts.titleSelector || '.event-title';
-  const priority     = opts.attrPriority || ['EventType','Company','Tag','Platform','ConsolePlatform','Region'];
+  const priority     = opts.attrPriority || ATTR_KEYS.slice();
+
+  // 统一边框宽度，优先 opts，否则从全局 DEFAULTS 读取，最后回退 2
+  const globalBorderPx =
+    typeof opts.borderWidthPx === 'number' ? opts.borderWidthPx
+    : (globalThis?.DEFAULTS?.BORDER_WIDTH_PX ?? 2);
 
   let css = '';
+
   for (const attr of priority) {
     const type = styleState?.boundTypes?.[attr];
     if (!type || type === 'none') continue;
-    const map = styleState?.rules?.[attr] || {};
 
+    const map = styleState?.rules?.[attr] || {};
     for (const [val, conf] of Object.entries(map)) {
       const v = `"${cssEscape(val)}"`;
       const baseSel = attr === 'Tag'
         ? `${selectorBase}[data-Tag~=${v}]`
         : `${selectorBase}[data-${attr}=${v}]`;
 
-      // 文字/背景/字体粗细/字体族
+      // 文本色 / 背景色 / 字体家族 / 字重
       if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
       if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
       if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
       if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
 
-      // 统一边框宽度（即便只想加粗不改色也适用）
+      // 边框（统一使用相同宽度）
       if (type === 'borderColor') {
         const parts = [];
         if (conf.borderColor) parts.push(`border-color:${conf.borderColor};`);
         parts.push('border-style:solid;');
-        parts.push(`border-width:${DEFAULT_BORDER_WIDTH}px;`);
+        parts.push(`border-width:${globalBorderPx}px;`);
         parts.push('box-sizing:border-box;');
         css += `${baseSel}{${parts.join('')}}\n`;
       }
 
       // 光晕（halo）
-// CSS box-shadow 语法回顾：
-// box-shadow: offset-x offset-y blur-radius spread-radius color
-//             水平偏移  垂直偏移   模糊半径     扩散半径     颜色
-// - offset 为 0 表示环绕四周的“外发光”（不偏移）
-// - blur 越大越柔，spread 越大越“向外扩张”（变粗）
-// - 可以叠加多层，用逗号分隔；后面的层会叠在前面之上
+      if (type === 'haloColor' && conf.haloColor) {
+        // 内圈/外圈透明度可按需调整
+        const rgbaStrong = hexToRGBA(conf.haloColor, 0.35); // 内圈（更实）
+        const rgbaSoft   = hexToRGBA(conf.haloColor, 0.2);  // 外圈（更柔）
 
-if (type === 'haloColor' && conf.haloColor) {
-  // rgbaStrong：较“实”的内圈颜色（高透明度）
-  // rgbaSoft  ：较“柔”的外圈颜色（低透明度）
-  const rgbaStrong = hexToRGBA(conf.haloColor, 0.2); // α=0.45（更亮）
-  const rgbaSoft   = hexToRGBA(conf.haloColor, 0.30); // α=0.30（更柔）
+        // 某些主题会裁剪阴影，放开
+        css += `${baseSel}{overflow:visible !important;}\n`;
 
-  // 一些主题会给 .vis-item 设置 overflow:hidden，导致阴影被裁掉
-  // 这里强制允许阴影溢出，确保光晕可见
-  css += `${baseSel}{overflow:visible !important;}\n`;
+        // 普通态三层
+        css +=
+          `${baseSel}{` +
+            `box-shadow:` +
+              `0 0 0 0px ${rgbaStrong}, ` +   // 贴边描边层
+              `0 0 0 6px ${rgbaSoft}, ` +     // 近光环
+              `0 0 18px 10px ${rgbaSoft}` +   // 外扩柔光
+            ` !important;` +
+          `}\n`;
 
-  // 普通态的三层光晕（由内到外）：
-  // 1) 0 0 0 0px rgbaStrong : 贴边的描边层（不扩散，纯“描边”效果）
-  // 2) 0 0 0 10px rgbaSoft  : 近光环（无模糊，只向外扩张 10px，形成明显外圈）
-  // 3) 0 0 24px 12px rgbaSoft : 远光环（24px 模糊 + 12px 扩散，形成柔和过渡）
-  css +=
-    `${baseSel}{` +
-      `box-shadow:` +
-        `0 0 0 0px ${rgbaStrong}, ` +   // 内圈描边：清晰、贴边
-        `0 0 0 0px ${rgbaSoft}, ` +    // 近光环：粗一些
-        `0 0 12px 6px ${rgbaSoft}` +   // 外圈柔光：更柔、更外扩
-      ` !important;` +
-    `}\n`;
-
-  // 选中态（.vis-selected）稍微增强一点：
-  // - 内圈描边从 0px -> 5px（更明显）
-  // - 近光环从 10px -> 12px（更粗）
-  // - 远光环从 24/12 -> 28/14（更远更柔）
-  css +=
-    `${baseSel}.vis-selected{` +
-      `box-shadow:` +
-        `0 0 0 0px ${rgbaStrong}, ` +  // 更粗的内圈描边
-        `0 0 0 6px ${rgbaSoft}, ` +   // 更粗的近光环
-        `0 0 28px 14px ${rgbaSoft}` +  // 更外扩的柔光
-      ` !important;` +
-    `}\n`;
-}
-
+        // 选中态稍增强
+        css +=
+          `${baseSel}.vis-selected{` +
+            `box-shadow:` +
+              `0 0 0 0px ${rgbaStrong}, ` +
+              `0 0 0 8px ${rgbaSoft}, ` +
+              `0 0 26px 14px ${rgbaSoft}` +
+            ` !important;` +
+          `}\n`;
+      }
     }
   }
   return css;
 }
 
-
-
-/** 把 CSS 文本注入/更新到 <style id="user-style-rules"> */
+/**
+ * 将 CSS 文本注入/更新到 <style id="user-style-rules">（总在 <head> 末尾）
+ */
 export function injectUserStyle(css) {
   let el = document.getElementById('user-style-rules');
   if (!el) {
     el = document.createElement('style');
     el.id = 'user-style-rules';
   } else if (el.parentNode) {
-    // 先移除，等会儿再 append，确保总是在 <head> 的最后
     el.parentNode.removeChild(el);
   }
   el.textContent = css || '';
-  document.head.appendChild(el); // 放到最后，压过其它样式
+  (document.head || document.documentElement).appendChild(el);
 }
 
-
-/** 入口：根据状态直接应用样式（编译 + 注入） */
-// 远程优先 + 本地兜底
+/**
+ * 入口：根据状态直接应用样式（优先远程编译，失败则本地兜底）
+ * @param {Object} styleState 由 buildEngineStyleState() 生成
+ * @param {Object} opts
+ *  - selectorBase/titleSelector/attrPriority/borderWidthPx：传给本地编译
+ *  - remoteCompileUrl：远程编译服务地址（默认 globalThis.STYLE_COMPILE_ENDPOINT 或 '/api/compile-style'）
+ *  - timeoutMs：远程编译超时时间（默认 7000ms）
+ *  - fetchImpl：自定义 fetch 实现（用于测试/Polyfill）
+ */
 export async function applyStyleState(styleState, opts = {}) {
   const payload = {
     state: styleState,
@@ -149,44 +188,40 @@ export async function applyStyleState(styleState, opts = {}) {
     }
   };
 
+  const endpoint =
+    opts.remoteCompileUrl ||
+    globalThis?.STYLE_COMPILE_ENDPOINT ||
+    '/api/compile-style';
+
+  const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 7000;
+  const fetchImpl = typeof opts.fetchImpl === 'function' ? opts.fetchImpl : fetch;
+
+  // 远程优先
   try {
-    const res = await fetch('/api/compile-style', {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const res = await fetchImpl(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timer);
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const css = await res.text();
-    injectUserStyle(css);                    // ✅ 使用后端返回的 CSS
+    injectUserStyle(css);
+    return;
   } catch (e) {
     console.warn('[style] remote compile failed, fallback to local:', e);
-    try {
-      const css = compileStyleRules(styleState, opts); // 🛟 兜底：沿用你现在的本地编译
-      injectUserStyle(css);
-    } catch (e2) {
-      console.error('[style] local compile also failed:', e2);
-    }
+  }
+
+  // 本地兜底
+  try {
+    const css = compileStyleRules(styleState, opts);
+    injectUserStyle(css);
+  } catch (e2) {
+    console.error('[style] local compile also failed:', e2);
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
