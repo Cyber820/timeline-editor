@@ -1,15 +1,20 @@
 // public/src/_staging/constants.js
 // ✅ 用途：集中放可配置项与纯函数，以便第二轮“统一接线”时移除散落的硬编码。
+// ✅ 已与 utils/id.js 整合（不再本地定义 genId）
 // ⚠️ 当前仍未被任何页面 import，作为“停机位/镜像”存在。
 
 /* =========================================================
  * 0) 版本标识（便于排查与灰度）
  * ======================================================= */
-export const CONSTS_VERSION = 'constants@1.1.0';
+export const CONSTS_VERSION = 'constants@1.1.1';
+
+/* =========================================================
+ * 0.5) 外部依赖：统一 ID 生成工具
+ * ======================================================= */
+import { genId, makeIdFactory } from '../utils/id.js';
 
 /* =========================================================
  * 1) 基本默认配置（支持全局覆盖）
- *    - 可通过 globalThis.DEFAULTS_OVERRIDE 在接线期做灰度
  * ======================================================= */
 export const DEFAULTS = Object.freeze({
   SELECTOR_BASE: '.vis-item.event, .vis-item-content.event',
@@ -27,7 +32,6 @@ export const ENDPOINT =
 
 /* =========================================================
  * 3) 字段映射（统一规范后端字段名 → 前端键）
- *    - 若 Apps Script/Sheet 字段变动，只改这里
  * ======================================================= */
 export const FIELD = Object.freeze({
   id: 'ID',
@@ -83,7 +87,7 @@ export function styleLabel(key) {
 }
 
 /* =========================================================
- * 5) 归一化工具（对输入多态更宽容）
+ * 5) 归一化工具
  * ======================================================= */
 export function normalizeToArray(raw) {
   if (raw == null) return [];
@@ -95,10 +99,8 @@ export function normalizeToArray(raw) {
   if (t === 'number' || t === 'boolean') return [raw];
   if (t === 'object') {
     try {
-      // 例如 ConsolePlatform: { 平台A:[...], 平台B:[...] }
       return Object.values(raw).flat().filter(Boolean);
     } catch {
-      // 无 .flat() 的极端环境
       let out = [];
       Object.keys(raw).forEach((k) => {
         const v = raw[k];
@@ -117,7 +119,6 @@ export function normalizeToStringArray(raw) {
 
 /* =========================================================
  * 6) 过滤相关纯函数
- *    - 约定：filters 中空数组/空值将自动忽略（不参与过滤）
  * ======================================================= */
 export function getFilterOptionsForKeyFrom(options, key) {
   if (!options) return [];
@@ -129,7 +130,7 @@ export function getFilterOptionsForKeyFrom(options, key) {
 
 export function valueInSelected(val, selectedArr) {
   const selected = normalizeToStringArray(selectedArr || []);
-  if (!selected.length) return true; // 空选择 → 不限制
+  if (!selected.length) return true;
   const values = normalizeToStringArray(val);
   if (!values.length) return false;
   return values.some((v) => selected.includes(v));
@@ -139,7 +140,7 @@ export function passesAndLogicFilters(item, filters) {
   const entries = Object.entries(filters || {}).filter(
     ([, v]) => normalizeToStringArray(v).length > 0,
   );
-  if (!entries.length) return true; // 过滤器全空等同于不过滤
+  if (!entries.length) return true;
   return entries.every(([key, values]) => valueInSelected(item?.[key], values));
 }
 
@@ -161,11 +162,9 @@ export function filterItems(items, filters, logic = 'and') {
 
 /* =========================================================
  * 7) 文本提取 & 标签归一
- *    - 支持“标签：aaa, bbb”“标签: aaa，bbb”各种中英标点
  * ======================================================= */
 export function pickLabeledFromBlob(blob, label) {
   if (!blob) return '';
-  // 支持全角/半角冒号、可选空格；只取到换行前
   const re = new RegExp(`${label}[：:][\\s]*([^\\n]+)`);
   const m = re.exec(String(blob));
   return m ? m[1].trim() : '';
@@ -173,7 +172,6 @@ export function pickLabeledFromBlob(blob, label) {
 
 export function normalizeTagArray(raw) {
   if (Array.isArray(raw)) return raw.filter(Boolean).map((s) => String(s).trim());
-  // 兼容中文逗号、分号、竖线
   return String(raw || '')
     .split(/[,\uFF0C;\uFF1B|]/g)
     .map((s) => s.trim())
@@ -182,7 +180,6 @@ export function normalizeTagArray(raw) {
 
 /* =========================================================
  * 8) 事件字段归一化 & 映射到 vis item
- *    - 优先使用 FIELD 映射；其次兼容旧键；最后尝试从 title blob 提取
  * ======================================================= */
 function readByField(obj, fieldKey) {
   const name = FIELD[fieldKey];
@@ -195,14 +192,10 @@ function coalesce(...vals) {
 }
 
 export function mapEventToItem(event, index = 0) {
-  // 基本字段（优先 FIELD，其次兼容旧字段）
   const id = coalesce(readByField(event, 'id'), event.id, `auto-${index + 1}`);
   const titleText = coalesce(readByField(event, 'title'), event.title, event.content, '(无标题)');
-
   const Start = coalesce(readByField(event, 'start'), event.Start, event.start);
   const End = coalesce(readByField(event, 'end'), event.End, event.end);
-
-  // 可能出现在 title 的“展示用块”
   const blob = String(coalesce(readByField(event, 'title'), event.title, ''));
 
   const EventType = coalesce(
@@ -211,45 +204,38 @@ export function mapEventToItem(event, index = 0) {
     event.eventType,
     pickLabeledFromBlob(blob, '事件类型'),
   );
-
   const Region = coalesce(
     readByField(event, 'region'),
     event.Region,
     event.region,
     pickLabeledFromBlob(blob, '地区'),
   );
-
   const Platform = coalesce(
     readByField(event, 'platform'),
     event.Platform,
     event.platform,
     pickLabeledFromBlob(blob, '平台类型'),
   );
-
   const Company = coalesce(
     readByField(event, 'company'),
     event.Company,
     event.company,
     pickLabeledFromBlob(blob, '公司'),
   );
-
   const Status = coalesce(
     readByField(event, 'status'),
     event.Status,
     event.status,
     pickLabeledFromBlob(blob, '状态'),
   );
-
   const ConsolePlatform = coalesce(
     readByField(event, 'consolePlatform'),
     event.ConsolePlatform,
     event.consolePlatform,
     pickLabeledFromBlob(blob, '主机类型'),
   );
-
   const TagRaw = coalesce(readByField(event, 'tag'), event.Tag, event.tag, pickLabeledFromBlob(blob, '标签'));
   const Tag = normalizeTagArray(TagRaw);
-
   const Desc = coalesce(readByField(event, 'desc'), event.Description, event.desc, '');
 
   const tooltipHtml =
@@ -301,9 +287,8 @@ export const TIMELINE_DEFAULT_OPTIONS = Object.freeze({
 });
 
 /* =========================================================
- * 10) 规则/工具函数
+ * 10) 规则/工具函数（已整合 utils/id.js）
  * ======================================================= */
-// 生成规则行 id（纯函数/无全局副作用）
 export const createRowId = (() => {
   let counter = 0;
   return () => `row-${++counter}`;
@@ -314,25 +299,10 @@ export function uniq(arr) {
   return Array.from(set);
 }
 
-// 同一 styleType 仅允许被一个 attr 绑定；但允许“同 attr 重复确认”
 export function canBindStyleType(boundMap, attrKey, nextType) {
   if (nextType === 'none') return true;
   const owner = Object.entries(boundMap || {}).find(([k, v]) => v === nextType && k !== attrKey);
   return !owner;
-}
-
-// 生成稳定 id（尽量优先 crypto）
-export function genId(prefix = 'r_') {
-  if (typeof crypto !== 'undefined') {
-    if (crypto.randomUUID) return prefix ? `${prefix}${crypto.randomUUID()}` : crypto.randomUUID();
-    if (crypto.getRandomValues) {
-      const a = new Uint32Array(2);
-      crypto.getRandomValues(a);
-      const uuid = `${a[0].toString(16)}${a[1].toString(16)}`;
-      return prefix ? `${prefix}${uuid}` : uuid;
-    }
-  }
-  return `${prefix}${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
 export function ensureBucketIn(rulesMap, attrKey) {
@@ -349,12 +319,12 @@ export function uiTypeToInternal(t) {
   return t === 'font' ? 'fontFamily' : t;
 }
 
-export function createEmptyRuleForType(type, idFactory = () => `r_${Date.now()}`) {
+export function createEmptyRuleForType(type, idFactory = () => genId('rule_')) {
   const rule = { id: idFactory(), type, style: {}, values: [] };
   if (type === 'fontFamily') {
     rule.style.fontFamily = '';
   } else {
-    rule.style[type] = '#000000'; // 颜色默认黑
+    rule.style[type] = '#000000';
   }
   return rule;
 }
@@ -376,34 +346,17 @@ export function toEngineKey(t, map = ENGINE_KEY_MAP) {
   return map[t] || t;
 }
 
-/**
- * 将 UI 状态（绑定+规则）构造成引擎可直接消费的状态：
- * {
- *   version: 1,
- *   boundTypes: { EventType: 'textColor', ... },
- *   rules: {
- *     EventType: {
- *       '主机游戏': { textColor:'#fff', bgColor:'#000', ... },
- *       ...
- *     },
- *     ...
- *   }
- * }
- */
 export function buildEngineStyleState(
   boundStyleType = {},
   styleRules = {},
   keyMap = ENGINE_KEY_MAP,
 ) {
   const map = (k) => toEngineKey(k, keyMap);
-
-  // 1) 绑定类型转换
   const boundTypes = {};
   for (const [attr, t] of Object.entries(boundStyleType || {})) {
     boundTypes[attr] = map(t || 'none');
   }
 
-  // 2) 规则展开：按 “属性 → 值 → style slots” 组织
   const rules = {};
   for (const [attr, rows] of Object.entries(styleRules || {})) {
     if (!Array.isArray(rows) || rows.length === 0) continue;
