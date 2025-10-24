@@ -1,79 +1,120 @@
 // public/src/app.js
+// ✅ App 入口：绑定工具栏 → 挂载时间轴 → 提供全局少量兼容钩子
+
 import { attachEventDataAttrs, applyStyleState } from './style/engine.js';
 import { getStyleState, setStyleState, onStyleStateChange } from './state/styleState.js';
 import {
   ENDPOINT,
   attributeLabels,
   PRESET_COLORS,
-  STYLE_LABELS,
   styleLabel,
+  // 过滤纯函数
+  filterItems,
 } from './_staging/constants.js';
 
-// ✅ 从 style-ui 引入渲染时间轴 & 工具栏绑定
-import {
-  renderFilterList,
-  bindToolbar,
-  mountTimeline,
-} from './_staging/style-ui.js';
+// UI：工具栏占位绑定（attr-picker 已在内部接线）
+import { bindToolbar } from './_staging/style-ui.js';
+// UI：当前过滤条件列表渲染（chips/整组移除）
+import { renderFilterList } from './ui/filter-ui.js';
+// Timeline：实际挂载渲染
+import { mountTimeline } from './timeline/mount.js';
 
-function updateFilterList() {
-  const div = document.getElementById('current-filters');
-  if (!div) return;
-  // 交给 staging 的纯渲染：只负责把 activeFilters 渲染出来
-  renderFilterList(div, activeFilters, attributeLabels, (key) => {
-    delete activeFilters[key];
-    updateFilterList();
-    // 这句如果你项目里有就保留，没有就删掉问号保护符
-    updateTimelineByFilter?.();
-  });
-}
+// ========== 运行态（保持轻量） ==========
+let allOptions = {};               // 可选：后续接入真实 options 源
+let activeFilters = {};            // 例：{ Region:['日本','北美'] }
+let filterLogic = 'and';           // 'and' | 'or'
+let timeline = null;               // vis.Timeline 实例
+let itemsDS = null;                // vis.DataSet（当前展示集）
+let originalItems = [];            // 初始 items 的快照（用于过滤回放）
 
-// 运行态（保持原有）
-let allOptions = {}, activeFilters = {}, filterOptionsChoices, filterLogic = 'and';
-let originalItems = [], timeline = null;
-
-// 暂时保留全局暴露（有旧代码用到）
+// ========== 兼容旧全局 ==========
 window.attributeLabels = attributeLabels;
 window.PRESET_COLORS  = PRESET_COLORS;
 window.styleLabel     = styleLabel;
 
-// 暴露给现有内联代码使用（避免你现在就重写那段脚本）
 window.__styleEngine = { attachEventDataAttrs, applyStyleState };
 window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
 
+window.ENDPOINT = ENDPOINT; // 兼容 test.html
 console.log('app.js loaded (style engine + state ready)');
-// 旧事件通知
 window.dispatchEvent(new Event('style:ready'));
 
-// 旧的按需加载示例（保留）
+// 按需加载样式面板（旧按钮示例）
 const openBtn = document.getElementById('open-style');
 if (openBtn) {
   openBtn.addEventListener('click', async () => {
-    const panel = await import('./ui/style-panel.js'); // 按需加载
+    const panel = await import('./ui/style-panel.js'); // 懒加载
     panel.openStylePanel({
       selectorBase: '.vis-item.event',
-      titleSelector: '.event-title'
+      titleSelector: '.event-title',
     });
   });
 }
 
-window.ENDPOINT = ENDPOINT; // 暴露给 test.html 里的旧代码
+// ========== 过滤 UI 渲染 ==========
+function updateFilterList() {
+  const div = document.getElementById('current-filters');
+  if (!div) return;
+  renderFilterList(
+    div,
+    activeFilters,
+    attributeLabels,
+    // 移除回调：支持整组或单值（filter-ui 内已兼容）
+    (key, value) => {
+      if (value == null) {
+        delete activeFilters[key];
+      } else {
+        const arr = activeFilters[key] || [];
+        activeFilters[key] = arr.filter(v => v !== value);
+        if (activeFilters[key].length === 0) delete activeFilters[key];
+      }
+      updateFilterList();
+      window.updateTimelineByFilter?.();
+    },
+    { perValueRemove: true } // 每个值渲染为可移除 chip
+  );
+}
 window.updateFilterList = updateFilterList;
 
-// ✅ 关键：页面就绪后绑定工具栏 & 挂载时间轴
-window.addEventListener('DOMContentLoaded', () => {
-  // 绑定顶部按钮到占位逻辑（避免点击无反应）
+// ========== 过滤应用 ==========
+function getFilteredItems() {
+  if (!originalItems?.length) return [];
+  if (!activeFilters || Object.keys(activeFilters).length === 0) return originalItems.slice();
+  return filterItems(originalItems, activeFilters, filterLogic);
+}
+
+function updateTimelineByFilter() {
+  if (!itemsDS || !timeline) return;
+  const next = getFilteredItems();
+  itemsDS.clear();
+  if (next.length) itemsDS.add(next);
+  // 轻量 redraw
+  try { timeline.redraw(); } catch {}
+}
+window.updateTimelineByFilter = updateTimelineByFilter;
+
+// ========== 页面就绪：绑定工具栏 & 挂载时间轴 ==========
+window.addEventListener('DOMContentLoaded', async () => {
   bindToolbar();
 
-  // 渲染时间轴
   const el = document.getElementById('timeline');
   if (!el) {
     console.error('[timeline] 未找到 #timeline 容器');
     return;
   }
-  mountTimeline(el);
+
+  // 挂载时间轴（返回句柄）
+  const handle = await mountTimeline(el);
+  timeline = handle?.timeline || null;
+  itemsDS  = handle?.items || null;
+
+  // 记录原始 items（用于过滤回放）
+  try {
+    originalItems = itemsDS ? itemsDS.get() : [];
+  } catch {
+    originalItems = [];
+  }
+
+  // 初次渲染过滤 UI（若有默认过滤）
+  updateFilterList();
 });
-
-import { fetchAndNormalize } from './fetch.js';
-import { mountTimeline } from '../timeline/mount.js';
-
