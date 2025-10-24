@@ -1,40 +1,44 @@
 // public/src/_staging/style-ui.js
-// 当前以“显示时间轴”为目标：拉数据 → 规范化 → 渲染 vis.Timeline
-// 保留你现有的样式/筛选占位逻辑；后续再逐步拆分
+// 🎯 目的：提供“样式相关 UI 的杂项工具 & 临时接线点”
+// - bindToolbar(): 为页面上现有按钮做轻量绑定（若存在），无则保持占位逻辑
+// - renderSimpleOptions(): 向 <select> 写入简单选项
+// - buildStyleControl(type, deps): 返回一个颜色/字体的输入控件（不直接写规则，只分发事件）
+// - applyCurrentStylesInjected(opts): 将 UI 态（boundStyleType/styleRules）构造成引擎态并应用
+//
+// ⚠️ 这里不包含编译器逻辑（编译在 style/engine.js 或远程服务）；不做数据拉取（fetch 可能在 app.js）。
 
 import {
-  getFilterOptionsForKeyFrom,
-  createEmptyRuleForType,
-  ensureBucketIn,
   buildEngineStyleState,
-  // 如需中文标签/颜色/样式名，可按需解开：
+  // 可选：如需中文标签/预设色等，可解开并传给 buildStyleControl 的 deps
   // attributeLabels,
   // PRESET_COLORS,
   // styleLabel,
 } from './constants.js';
 
-import { toISO } from '../utils/data.js';
-import { escapeHtml } from '../utils/dom.js';
+import {
+  openAttrPicker,
+  confirmAttrPicker,
+  closeAttrPicker,
+  selectAllInAttrPicker,
+  clearAttrPicker,
+} from '../ui/attr-picker.js';
 
-
-import { fetchAndNormalize } from './fetch.js';
-
-import { openAttrPicker } from '../ui/attr-picker.js';
-
+// 供其它地方复用的小工具（保持原导出）
 export { isSameSet } from '../utils/data.js';
 export { getTakenValues, readRowStyleKey } from '../utils/dom.js';
 
-
-
-/*==================
-staging-ui.js保留位置
-  ===================*/
 /* =========================
- * —— 新增：按钮/弹窗占位绑定 —— 
- *   保持与你页面 onclick 兼容（可在 app.js 调用）
+ * 工具栏/弹窗：占位绑定（若页面存在这些 id）
  * ========================= */
+function log(...args) { try { console.log('[style-ui]', ...args); } catch {} }
+
+/**
+ * 绑定页面上的若干按钮（若存在）。不存在则忽略。
+ * - 过滤相关仍保留占位（你的过滤交互后面在 app.js 里接全）
+ * - 属性选择弹窗按钮（#attr-picker-*）会接入 attr-picker 的真实逻辑
+ */
 export function bindToolbar() {
-  // 过滤
+  // ===== 过滤区：占位（第二轮在 app.js 里接线） =====
   window.openFilterWindow = function () {
     const el = document.getElementById('filter-window');
     if (el) el.style.display = 'block';
@@ -47,7 +51,7 @@ export function bindToolbar() {
   window.applyFilters = function () { alert('已应用 AND 逻辑（占位）'); };
   window.applyFiltersOr = function () { alert('已应用 OR 逻辑（占位）'); };
 
-  // 样式
+  // ===== 样式面板：占位（真实面板在 style-panel.js） =====
   window.openStyleWindow = function (attr) {
     const el = document.getElementById('style-window');
     if (!el) return;
@@ -68,30 +72,44 @@ export function bindToolbar() {
     if (el) el.style.display = 'none';
   };
 
-  // 属性选择弹窗按钮
+  // ===== 属性选择弹窗：若存在这些元素，则接入真实逻辑 =====
   const picker = document.getElementById('attr-picker-window');
   const confirmBtn = document.getElementById('attr-picker-confirm');
   const cancelBtn = document.getElementById('attr-picker-cancel');
   const selAllBtn = document.getElementById('attr-picker-select-all');
   const clearBtn = document.getElementById('attr-picker-clear');
-  if (confirmBtn) confirmBtn.addEventListener('click', () => { alert('已选择（占位）'); if (picker) picker.style.display = 'none'; });
-  if (cancelBtn) cancelBtn.addEventListener('click', () => { if (picker) picker.style.display = 'none'; });
-  if (selAllBtn) selAllBtn.addEventListener('click', () => alert('全选（占位）'));
-  if (clearBtn) clearBtn.addEventListener('click', () => alert('全不选（占位）'));
+
+  if (confirmBtn) confirmBtn.addEventListener('click', () => { confirmAttrPicker(); });
+  if (cancelBtn)  cancelBtn.addEventListener('click', () => { closeAttrPicker(); });
+  if (selAllBtn)  selAllBtn.addEventListener('click', () => { selectAllInAttrPicker(); });
+  if (clearBtn)   clearBtn.addEventListener('click', () => { clearAttrPicker(); });
+
+  // 暴露一个“打开选择器”的全局函数（兼容你页面 onclick）
+  window.openAttrPicker = function (rowId, attrKey) {
+    if (!picker) return alert('属性选择弹窗未就绪（占位）');
+    openAttrPicker(rowId, attrKey);
+  };
 
   log('toolbar bound');
 }
 
+/* =========================
+ * 选项渲染（简单 <select>）
+ * ========================= */
 export function renderSimpleOptions(selectEl, list) {
   if (!selectEl) return;
   selectEl.innerHTML = '';
-  (list || []).forEach(opt => {
+  (list || []).forEach((opt) => {
     const o = document.createElement('option');
     o.value = o.textContent = opt;
     selectEl.appendChild(o);
   });
 }
 
+/* =========================
+ * 样式控件工厂（字体 / 颜色）
+ * - 返回 DOM，但不直接写 rule.style；通过触发 change/input 事件交由外层同步
+ * ========================= */
 export function buildStyleControl(type, deps = {}) {
   const { PRESET_COLORS = [] } = deps;
   const wrap = document.createElement('div');
@@ -104,14 +122,13 @@ export function buildStyleControl(type, deps = {}) {
       <option value="STCaiyun">华文彩云 (STCaiyun)</option>
       <option value="FZShuTi">方正舒体 (FZShuTi)</option>
       <option value="FZYaoti">方正姚体 (FZYaoti)</option>
-      <option value='"Microsoft YaHei"'>微软雅黑 (Microsoft YaHei)</option>
+      <option value="Microsoft YaHei, PingFang SC, Noto Sans SC, system-ui">微软雅黑 / 苹方 / 思源黑体</option>
       <option value="DengXian">等线 (DengXian)</option>
-      <option value="LiSu">隶书 (LiSu)</option>
-      <option value="YouYuan">幼圆 (YouYuan)</option>
       <option value="SimSun">宋体 (SimSun)</option>
       <option value="SimHei">黑体 (SimHei)</option>
       <option value="KaiTi">楷体 (KaiTi)</option>
     `;
+    // 外层监听 'change' → 写回 rule.style.fontFamily
     wrap.appendChild(fontSel);
     return wrap;
   }
@@ -126,14 +143,15 @@ export function buildStyleControl(type, deps = {}) {
     color.value = '#000000';
     color.setAttribute('aria-label', '选择颜色');
 
-    // 2) HEX 输入
+    // 2) HEX 输入（带预览）
     const hex = document.createElement('input');
     hex.type = 'text';
     hex.placeholder = '#RRGGBB';
     hex.value = color.value.toUpperCase();
     hex.inputMode = 'text';
     hex.pattern = '^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$';
-        // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
+
+    // —— 工具：HEX 规范化 + 文本可读色 + 预览 —— //
     function normalizeHex(v) {
       let s = String(v || '').trim();
       if (!s) return null;
@@ -155,7 +173,7 @@ export function buildStyleControl(type, deps = {}) {
     }
     applyPreview(hex.value);
 
-    // —— 同步：取色器 -> HEX（实时）——
+    // —— 同步：取色器 → HEX（实时）——
     color.addEventListener('input', () => {
       const v = color.value.toUpperCase();
       hex.value = v;
@@ -196,7 +214,7 @@ export function buildStyleControl(type, deps = {}) {
     wrap.appendChild(color);
     wrap.appendChild(hex);
 
-    // 3) 预设色块（9 个非黑白）
+    // 3) 预设色块
     const sw = document.createElement('div');
     sw.className = 'swatches';
 
@@ -240,15 +258,18 @@ export function buildStyleControl(type, deps = {}) {
   return wrap;
 }
 
+/* =========================
+ * 一键构建并应用当前样式（UI 态 → 引擎态 → 可选持久化 → 应用）
+ * ========================= */
 export function applyCurrentStylesInjected({
-  // 必需内存
+  // 必需内存（来自面板/表格）
   boundStyleType = {},
   styleRules = {},
 
-  // 引擎调用
+  // 引擎调用：将状态交给编译器/注入器
   applyEngine = (state, opts) => {},
 
-  // 选择器（与现网保持一致，便于第二遍替换）
+  // 选择器（与现网保持一致，便于第二轮替换）
   selectorBase = '.vis-item.event, .vis-item-content.event',
   titleSelector = '.event-title',
 
