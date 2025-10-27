@@ -50,15 +50,11 @@ function toMs(tsLike) {
 
 /**
  * 主入口：渲染时间轴
- * @param {HTMLElement} container - 目标容器
- * @param {Object} overrides - 可覆盖的 vis 选项（将与 TIMELINE_DEFAULT_OPTIONS & 本地 defaults 合并）
- * @returns {Promise<{timeline:any, items:any, destroy:Function, setItems:Function, setOptions:Function}>}
  */
 export async function mountTimeline(container, overrides = {}) {
   window.__timelineInit = 'mounting';
   log('mountTimeline start');
 
-  // 0) 防御：检查容器和 vis.js
   if (!container) {
     console.error('mountTimeline: 容器不存在');
     window.__timelineInit = 'container-missing';
@@ -72,23 +68,19 @@ export async function mountTimeline(container, overrides = {}) {
     return;
   }
 
-  // 1) 初始化全局状态（可选）
   window.__timelineItems = new window.vis.DataSet([]);
   window.__timeline = null;
 
-  // 2) 显示“加载中”
   const loading = createLoadingOverlay();
   const originalPosition = container.style.position;
   const needRel = getComputedStyle(container).position === 'static';
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  // 销毁函数占位（在成功创建后填充）
   let resizeHandler = null;
   let timeline = null;
   let items = null;
 
-  // 销毁：移除监听、还原样式、清空内容
   function destroy() {
     try { if (resizeHandler) window.removeEventListener('resize', resizeHandler); } catch {}
     try { if (timeline && timeline.destroy) timeline.destroy(); } catch {}
@@ -99,7 +91,6 @@ export async function mountTimeline(container, overrides = {}) {
     window.__timelineItems = null;
   }
 
-  // 安全设置 items
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
@@ -107,7 +98,6 @@ export async function mountTimeline(container, overrides = {}) {
     if (timeline && timeline.redraw) requestAnimationFrame(() => timeline.redraw());
   }
 
-  // 动态 patch options（浅合并）
   function setOptions(patch = {}) {
     if (timeline && patch && typeof patch === 'object') {
       timeline.setOptions(mergeOptions(timeline.options || {}, patch));
@@ -116,7 +106,6 @@ export async function mountTimeline(container, overrides = {}) {
   }
 
   try {
-    // 3) 拉数据 + 规范化
     const data = await fetchAndNormalize();
     if (!Array.isArray(data) || data.length === 0) {
       container.innerHTML =
@@ -125,12 +114,10 @@ export async function mountTimeline(container, overrides = {}) {
       return { timeline: null, items: null, destroy, setItems, setOptions };
     }
 
-    // 4) 写入 DataSet
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 5) 计算时间范围（用毫秒时间戳，稳）
-    const raw = items.get(); // vis.DataSet -> array
+    const raw = items.get();
     const times = raw.map(it => toMs(it && (it.start ?? it.end))).filter(Number.isFinite);
 
     let startDate, endDate;
@@ -139,15 +126,13 @@ export async function mountTimeline(container, overrides = {}) {
       const maxT = Math.max(...times);
       const DAY = 24 * 60 * 60 * 1000;
       const span = Math.max(0, maxT - minT);
-      const padMs = Math.max(7 * DAY, Math.round(span * 0.05)); // 至少 7 天
+      const padMs = Math.max(7 * DAY, Math.round(span * 0.05));
       const s = new Date(minT - padMs);
       const e = new Date(maxT + padMs);
       if (!Number.isNaN(+s)) startDate = s;
       if (!Number.isNaN(+e)) endDate = e;
     }
 
-    // 6) 默认参数（核心调节区），合并 constants 默认
-    // —— 关键：locale 强制可识别，避免“俄语月份”之类乱码。优先 overrides.locale，其次 constants，最后回退 'en'
     const wantedLocale =
       (overrides && overrides.locale) ||
       (TIMELINE_DEFAULT_OPTIONS && TIMELINE_DEFAULT_OPTIONS.locale) ||
@@ -156,48 +141,41 @@ export async function mountTimeline(container, overrides = {}) {
     const baseDefaults = {
       minHeight: 720,
       maxHeight: 720,
-      locale: wantedLocale, // 显式设置
-      // 只显示“Title/内容文字”的模板：不插 HTML；只放纯文本标题
+      locale: wantedLocale,
       template: (item, element) => {
-        // 允许数据里带 Title 字段；没有就退回 content（字符串）
         const titleText =
           item?.Title ??
           item?.title ??
-          (typeof item?.content === 'string' ? item.content : '') ||
-          '(无标题)';
+          ((typeof item?.content === 'string' ? item.content : '') || '(无标题)');
         const host = element?.closest?.('.vis-item') || element;
-        if (host) host.classList.add('event'); // 统一 .event 标记（供样式/绑定用）
+        if (host) host.classList.add('event');
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
-        h4.textContent = titleText; // 只放纯文本标题，避免把描述/HTML塞进来
+        h4.textContent = titleText;
         root.appendChild(h4);
         return root;
       },
     };
 
     const options = mergeOptions(
-      TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
-      baseDefaults,             // 本文件默认（含 locale/template）
-      overrides                 // 调用方覆盖
+      TIMELINE_DEFAULT_OPTIONS,
+      baseDefaults,
+      overrides
     );
-    // 仅当有效时才设置 start/end（避免把“普通对象/Invalid Date”塞进 options）
     if (startDate instanceof Date) options.start = startDate;
-    if (endDate   instanceof Date) options.end   = endDate;
+    if (endDate instanceof Date) options.end = endDate;
 
-    // 7) 创建时间轴
     const vis = window.vis;
     timeline = new vis.Timeline(container, items, options);
     window.__timeline = timeline;
 
-    // 8) 自适应窗口
     resizeHandler = () => timeline.redraw();
     window.addEventListener('resize', resizeHandler);
 
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
 
-    // 9) 返回可操作句柄
     return { timeline, items, destroy, setItems, setOptions };
   } catch (err) {
     console.error(err);
@@ -206,7 +184,6 @@ export async function mountTimeline(container, overrides = {}) {
     window.__timelineInit = 'error';
     return { timeline: null, items: null, destroy, setItems, setOptions };
   } finally {
-    // 10) 移除 loading
     try { loading.remove(); } catch {}
   }
 }
