@@ -11,7 +11,7 @@ window.__timeline = null;
 window.__timelineItems = null;
 
 function log(...args) {
-  console.log('[timeline]', ...args);
+  try { console.log('[timeline]', ...args); } catch {}
 }
 
 // 浅层“深合并”：仅合并一层子对象（满足我们这里的 options 结构）
@@ -23,7 +23,8 @@ function mergeOptions(...objs) {
       const v = o[k];
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         out[k] = { ...(out[k] || {}), ...v };
-      } else {
+      } else if (v !== undefined) {
+        // 不写入 undefined，避免把“未定义的 start/end”显式设置到 options
         out[k] = v;
       }
     }
@@ -40,6 +41,14 @@ function createLoadingOverlay() {
   el.style.cssText =
     'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
   return el;
+}
+
+// 把各种时间输入转成“可比较的时间戳（毫秒）”；无效返回 NaN
+function toMs(tsLike) {
+  if (typeof tsLike === 'number') return tsLike;
+  const d = new Date(tsLike);
+  const n = +d;
+  return Number.isFinite(n) ? n : NaN;
 }
 
 /**
@@ -84,15 +93,9 @@ export async function mountTimeline(container, overrides = {}) {
 
   // 销毁：移除监听、还原样式、清空内容
   function destroy() {
-    try {
-      if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-    } catch {}
-    try {
-      if (timeline && timeline.destroy) timeline.destroy();
-    } catch {}
-    try {
-      if (container.contains(loading)) loading.remove();
-    } catch {}
+    try { if (resizeHandler) window.removeEventListener('resize', resizeHandler); } catch {}
+    try { if (timeline && timeline.destroy) timeline.destroy(); } catch {}
+    try { if (container.contains(loading)) loading.remove(); } catch {}
     if (needRel) container.style.position = originalPosition || '';
     window.__timelineInit = 'destroyed';
     window.__timeline = null;
@@ -133,30 +136,39 @@ export async function mountTimeline(container, overrides = {}) {
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 5) 计算时间范围（容错：若无 start/end，跳过范围设定）
-    const ts = items.get().map(it => {
-      const t = it.start || it.end;
-      return t ? +new Date(t) : NaN;
-    }).filter(Number.isFinite);
+    // 5) 计算时间范围（用毫秒时间戳，稳）
+    const raw = items.get(); // vis.DataSet -> array
+    const times = raw
+      .map(it => toMs(it && (it.start ?? it.end)))
+      .filter(Number.isFinite);
 
-    const minT = ts.length ? Math.min(...ts) : NaN;
-    const maxT = ts.length ? Math.max(...ts) : NaN;
-    const pad = ts.length ? Math.max(7, Math.round((maxT - minT) * 0.05)) : 0;
+    const hasRange = times.length > 0;
+    let startDate, endDate;
+    if (hasRange) {
+      const minT = Math.min(...times);
+      const maxT = Math.max(...times);
+      const span = Math.max(0, maxT - minT);
+      const DAY = 24 * 60 * 60 * 1000;
+      const padMs = Math.max(7 * DAY, Math.round(span * 0.05)); // 至少 7 天
+      const s = new Date(minT - padMs);
+      const e = new Date(maxT + padMs);
+      if (!Number.isNaN(+s)) startDate = s;
+      if (!Number.isNaN(+e)) endDate = e;
+    }
 
     // 6) 默认参数（核心调节区），合并 constants 默认
-    const localDefaults = {
-      // 覆盖/补充 vis 关键选项
+    const baseDefaults = {
       minHeight: 720,
       maxHeight: 720,
-      start: Number.isFinite(minT) ? new Date(minT - pad) : undefined,
-      end: Number.isFinite(maxT) ? new Date(maxT + pad) : undefined,
     };
-
     const options = mergeOptions(
       TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
-      localDefaults,            // 本文件默认
+      baseDefaults,             // 本文件默认
       overrides                 // 调用方覆盖
     );
+    // 仅当有效时才设置 start/end（避免把“普通对象/Invalid Date”塞进 options）
+    if (startDate instanceof Date) options.start = startDate;
+    if (endDate   instanceof Date) options.end   = endDate;
 
     // 7) 创建时间轴
     timeline = new window.vis.Timeline(container, items, options);
