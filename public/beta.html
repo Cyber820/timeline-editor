@@ -6,36 +6,24 @@
   <title>Timeline Beta — Step 1: 渲染时间轴</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- vis-timeline 基础样式 & 脚本（CDN 版本，方便单页调试） -->
   <link rel="stylesheet" href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css">
   <script src="https://unpkg.com/vis-timeline/standalone/umd/vis-timeline-graph2d.min.js"></script>
 
   <style>
-    /* 页面与容器的最小布局，仅用于演示 */
-    :root { color-scheme: light dark; }
     body { margin: 0; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
     header { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
     main { padding: 12px 16px; }
-    #timeline {
-      height: 720px;               /* 与 mountTimeline 的默认高度一致 */
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      background: white;
-    }
-    /* 让标题在内容里更显眼（与我们后续样式引擎的 .event-title 类名一致） */
+    #timeline { height: 720px; border: 1px solid #e5e7eb; border-radius: 8px; background: white; }
     .event-title { margin: 0; font-weight: 600; font-size: 13px; }
     .event-meta { color:#6b7280; font-size: 12px; }
   </style>
 
-  <!--
-    关键点：使用 import map 将 ./src/timeline/mount.js 里相对导入的 ./fetch.js
-    替换为一个内联 data: 模块（提供 fetchAndNormalize 的 mock 实现）。
-    这样不需要你现在就实现真正的 fetch.js，也无需动源码。
-  -->
+  <!-- 用 import map 把 ./src/timeline/fetch.js 映射到一个内联 mock。
+       关键修正：start/end 使用 Date 对象。 -->
   <script type="importmap">
   {
     "imports": {
-      "./src/timeline/fetch.js": "data:text/javascript;charset=utf-8,%2F%2F%20mock%20fetchAndNormalize%20for%20beta.html%0Aexport%20async%20function%20fetchAndNormalize()%20%7B%0A%20%20%2F%2F%20%E7%9B%B4%E6%8E%A5%E8%BF%94%E5%9B%9E%20vis%20items%EF%BC%9A%E5%8C%85%E5%90%AB%20id%2Fcontent%2Fstart%2Fend%EF%BC%8C%E5%92%8C%20mountTimeline%20%E7%9B%B8%E5%AE%B9%0A%20%20const%20items%20%3D%20%5B%0A%20%20%20%20%7B%20id%3A%201%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EProject%20Kickoff%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E6%97%A5%E6%9C%AC%20%C2%B7%20%E5%B9%B3%E5%8F%B0%EF%BC%9APC%3C%2Fdiv%3E'%2C%20start%3A%20'2023-11-01'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%202%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EAlpha%20Internal%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%85%AC%E5%8F%B8%EF%BC%9AAcorn%20Games%3C%2Fdiv%3E'%2C%20start%3A%20'2024-03-12'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%203%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EClosed%20Beta%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E4%B8%BB%E6%9C%BA%EF%BC%9ASwitch%3C%2Fdiv%3E'%2C%20start%3A%20'2024-07-05'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%204%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3ELaunch%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E5%8C%97%E7%BE%8E%3C%2Fdiv%3E'%2C%20start%3A%20'2025-02-18'%20%7D%0A%20%20%5D%3B%0A%20%20return%20items%3B%0A%7D%0A"
+      "./src/timeline/fetch.js": "data:text/javascript;charset=utf-8,%2F%2F%20mock%20fetchAndNormalize%20for%20beta.html%0Aexport%20async%20function%20fetchAndNormalize()%20%7B%0A%20%20const%20items%20%3D%20%5B%0A%20%20%20%20%7B%20id%3A%201%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EProject%20Kickoff%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E6%97%A5%E6%9C%AC%20%C2%B7%20%E5%B9%B3%E5%8F%B0%EF%BC%9APC%3C%2Fdiv%3E'%2C%20start%3A%20new%20Date('2023-11-01T00%3A00%3A00Z')%20%7D%2C%0A%20%20%20%20%7B%20id%3A%202%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EAlpha%20Internal%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%85%AC%E5%8F%B8%EF%BC%9AAcorn%20Games%3C%2Fdiv%3E'%2C%20start%3A%20new%20Date('2024-03-12T00%3A00%3A00Z')%20%7D%2C%0A%20%20%20%20%7B%20id%3A%203%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EClosed%20Beta%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E4%B8%BB%E6%9C%BA%EF%BC%9ASwitch%3C%2Fdiv%3E'%2C%20start%3A%20new%20Date('2024-07-05T00%3A00%3A00Z')%20%7D%2C%0A%20%20%20%20%7B%20id%3A%204%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3ELaunch%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E5%8C%97%E7%BE%8E%3C%2Fdiv%3E'%2C%20start%3A%20new%20Date('2025-02-18T00%3A00%3A00Z')%20%7D%0A%20%20%5D%3B%0A%20%20return%20items%3B%0A%7D%0A"
     }
   }
   </script>
@@ -50,21 +38,15 @@
     <div id="timeline"></div>
   </main>
 
-  <!-- 入口脚本：直接使用现有的 ESM 代码挂载时间轴 -->
   <script type="module">
     import { mountTimeline } from "./src/timeline/mount.js";
-
     document.addEventListener('DOMContentLoaded', () => {
       const el = document.getElementById('timeline');
       if (!el) {
         console.error('[beta] 未找到 #timeline 容器');
         return;
       }
-      // 直接渲染（其内部会调用我们通过 import map 注入的 mock fetchAndNormalize）
-      mountTimeline(el, {
-        // 你可以按需覆盖 vis 选项；这里保持默认即可
-        // locale: 'zh-cn'
-      });
+      mountTimeline(el);
     });
   </script>
 </body>
