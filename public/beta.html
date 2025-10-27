@@ -1,150 +1,71 @@
+<!-- public/beta.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <title>Timeline Beta — Step 1: 渲染时间轴</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>电子游戏时间轴 · 重建版</title>
 
-  <!-- 第三方库（保留你现用版本） -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/zh-cn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <!-- vis-timeline 基础样式 & 脚本（CDN 版本，方便单页调试） -->
+  <link rel="stylesheet" href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css">
+  <script src="https://unpkg.com/vis-timeline/standalone/umd/vis-timeline-graph2d.min.js"></script>
 
   <style>
-    :root { --gap: 12px; --panel-bg: #f8f9fb; --border: #e5e7eb; --text: #111827; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin: 0; color: var(--text); background: #fff; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; }
-
-    header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
-    .brand { font-weight: 700; }
-    #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-
-    main { display: grid; grid-template-columns: 280px 1fr; gap: var(--gap); padding: var(--gap); }
-    #left-panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-    #timeline-panel { border: 1px solid var(--border); border-radius: 10px; padding: 0; min-height: 600px; display: flex; flex-direction: column; }
-
-    #timeline { width: 100%; height: 800px; border: 1px solid lightgray; position: relative; }
-    .vis-tooltip { white-space: normal !important; max-width: 700px !important; min-width: 300px; font-size: 10px; line-height: 1.2; padding: 12px; background-color: #fff; border: 1px solid #ccc; box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); }
-    .vis-item { font-size: 10px; padding: 1px 2px; background-color: #f5f5f5; border: 1px solid #aaa; border-radius: 4px; max-width: 300px; }
-    #timeline .vis-item .event-title { margin: 0 !important; line-height: 1.5 !important; }
-
-    .section-title { font-weight: 600; margin: 8px 0; }
-    .muted { color: #6b7280; font-size: 12px; }
+    /* 页面与容器的最小布局，仅用于演示 */
+    :root { color-scheme: light dark; }
+    body { margin: 0; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+    header { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
+    main { padding: 12px 16px; }
+    #timeline {
+      height: 720px;               /* 与 mountTimeline 的默认高度一致 */
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: white;
+    }
+    /* 让标题在内容里更显眼（与我们后续样式引擎的 .event-title 类名一致） */
+    .event-title { margin: 0; font-weight: 600; font-size: 13px; }
+    .event-meta { color:#6b7280; font-size: 12px; }
   </style>
+
+  <!--
+    关键点：使用 import map 将 ./src/timeline/mount.js 里相对导入的 ./fetch.js
+    替换为一个内联 data: 模块（提供 fetchAndNormalize 的 mock 实现）。
+    这样不需要你现在就实现真正的 fetch.js，也无需动源码。
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./src/timeline/fetch.js": "data:text/javascript;charset=utf-8,%2F%2F%20mock%20fetchAndNormalize%20for%20beta.html%0Aexport%20async%20function%20fetchAndNormalize()%20%7B%0A%20%20%2F%2F%20%E7%9B%B4%E6%8E%A5%E8%BF%94%E5%9B%9E%20vis%20items%EF%BC%9A%E5%8C%85%E5%90%AB%20id%2Fcontent%2Fstart%2Fend%EF%BC%8C%E5%92%8C%20mountTimeline%20%E7%9B%B8%E5%AE%B9%0A%20%20const%20items%20%3D%20%5B%0A%20%20%20%20%7B%20id%3A%201%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EProject%20Kickoff%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E6%97%A5%E6%9C%AC%20%C2%B7%20%E5%B9%B3%E5%8F%B0%EF%BC%9APC%3C%2Fdiv%3E'%2C%20start%3A%20'2023-11-01'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%202%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EAlpha%20Internal%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%85%AC%E5%8F%B8%EF%BC%9AAcorn%20Games%3C%2Fdiv%3E'%2C%20start%3A%20'2024-03-12'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%203%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3EClosed%20Beta%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E4%B8%BB%E6%9C%BA%EF%BC%9ASwitch%3C%2Fdiv%3E'%2C%20start%3A%20'2024-07-05'%20%7D%2C%0A%20%20%20%20%7B%20id%3A%204%2C%20content%3A%20'%3Ch4%20class%3D%22event-title%22%3ELaunch%3C%2Fh4%3E%3Cdiv%20class%3D%22event-meta%22%3E%E5%9C%B0%E5%8C%BA%EF%BC%9A%E5%8C%97%E7%BE%8E%3C%2Fdiv%3E'%2C%20start%3A%20'2025-02-18'%20%7D%0A%20%20%5D%3B%0A%20%20return%20items%3B%0A%7D%0A"
+    }
+  }
+  </script>
 </head>
 <body>
   <header>
-    <div class="brand">电子游戏时间轴 · 重建版</div>
-    <div id="toolbar">
-      <button onclick="openFilterWindow('and')">🔍 过滤标准</button>
-      <button onclick="openStyleWindow('EventType')">事件样式</button>
-      <button onclick="openStyleWindow('Platform')">平台样式</button>
-      <button onclick="openStyleWindow('ConsolePlatform')">主机样式</button>
-      <button onclick="openStyleWindow('Company')">公司样式</button>
-      <button onclick="openStyleWindow('Region')">地区样式</button>
-    </div>
+    <strong>Timeline Beta</strong>
+    <span style="color:#6b7280;margin-left:8px;">Step 1：渲染时间轴（直接读取）</span>
   </header>
 
   <main>
-    <aside id="left-panel">
-      <div class="section-title">筛选器（Step 3 占位）</div>
-      <div class="muted">此处先保留容器，等第二步时间轴跑通后再接第三步逻辑。</div>
-      <div id="filters-host"></div>
-
-      <hr style="margin:12px 0; border:none; border-top:1px solid var(--border)" />
-
-      <div class="section-title">样式（Step 4 占位）</div>
-      <div class="muted">样式绑定、规则表与预览等在这里接线。</div>
-      <div id="styles-host"></div>
-    </aside>
-
-    <section id="timeline-panel">
-      <div id="timeline"></div>
-    </section>
+    <div id="timeline"></div>
   </main>
 
-  <!-- 过滤逻辑设置弹窗 -->
-  <div id="filter-window" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #fff; padding: 20px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none; z-index: 2000; max-height: 80vh; overflow: auto; width: 700px;">
-    <h3>过滤标准（和逻辑）</h3>
-    <button onclick="openAddFilter()">增加过滤标准</button>
-    <button onclick="resetFilters()">复原过滤标准</button>
-    <button onclick="applyFilters()">应用和逻辑</button>
-    <button onclick="applyFiltersOr()">应用或逻辑</button>
-    <button onclick="document.getElementById('filter-window').style.display='none'">关闭</button>
-    <div id="current-filters"></div>
-  </div>
+  <!-- 入口脚本：直接使用现有的 ESM 代码挂载时间轴 -->
+  <script type="module">
+    import { mountTimeline } from "./src/timeline/mount.js";
 
-  <!-- 添加过滤标准弹窗 -->
-  <div id="add-filter-window" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #fff; padding: 20px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: none; z-index: 2000; max-height: 80vh; overflow: auto; width: 700px; height: 300px;">
-    <h3>新增过滤标准</h3>
-    <label>过滤属性：<select id="filter-attribute"></select></label><br>
-    <label>过滤选项：<select id="filter-options" multiple></select></label><br>
-    <button onclick="confirmAddFilter()">确定</button>
-    <button onclick="document.getElementById('add-filter-window').style.display='none'">取消</button>
-  </div>
-
-  <!-- 属性多选弹窗 -->
-  <div id="attr-picker-window" style="display:none; position:absolute; top:120px; left:50%; transform:translateX(-50%); width:700px; background:#fff; border:1px solid #ccc; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:2100; max-height:70vh; overflow:auto;">
-    <h3 id="attr-picker-title" style="margin:0 0 8px;">选择应用的属性值</h3>
-    <div id="attr-picker-hint" style="color:#666; margin-bottom:8px;"></div>
-    <div style="margin:6px 0 8px;">
-      <button id="attr-picker-select-all" type="button">全选</button>
-      <button id="attr-picker-clear" type="button">全不选</button>
-    </div>
-    <div style="margin-bottom:8px;">
-      <div id="attr-picker-attrname" style="margin-bottom:6px; color:#333;">属性值</div>
-      <select id="attr-picker-options" multiple></select>
-    </div>
-    <div style="margin-top:10px; text-align:right;">
-      <button id="attr-picker-confirm" style="margin-right:8px;">确定</button>
-      <button id="attr-picker-cancel">取消</button>
-    </div>
-  </div>
-
-  <!-- 样式弹窗 -->
-  <div id="style-window" style="display:none; position:absolute; top:100px; left:50%; transform:translateX(-50%); width:700px; height:400px; background:#fff; border:1px solid #ccc; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow:auto; z-index:2000;">
-    <h3 id="style-title">属性样式</h3>
-    <div class="toolbar" style="margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-      <label>自定义样式：
-        <select id="style-type" onchange="onStyleTypeChange()">
-          <option value="none">无</option>
-          <option value="font">字体</option>
-          <option value="fontColor">字体颜色</option>
-          <option value="borderColor">事件框颜色</option>
-          <option value="backgroundColor">事件框填充色</option>
-          <option value="haloColor">光晕颜色</option>
-        </select>
-      </label>
-      <span id="bound-type-hint" style="color:#666;">当前样式：无</span>
-      <span style="flex:1"></span>
-      <button id="style-confirm-btn" disabled>确认绑定</button>
-      <button id="style-reset-btn" style="display:none;">重置</button>
-      <button class="btn-ghost" onclick="closeStyleWindow()" aria-label="关闭" style="background:transparent;border:0;font-size:18px;line-height:1;padding:2px 6px;cursor:pointer;color:#666;">×</button>
-    </div>
-    <div>
-      <button id="add-style-btn" onclick="addStyleRow()" disabled>新增样式</button>
-    </div>
-    <table id="style-table" border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th>样式内容</th>
-          <th>应用属性</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="styleTableBody"></tbody>
-    </table>
-    <div style="margin-top:10px; text-align:right;">
-      <button id="style-save" type="button" class="btn-primary" onclick="confirmStyle()">确定</button>
-      <button id="style-cancel" type="button" onclick="closeStyleWindow()">取消</button>
-    </div>
-  </div>
-
-  <!-- 入口脚本（按你的结构）：app.js 会 import _staging/constants & style-ui -->
-  <script type="module" src="./src/app.js"></script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('timeline');
+      if (!el) {
+        console.error('[beta] 未找到 #timeline 容器');
+        return;
+      }
+      // 直接渲染（其内部会调用我们通过 import map 注入的 mock fetchAndNormalize）
+      mountTimeline(el, {
+        // 你可以按需覆盖 vis 选项；这里保持默认即可
+        // locale: 'zh-cn'
+      });
+    });
+  </script>
 </body>
 </html>
