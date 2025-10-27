@@ -10,9 +10,7 @@ window.__timelineInit = 'not-started';
 window.__timeline = null;
 window.__timelineItems = null;
 
-function log(...args) {
-  try { console.log('[timeline]', ...args); } catch {}
-}
+function log(...args) { try { console.log('[timeline]', ...args); } catch {} }
 
 // 浅层“深合并”：仅合并一层子对象（满足我们这里的 options 结构）
 function mergeOptions(...objs) {
@@ -24,7 +22,6 @@ function mergeOptions(...objs) {
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         out[k] = { ...(out[k] || {}), ...v };
       } else if (v !== undefined) {
-        // 不写入 undefined，避免把“未定义的 start/end”显式设置到 options
         out[k] = v;
       }
     }
@@ -106,12 +103,8 @@ export async function mountTimeline(container, overrides = {}) {
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
-    if (Array.isArray(nextItems) && nextItems.length) {
-      items.add(nextItems);
-    }
-    if (timeline && timeline.redraw) {
-      requestAnimationFrame(() => timeline.redraw());
-    }
+    if (Array.isArray(nextItems) && nextItems.length) items.add(nextItems);
+    if (timeline && timeline.redraw) requestAnimationFrame(() => timeline.redraw());
   }
 
   // 动态 patch options（浅合并）
@@ -138,17 +131,14 @@ export async function mountTimeline(container, overrides = {}) {
 
     // 5) 计算时间范围（用毫秒时间戳，稳）
     const raw = items.get(); // vis.DataSet -> array
-    const times = raw
-      .map(it => toMs(it && (it.start ?? it.end)))
-      .filter(Number.isFinite);
+    const times = raw.map(it => toMs(it && (it.start ?? it.end))).filter(Number.isFinite);
 
-    const hasRange = times.length > 0;
     let startDate, endDate;
-    if (hasRange) {
+    if (times.length) {
       const minT = Math.min(...times);
       const maxT = Math.max(...times);
-      const span = Math.max(0, maxT - minT);
       const DAY = 24 * 60 * 60 * 1000;
+      const span = Math.max(0, maxT - minT);
       const padMs = Math.max(7 * DAY, Math.round(span * 0.05)); // 至少 7 天
       const s = new Date(minT - padMs);
       const e = new Date(maxT + padMs);
@@ -157,13 +147,38 @@ export async function mountTimeline(container, overrides = {}) {
     }
 
     // 6) 默认参数（核心调节区），合并 constants 默认
+    // —— 关键：locale 强制可识别，避免“俄语月份”之类乱码。优先 overrides.locale，其次 constants，最后回退 'en'
+    const wantedLocale =
+      (overrides && overrides.locale) ||
+      (TIMELINE_DEFAULT_OPTIONS && TIMELINE_DEFAULT_OPTIONS.locale) ||
+      'en';
+
     const baseDefaults = {
       minHeight: 720,
       maxHeight: 720,
+      locale: wantedLocale, // 显式设置
+      // 只显示“Title/内容文字”的模板：不插 HTML；只放纯文本标题
+      template: (item, element) => {
+        // 允许数据里带 Title 字段；没有就退回 content（字符串）
+        const titleText =
+          item?.Title ??
+          item?.title ??
+          (typeof item?.content === 'string' ? item.content : '') ||
+          '(无标题)';
+        const host = element?.closest?.('.vis-item') || element;
+        if (host) host.classList.add('event'); // 统一 .event 标记（供样式/绑定用）
+        const root = document.createElement('div');
+        const h4 = document.createElement('h4');
+        h4.className = 'event-title';
+        h4.textContent = titleText; // 只放纯文本标题，避免把描述/HTML塞进来
+        root.appendChild(h4);
+        return root;
+      },
     };
+
     const options = mergeOptions(
       TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
-      baseDefaults,             // 本文件默认
+      baseDefaults,             // 本文件默认（含 locale/template）
       overrides                 // 调用方覆盖
     );
     // 仅当有效时才设置 start/end（避免把“普通对象/Invalid Date”塞进 options）
@@ -171,7 +186,8 @@ export async function mountTimeline(container, overrides = {}) {
     if (endDate   instanceof Date) options.end   = endDate;
 
     // 7) 创建时间轴
-    timeline = new window.vis.Timeline(container, items, options);
+    const vis = window.vis;
+    timeline = new vis.Timeline(container, items, options);
     window.__timeline = timeline;
 
     // 8) 自适应窗口
