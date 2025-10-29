@@ -72,23 +72,23 @@ function pickTitleFromBlob(blob) {
 /** 兼容各种形态，尽力取出“可显示的标题纯文本” */
 function resolveTitle(item) {
   // 1) 显式字段优先
-  const t1 = toPlainText(item?.Title);
+  const t1 = toPlainText(item && item.Title);
   if (t1) return t1;
-  const t2 = toPlainText(item?.title);
+  const t2 = toPlainText(item && item.title);
   if (t2) return t2;
 
-  // 2) 从大段详情里解析“事件名称：xxx”
-  const fromTitleBlob = pickTitleFromBlob(item?.title);
+  // 2) 有些数据把“全量详情”塞进 title 或 content；从中解析“事件名称：xxx”
+  const fromTitleBlob = pickTitleFromBlob(item && item.title);
   if (fromTitleBlob) return fromTitleBlob;
 
-  const fromContentBlob = pickTitleFromBlob(item?.content);
+  const fromContentBlob = pickTitleFromBlob(item && item.content);
   if (fromContentBlob) return fromContentBlob;
 
-  // 3) 退回到 content/label 的纯文本
-  const t3 = toPlainText(item?.content);
+  // 3) 仍不行，就退回到 content/label 的纯文本
+  const t3 = toPlainText(item && item.content);
   if (t3) return t3;
 
-  const t4 = toPlainText(item?.label);
+  const t4 = toPlainText(item && item.label);
   if (t4) return t4;
 
   // 4) 最终兜底
@@ -97,8 +97,8 @@ function resolveTitle(item) {
 
 /**
  * 主入口：渲染时间轴
- * @param {HTMLElement} container - 目标容器
- * @param {Object} overrides - 可覆盖的 vis 选项（与 TIMELINE_DEFAULT_OPTIONS & 本地 defaults 合并）
+ * @param {HTMLElement} container
+ * @param {Object} overrides
  * @returns {Promise<{timeline:any, items:any, destroy:Function, setItems:Function, setOptions:Function}>}
  */
 export async function mountTimeline(container, overrides = {}) {
@@ -130,7 +130,7 @@ export async function mountTimeline(container, overrides = {}) {
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  // 局部句柄
+  // 在闭包里维护这些句柄，便于返回/销毁
   let resizeHandler = null;
   let timeline = null;
   let items = null;
@@ -150,8 +150,12 @@ export async function mountTimeline(container, overrides = {}) {
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
-    if (Array.isArray(nextItems) && nextItems.length) items.add(nextItems);
-    if (timeline?.redraw) requestAnimationFrame(() => timeline.redraw());
+    if (Array.isArray(nextItems) && nextItems.length) {
+      items.add(nextItems);
+    }
+    if (timeline && timeline.redraw) {
+      requestAnimationFrame(() => timeline.redraw());
+    }
   }
 
   // 动态 patch options（浅合并）
@@ -171,84 +175,56 @@ export async function mountTimeline(container, overrides = {}) {
       window.__timelineInit = 'empty-data';
       return { timeline: null, items: null, destroy, setItems, setOptions };
     }
-// —— 追加：时间字段归一化（消除 [object Object] 问题）——
-function normalizeTimeLike(v) {
-  if (!v) return undefined;
-  // 已是 Date/number/string：直接用
-  if (v instanceof Date) return v;
-  if (typeof v === 'number') return v;            // 时间戳
-  if (typeof v === 'string') return v;            // "YYYY-MM-DD" / ISO
-
-  // 常见对象形态兜底：{date:"..."}, {value:"..."}, {year,month,day}
-  if (v && typeof v === 'object') {
-    if (typeof v.date === 'string' || typeof v.date === 'number') return v.date;
-    if (typeof v.value === 'string' || typeof v.value === 'number') return v.value;
-    if (
-      Number.isFinite(v.year) &&
-      Number.isFinite(v.month) &&
-      Number.isFinite(v.day)
-    ) {
-      // month/day 补零
-      const mm = String(v.month).padStart(2, '0');
-      const dd = String(v.day).padStart(2, '0');
-      return `${v.year}-${mm}-${dd}`;
-    }
-  }
-  return undefined; // 其余直接置空，避免抛错
-}
-
-// 对每条记录做 start/end 归一化；并输出首个异常样本
-let firstBad = null;
-const safeData = (Array.isArray(data) ? data : []).map((it, i) => {
-  const startN = normalizeTimeLike(it.start ?? it.Start);
-  const endN   = normalizeTimeLike(it.end   ?? it.End);
-
-  if (!startN && !endN && !firstBad) {
-    firstBad = { index: i, rawStart: it.start ?? it.Start, rawEnd: it.end ?? it.End, item: it };
-  }
-  return { ...it, start: startN, end: endN };
-});
-
-if (firstBad) {
-  console.warn('[timeline] 首个无可用时间的条目（已置空避免抛错）：', firstBad);
-}
 
     // 4) 写入 DataSet
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 5) 计算时间范围
-    const ts = items.get().map(it => toMs(it.start || it.end)).filter(Number.isFinite);
-    const minT = ts.length ? Math.min(...ts) : NaN;
-    const maxT = ts.length ? Math.max(...ts) : NaN;
-    const pad = ts.length ? Math.max(7, Math.round((maxT - minT) * 0.05)) : 0;
+    // 5) 计算时间范围（容错：若无 start/end，跳过范围设定）
+    const raw = items.get();
+    const times = raw
+      .map(it => toMs((it && (it.start != null ? it.start : it.end))))
+      .filter(Number.isFinite);
 
-    // 6) 默认参数（核心调节区）
+    let startDate, endDate;
+    if (times.length) {
+      const minT = Math.min(...times);
+      const maxT = Math.max(...times);
+      const DAY = 24 * 60 * 60 * 1000;
+      const span = Math.max(0, maxT - minT);
+      const padMs = Math.max(7 * DAY, Math.round(span * 0.05));
+      const s = new Date(minT - padMs);
+      const e = new Date(maxT + padMs);
+      if (!Number.isNaN(+s)) startDate = s;
+      if (!Number.isNaN(+e)) endDate = e;
+    }
+
+    // 6) 默认参数（核心调节区），合并 constants 默认
     const baseDefaults = {
+      // 先用英文避免月份乱码
+      locale: 'en',
       minHeight: 720,
       maxHeight: 720,
-      // 为避免月份乱码，先用英文。后续换 zh-cn 再配合 moment/locale
-      locale: 'en',
-      start: Number.isFinite(minT) ? new Date(minT - pad) : undefined,
-      end: Number.isFinite(maxT) ? new Date(maxT + pad) : undefined,
-      // 仅显示“标题”
       template: (item, element) => {
-        const host = element?.closest?.('.vis-item') || element;
-        if (host) host.classList.add('event');
+        const titleText = resolveTitle(item);
+        const host = (element && element.closest) ? (element.closest('.vis-item') || element) : element;
+        if (host && host.classList) host.classList.add('event');
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
-        h4.textContent = resolveTitle(item);
+        h4.textContent = titleText;
         root.appendChild(h4);
         return root;
       },
     };
 
     const options = mergeOptions(
-      TIMELINE_DEFAULT_OPTIONS,
-      baseDefaults,
-      overrides
+      TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
+      baseDefaults,             // 本文件默认
+      overrides                 // 调用方覆盖
     );
+    if (startDate instanceof Date) options.start = startDate;
+    if (endDate instanceof Date) options.end = endDate;
 
     // 7) 创建时间轴
     const vis = window.vis;
@@ -259,18 +235,15 @@ if (firstBad) {
     // === 覆盖式弹窗逻辑 ===
     // ======================
 
-    // 关键：vis 的可视内容容器
-    const contentEl = container.querySelector('.vis-content') || container;
-
-    // 1) 创建/获取弹窗节点（挂到 .vis-content 里）
+    // 1) 创建/获取弹窗节点（绝对定位，覆盖点击的事件框）
     function ensurePopover() {
-      let pop = contentEl.querySelector('#event-popover');
+      let pop = container.querySelector('#event-popover');
       if (!pop) {
         pop = document.createElement('div');
         pop.id = 'event-popover';
         pop.style.cssText = [
           'position:absolute',
-          'z-index:9999',
+          'z-index:1000',
           'background:#fff',
           'border:1px solid #e5e7eb',
           'box-shadow:0 8px 24px rgba(0,0,0,.15)',
@@ -279,7 +252,7 @@ if (firstBad) {
           'pointer-events:auto',
           'padding:10px'
         ].join(';');
-        contentEl.appendChild(pop);
+        container.appendChild(pop);
       }
       return pop;
     }
@@ -287,57 +260,57 @@ if (firstBad) {
     // 2) 关闭弹窗
     let currentAnchor = null; // 当前锚定的事件框元素
     function hidePopover() {
-      const pop = contentEl.querySelector('#event-popover');
+      const pop = container.querySelector('#event-popover');
       if (pop) pop.style.display = 'none';
       currentAnchor = null;
     }
 
     // 3) 渲染弹窗内容（优先用 item.title 的 HTML，否则拼装）
     function buildDetailHTML(item) {
-      if (typeof item.title === 'string' && item.title.trim()) return item.title;
+      if (typeof item.title === 'string' && item.title.trim()) {
+        return item.title;
+      }
+      const lines = [];
       const safe = (v) => (v == null ? '' : String(v));
       const kv = (k, v) => `<div><strong>${k}：</strong>${safe(v)}</div>`;
-      const parts = [];
-      parts.push(kv('事件名称', resolveTitle(item)));
-      if (item.start) parts.push(kv('开始时间', safe(item.start)));
-      if (item.end)   parts.push(kv('结束时间', safe(item.end)));
-      if (item.EventType)       parts.push(kv('事件类型', item.EventType));
-      if (item.Region)          parts.push(kv('地区', item.Region));
-      if (item.Platform)        parts.push(kv('平台类型', item.Platform));
-      if (item.ConsolePlatform) parts.push(kv('主机类型', item.ConsolePlatform));
-      if (item.Company)         parts.push(kv('公司', item.Company));
+
+      lines.push(kv('事件名称', resolveTitle(item)));
+      if (item.start) lines.push(kv('开始时间', safe(item.start)));
+      if (item.end)   lines.push(kv('结束时间', safe(item.end)));
+      if (item.EventType)       lines.push(kv('事件类型', item.EventType));
+      if (item.Region)          lines.push(kv('地区', item.Region));
+      if (item.Platform)        lines.push(kv('平台类型', item.Platform));
+      if (item.ConsolePlatform) lines.push(kv('主机类型', item.ConsolePlatform));
+      if (item.Company)         lines.push(kv('公司', item.Company));
       if (Array.isArray(item.Tag) && item.Tag.length) {
-        parts.push(kv('标签', item.Tag.join('，')));
+        lines.push(kv('标签', item.Tag.join('，')));
       }
-      return parts.join('');
+      return lines.join('');
     }
 
     // 4) 定位并显示弹窗：覆盖点击的事件框
     function showPopoverOverItem(itemId) {
       const pop = ensurePopover();
 
-      // 在 .vis-content 里查找 item 节点
-      const selectorId = (window.CSS && CSS.escape)
-        ? CSS.escape(String(itemId))
-        : String(itemId).replace(/"/g, '\\"');
-
-      const itemEl = contentEl.querySelector(`.vis-item[data-id="${selectorId}"]`);
+      // vis 会给每个 item 一个 data-id
+      const selectorId = CSS && CSS.escape ? CSS.escape(String(itemId)) : String(itemId).replace(/"/g, '\\"');
+      const itemEl = container.querySelector(`.vis-item[data-id="${selectorId}"]`);
       if (!itemEl) return;
 
-      // 以 .vis-content 为参照计算定位
-      const cb = contentEl.getBoundingClientRect();
+      // 计算相对容器的定位
+      const cb = container.getBoundingClientRect();
       const ib = itemEl.getBoundingClientRect();
 
-      const top  = ib.top  - cb.top;
-      const left = ib.left - cb.left;
+      const top  = ib.top  - cb.top + container.scrollTop;
+      const left = ib.left - cb.left + container.scrollLeft;
       const width  = ib.width;
       const height = ib.height;
 
-      // 读取数据 & 填充内容
+      // 取出该 Item 的数据，构建内容
       const item = items.get(itemId);
       pop.innerHTML = buildDetailHTML(item);
 
-      // 覆盖到 item 位置和尺寸
+      // 覆盖定位与尺寸
       pop.style.top = `${top}px`;
       pop.style.left = `${left}px`;
       pop.style.width = `${width}px`;
@@ -354,34 +327,36 @@ if (firstBad) {
     };
     timeline.on('click', onClick);
 
-    // 点击容器或文档其他位置时关闭（不在弹窗内且不在锚点上）
+    // 外部点击关闭：点击容器内非弹窗/非锚点区域 & 点击容器外
     function outsideClickHandler(e) {
-      const pop = contentEl.querySelector('#event-popover');
+      const pop = container.querySelector('#event-popover');
       if (!pop || pop.style.display === 'none') return;
 
-      const t = e.target;
-      const clickInPop = pop.contains(t);
-      const clickOnAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(t);
+      const target = e.target;
+      const clickInPop = pop.contains(target);
+      const clickOnAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(target);
 
-      if (!clickInPop && !clickOnAnchor) hidePopover();
+      if (!clickInPop && !clickOnAnchor) {
+        hidePopover();
+      }
     }
     document.addEventListener('mousedown', outsideClickHandler);
 
-    // 窗口变化：重绘并关闭弹窗避免错位
-    resizeHandler = () => { timeline.redraw(); hidePopover(); };
+    // 8) 自适应窗口
+    resizeHandler = () => {
+      timeline.redraw();
+      // 关闭弹窗（避免窗口改变后错位）
+      hidePopover();
+    };
     window.addEventListener('resize', resizeHandler);
 
-    // 覆盖 destroy，加入清理
+    // 完整销毁：移除监听、弹窗
     const _baseDestroy = destroy;
     destroy = function () {
       document.removeEventListener('mousedown', outsideClickHandler);
       hidePopover();
       _baseDestroy();
     };
-
-    // ======================
-    // === 覆盖式弹窗逻辑 End
-    // ======================
 
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
@@ -391,7 +366,7 @@ if (firstBad) {
   } catch (err) {
     console.error(err);
     container.innerHTML =
-      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err?.message || String(err))}</div>`;
+      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err && err.message ? err.message : String(err))}</div>`;
     window.__timelineInit = 'error';
     return { timeline: null, items: null, destroy, setItems, setOptions };
   } finally {
