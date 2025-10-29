@@ -199,9 +199,8 @@ export async function mountTimeline(container, overrides = {}) {
       if (!Number.isNaN(+e)) endDate = e;
     }
 
-    // 6) 默认参数（核心调节区），合并 constants 默认
+    // 6) 默认参数（核心调节区），先用英文避免月份乱码
     const baseDefaults = {
-      // 先用英文避免月份乱码
       locale: 'en',
       minHeight: 720,
       maxHeight: 720,
@@ -235,7 +234,6 @@ export async function mountTimeline(container, overrides = {}) {
     // === 覆盖式弹窗逻辑 ===
     // ======================
 
-    // 1) 创建/获取弹窗节点（绝对定位，覆盖点击的事件框）
     function ensurePopover() {
       let pop = container.querySelector('#event-popover');
       if (!pop) {
@@ -257,7 +255,6 @@ export async function mountTimeline(container, overrides = {}) {
       return pop;
     }
 
-    // 2) 关闭弹窗
     let currentAnchor = null; // 当前锚定的事件框元素
     function hidePopover() {
       const pop = container.querySelector('#event-popover');
@@ -265,10 +262,9 @@ export async function mountTimeline(container, overrides = {}) {
       currentAnchor = null;
     }
 
-    // 3) 渲染弹窗内容（优先用 item.title 的 HTML，否则拼装）
     function buildDetailHTML(item) {
       if (typeof item.title === 'string' && item.title.trim()) {
-        return item.title;
+        return item.title; // 复用旧版 HTML tooltip
       }
       const lines = [];
       const safe = (v) => (v == null ? '' : String(v));
@@ -288,46 +284,53 @@ export async function mountTimeline(container, overrides = {}) {
       return lines.join('');
     }
 
-    // 4) 定位并显示弹窗：覆盖点击的事件框
-    function showPopoverOverItem(itemId) {
+    // 利用点击事件的 target 来定位，失败时再回退到 data-id 查询
+    function findAnchorElementFromClick(props) {
+      // 1) 首选：事件源往上找 .vis-item
+      const t = props && props.event && props.event.target;
+      const hit = t && t.closest ? t.closest('.vis-item') : null;
+      if (hit) return hit;
+
+      // 2) 回退：通过 data-id 匹配
+      if (!props || props.item == null) return null;
+      const selectorId = (window.CSS && CSS.escape)
+        ? CSS.escape(String(props.item))
+        : String(props.item).replace(/"/g, '\\"');
+      return container.querySelector(`.vis-item[data-id="${selectorId}"]`);
+    }
+
+    function showPopoverOverItem(props) {
       const pop = ensurePopover();
+      const itemId = props.item;
+      const anchorEl = findAnchorElementFromClick(props);
+      if (!anchorEl) return;
 
-      // vis 会给每个 item 一个 data-id
-      const selectorId = CSS && CSS.escape ? CSS.escape(String(itemId)) : String(itemId).replace(/"/g, '\\"');
-      const itemEl = container.querySelector(`.vis-item[data-id="${selectorId}"]`);
-      if (!itemEl) return;
-
-      // 计算相对容器的定位
       const cb = container.getBoundingClientRect();
-      const ib = itemEl.getBoundingClientRect();
+      const ib = anchorEl.getBoundingClientRect();
 
       const top  = ib.top  - cb.top + container.scrollTop;
       const left = ib.left - cb.left + container.scrollLeft;
       const width  = ib.width;
       const height = ib.height;
 
-      // 取出该 Item 的数据，构建内容
       const item = items.get(itemId);
       pop.innerHTML = buildDetailHTML(item);
 
-      // 覆盖定位与尺寸
       pop.style.top = `${top}px`;
       pop.style.left = `${left}px`;
       pop.style.width = `${width}px`;
       pop.style.height = `${height}px`;
       pop.style.display = 'block';
 
-      currentAnchor = itemEl;
+      currentAnchor = anchorEl;
     }
 
-    // 5) 点击行为：点击事件框 → 弹出；点击空白 → 关闭
     const onClick = (props) => {
-      if (!props || !props.item) { hidePopover(); return; }
-      showPopoverOverItem(props.item);
+      if (!props || props.item == null) { hidePopover(); return; }
+      showPopoverOverItem(props);
     };
     timeline.on('click', onClick);
 
-    // 外部点击关闭：点击容器内非弹窗/非锚点区域 & 点击容器外
     function outsideClickHandler(e) {
       const pop = container.querySelector('#event-popover');
       if (!pop || pop.style.display === 'none') return;
@@ -345,8 +348,7 @@ export async function mountTimeline(container, overrides = {}) {
     // 8) 自适应窗口
     resizeHandler = () => {
       timeline.redraw();
-      // 关闭弹窗（避免窗口改变后错位）
-      hidePopover();
+      hidePopover(); // 尺寸变化避免错位
     };
     window.addEventListener('resize', resizeHandler);
 
