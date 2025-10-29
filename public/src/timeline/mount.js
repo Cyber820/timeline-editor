@@ -234,26 +234,35 @@ export async function mountTimeline(container, overrides = {}) {
     // === 覆盖式弹窗逻辑 ===
     // ======================
 
-    function ensurePopover() {
-      let pop = container.querySelector('#event-popover');
-      if (!pop) {
-        pop = document.createElement('div');
-        pop.id = 'event-popover';
-        pop.style.cssText = [
-          'position:absolute',
-          'z-index:1000',
-          'background:#fff',
-          'border:1px solid #e5e7eb',
-          'box-shadow:0 8px 24px rgba(0,0,0,.15)',
-          'border-radius:8px',
-          'overflow:auto',
-          'pointer-events:auto',
-          'padding:10px'
-        ].join(';');
-        container.appendChild(pop);
-      }
-      return pop;
-    }
+function ensurePopover() {
+  let pop = container.querySelector('#event-popover');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'event-popover';
+    pop.style.cssText = [
+      'position:absolute',
+      'z-index:1000',
+      'background:#fff',
+      'border:1px solid #e5e7eb',
+      'box-shadow:0 8px 24px rgba(0,0,0,.15)',
+      'border-radius:10px',
+      'padding:12px',
+      'overflow:auto',
+      'pointer-events:auto',
+      // 新增：最小/最大尺寸，避免过小；过大时内部滚动
+      'min-width: 280px',
+      'min-height: 140px',
+      'max-width: 520px',
+      'max-height: 60vh',
+      // 字体与排版
+      'font-size:14px',
+      'line-height:1.5'
+    ].join(';');
+    container.appendChild(pop);
+  }
+  return pop;
+}
+
 
     let currentAnchor = null; // 当前锚定的事件框元素
     function hidePopover() {
@@ -300,30 +309,53 @@ export async function mountTimeline(container, overrides = {}) {
     }
 
     function showPopoverOverItem(props) {
-      const pop = ensurePopover();
-      const itemId = props.item;
-      const anchorEl = findAnchorElementFromClick(props);
-      if (!anchorEl) return;
+  const pop = ensurePopover();
+  const itemId = props.item;
 
-      const cb = container.getBoundingClientRect();
-      const ib = anchorEl.getBoundingClientRect();
+  // 先找点击锚点（优先 target.closest('.vis-item')，回退 data-id）
+  const anchorEl = findAnchorElementFromClick(props);
+  if (!anchorEl) return;
 
-      const top  = ib.top  - cb.top + container.scrollTop;
-      const left = ib.left - cb.left + container.scrollLeft;
-      const width  = ib.width;
-      const height = ib.height;
+  // 容器与锚点位置
+  const cb = container.getBoundingClientRect();
+  const ib = anchorEl.getBoundingClientRect();
 
-      const item = items.get(itemId);
-      pop.innerHTML = buildDetailHTML(item);
+  // 以事件框为锚点的“起始位置”（覆盖出现）
+  let top  = ib.top  - cb.top + container.scrollTop;
+  let left = ib.left - cb.left + container.scrollLeft;
 
-      pop.style.top = `${top}px`;
-      pop.style.left = `${left}px`;
-      pop.style.width = `${width}px`;
-      pop.style.height = `${height}px`;
-      pop.style.display = 'block';
+  // 期望尺寸：至少不小于最小尺寸；最多不超过最大尺寸
+  // （注意：内联样式里我们已经写了 min/max；JS 里再计算一次用于边界修正）
+  const MIN_W = 280, MIN_H = 140;
+  const MAX_W = Math.min(520, container.clientWidth);   // 不超过容器可视宽
+  const MAX_H = Math.min(container.clientHeight * 0.6, 600); // 不超过容器 60% 高
 
-      currentAnchor = anchorEl;
-    }
+  let width  = Math.max(ib.width,  MIN_W);
+  let height = Math.max(ib.height, MIN_H);
+  width  = Math.min(width,  MAX_W);
+  height = Math.min(height, MAX_H);
+
+  // 取出 Item 数据并填充
+  const item = items.get(itemId);
+  pop.innerHTML = buildDetailHTML(item);
+
+  // 边界防溢出：如果右侧或下方会超出容器，就往左/上收回
+  const maxLeft = container.scrollLeft + (container.clientWidth  - width  - 8); // 预留 8px 内边距
+  const maxTop  = container.scrollTop  + (container.clientHeight - height - 8);
+
+  left = Math.max(container.scrollLeft, Math.min(left, maxLeft));
+  top  = Math.max(container.scrollTop,  Math.min(top,  maxTop));
+
+  // 应用定位与尺寸
+  pop.style.left = `${left}px`;
+  pop.style.top  = `${top}px`;
+  pop.style.width  = `${width}px`;
+  pop.style.height = `${height}px`;
+  pop.style.display = 'block';
+
+  currentAnchor = anchorEl;
+}
+
 
     const onClick = (props) => {
       if (!props || props.item == null) { hidePopover(); return; }
