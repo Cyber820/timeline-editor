@@ -271,27 +271,99 @@ function ensurePopover() {
       currentAnchor = null;
     }
 
-    function buildDetailHTML(item) {
-      if (typeof item.title === 'string' && item.title.trim()) {
-        return item.title; // 复用旧版 HTML tooltip
-      }
-      const lines = [];
-      const safe = (v) => (v == null ? '' : String(v));
-      const kv = (k, v) => `<div><strong>${k}：</strong>${safe(v)}</div>`;
+   // 解析 “字段名：值” 的通用函数（支持中文/英文冒号）
+function pickFromBlob(blob, label) {
+  const s = toPlainText(blob);
+  if (!s) return '';
+  const re = new RegExp(`${label}\\s*[:：]\\s*([^\\n<]+)`);
+  const m = re.exec(s);
+  return m ? m[1].trim() : '';
+}
 
-      lines.push(kv('事件名称', resolveTitle(item)));
-      if (item.start) lines.push(kv('开始时间', safe(item.start)));
-      if (item.end)   lines.push(kv('结束时间', safe(item.end)));
-      if (item.EventType)       lines.push(kv('事件类型', item.EventType));
-      if (item.Region)          lines.push(kv('地区', item.Region));
-      if (item.Platform)        lines.push(kv('平台类型', item.Platform));
-      if (item.ConsolePlatform) lines.push(kv('主机类型', item.ConsolePlatform));
-      if (item.Company)         lines.push(kv('公司', item.Company));
-      if (Array.isArray(item.Tag) && item.Tag.length) {
-        lines.push(kv('标签', item.Tag.join('，')));
-      }
-      return lines.join('');
+// 多候选键读取：item[key]、item[key 的变体]、item._raw[key]…；再兜底从 blob 里捞
+function readField(item, keys = [], blobLabel = '') {
+  const tryKeys = [];
+  keys.forEach(k => {
+    tryKeys.push(k);
+    // 常见大小写/首字母小写变体
+    tryKeys.push(k.charAt(0).toLowerCase() + k.slice(1));
+    tryKeys.push(k.toUpperCase());
+    tryKeys.push(k.toLowerCase());
+  });
+
+  for (const k of tryKeys) {
+    if (item && item[k] != null && item[k] !== '') return item[k];
+  }
+  // _raw 兜底
+  if (item && item._raw) {
+    for (const k of tryKeys) {
+      if (item._raw[k] != null && item._raw[k] !== '') return item._raw[k];
     }
+  }
+  // 从 title/content 的多行文本里兜底解析
+  if (blobLabel) {
+    const v1 = pickFromBlob(item && item.title, blobLabel);
+    if (v1) return v1;
+    const v2 = pickFromBlob(item && item.content, blobLabel);
+    if (v2) return v2;
+  }
+  return '';
+}
+
+// 标准化标签为数组
+function normalizeTags(v) {
+  if (!v && v !== 0) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return String(v)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// ✅ 替换原来的 buildDetailHTML
+function buildDetailHTML(item) {
+  // 优先保留你旧数据里已有的 HTML（如之前做过 tooltip 拼装）
+  if (typeof item?.title === 'string' && item.title.trim()) {
+    return item.title;
+  }
+
+  // 读取字段（多路兜底 + 从 blob 提取）
+  const evtType = readField(item, ['EventType'], '事件类型');
+  const region  = readField(item, ['Region'], '地区');
+  const plat    = readField(item, ['Platform'], '平台类型');
+  const cplat   = readField(item, ['ConsolePlatform'], '主机类型');
+  const company = readField(item, ['Company'], '公司');
+  const desc    = readField(item, ['Description', 'Desc'], '描述');
+  const contr   = readField(item, ['Contributor', 'Submitter'], '贡献者');
+  const tagsRaw = readField(item, ['Tag', 'Tags'], '标签');
+  const tags    = Array.isArray(tagsRaw) ? tagsRaw : normalizeTags(tagsRaw);
+
+  const kv = (k, v) =>
+    v == null || v === '' ? '' : `<div><strong>${escapeHtml(k)}：</strong>${escapeHtml(String(v))}</div>`;
+
+  // 统一标题仍用 resolveTitle（已做多路兜底）
+  const parts = [];
+  parts.push(kv('事件名称', resolveTitle(item)));
+  if (item.start) parts.push(kv('开始时间', item.start));
+  if (item.end)   parts.push(kv('结束时间', item.end));
+  parts.push(kv('事件类型', evtType));
+  parts.push(kv('地区', region));
+  parts.push(kv('平台类型', plat));
+  parts.push(kv('主机类型', cplat));
+  parts.push(kv('公司', company));
+  if (tags.length) parts.push(kv('标签', tags.join('，')));
+  parts.push(kv('描述', desc));
+  parts.push(kv('贡献者', contr));
+
+  // 少量样式微调：标题更醒目
+  return `
+    <div style="font-weight:600;margin-bottom:6px">${escapeHtml(resolveTitle(item))}</div>
+    <div style="font-size:13px;line-height:1.6">
+      ${parts.join('')}
+    </div>
+  `;
+}
+
 
     // 利用点击事件的 target 来定位，失败时再回退到 data-id 查询
     function findAnchorElementFromClick(props) {
