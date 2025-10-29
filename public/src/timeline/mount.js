@@ -64,38 +64,33 @@ function toPlainText(x) {
 function pickTitleFromBlob(blob) {
   const s = toPlainText(blob);
   if (!s) return '';
-  // 支持中文冒号“：”或英文冒号“:”，并抓取到行尾或 HTML 换行前
   const m = /(事件名称)\s*[:：]\s*([^\n<]+)/.exec(s);
   return m ? m[2].trim() : '';
 }
 
 /** 兼容各种形态，尽力取出“可显示的标题纯文本” */
 function resolveTitle(item) {
-  // 1) 显式字段优先
   const t1 = toPlainText(item && item.Title);
   if (t1) return t1;
   const t2 = toPlainText(item && item.title);
   if (t2) return t2;
 
-  // 2) 有些数据把“全量详情”塞进 title 或 content；从中解析“事件名称：xxx”
   const fromTitleBlob = pickTitleFromBlob(item && item.title);
   if (fromTitleBlob) return fromTitleBlob;
 
   const fromContentBlob = pickTitleFromBlob(item && item.content);
   if (fromContentBlob) return fromContentBlob;
 
-  // 3) 仍不行，就退回到 content/label 的纯文本
   const t3 = toPlainText(item && item.content);
   if (t3) return t3;
 
   const t4 = toPlainText(item && item.label);
   if (t4) return t4;
 
-  // 4) 最终兜底
   return '(无标题)';
 }
 
-/** 从纯文本 blob 中提取 “字段名：值”（支持中/英冒号） */
+// 从 blob（多行字符串）里解析“字段名：值”（支持中/英文冒号）
 function pickFromBlob(blob, label) {
   const s = toPlainText(blob);
   if (!s) return '';
@@ -104,14 +99,23 @@ function pickFromBlob(blob, label) {
   return m ? m[1].trim() : '';
 }
 
-/** 旧前端策略：优先字段值 -> 失败再从 title/content 文本里 pick */
-function readFieldLegacy(item, fieldKeys = [], blobLabel = '') {
+// 多候选键读取：item[key]、item[key 的变体]、item._raw[key]…；再兜底从 blob 里捞
+function readField(item, keys = [], blobLabel = '') {
   const tryKeys = [];
-  fieldKeys.forEach(k => {
-    tryKeys.push(k, k.toLowerCase(), k.toUpperCase(), k.charAt(0).toLowerCase() + k.slice(1));
+  keys.forEach(k => {
+    tryKeys.push(k);
+    tryKeys.push(k.charAt(0).toLowerCase() + k.slice(1));
+    tryKeys.push(k.toUpperCase());
+    tryKeys.push(k.toLowerCase());
   });
+
   for (const k of tryKeys) {
     if (item && item[k] != null && item[k] !== '') return item[k];
+  }
+  if (item && item._raw) {
+    for (const k of tryKeys) {
+      if (item._raw[k] != null && item._raw[k] !== '') return item._raw[k];
+    }
   }
   if (blobLabel) {
     const v1 = pickFromBlob(item && item.title, blobLabel);
@@ -122,62 +126,67 @@ function readFieldLegacy(item, fieldKeys = [], blobLabel = '') {
   return '';
 }
 
-/** 标准化标签为数组 */
+// 标准化标签为数组
 function normalizeTags(v) {
   if (!v && v !== 0) return [];
   if (Array.isArray(v)) return v.filter(Boolean);
-  return String(v).split(',').map(s => s.trim()).filter(Boolean);
+  return String(v)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 }
 
-/** 安全输出一行：空值则不渲染 */
-function kv(label, value) {
-  const s = (value == null) ? '' : String(value).trim();
-  if (!s) return '';
-  return `<div><strong>${escapeHtml(label)}：</strong>${escapeHtml(s)}</div>`;
-}
+const fmtDate = (v) => {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isFinite(+d) ? d.toISOString().slice(0,10) : String(v);
+};
 
-/** ✅ 详情弹窗内容：严格过滤空值，绝不渲染“裸标签：” */
+// ✅ 统一的详情 HTML 生成（空值不渲染行，避免“标签：”空行）
 function buildDetailHTML(item) {
-  // 标题
-  const titleText = resolveTitle(item);
-
-  // 旧前端字段兼容 + 文本兜底
-  const start    = readFieldLegacy(item, ['Start', 'start'], '时间');
-  const end      = readFieldLegacy(item, ['End', 'end'], '时间');
-  const eventTyp = readFieldLegacy(item, ['EventType'], '事件类型');
-  const region   = readFieldLegacy(item, ['Region'], '地区');
-  const platform = readFieldLegacy(item, ['Platform'], '平台类型');
-  const cplat    = readFieldLegacy(item, ['ConsolePlatform'], '主机类型');
-  const company  = readFieldLegacy(item, ['Company'], '公司');
-  const status   = readFieldLegacy(item, ['Status'], '状态');
-  const desc     = readFieldLegacy(item, ['Description', 'Desc'], '描述');
-  const contr    = readFieldLegacy(item, ['Contributor', 'Submitter'], '贡献者');
-
-  // 标签：字段或“标签：xxx”行兜底
-  let tags = readFieldLegacy(item, ['Tag', 'Tags'], '标签');
-  const tagList = Array.isArray(tags) ? tags : normalizeTags(tags);
-
-  // 组装（空值不渲染）
-  const parts = [];
-  const titleLine = `<div style="font-weight:600;margin-bottom:6px">${escapeHtml(titleText)}</div>`;
-
-  // 时间行（两端之一存在时再渲染；合并为一行）
-  if ((start && String(start).trim()) || (end && String(end).trim())) {
-    const timeText = `${start || ''}${end ? (' ~ ' + end) : ''}`.trim();
-    if (timeText) parts.push(kv('时间', timeText));
+  if (typeof item?.title === 'string' && item.title.trim()) {
+    return item.title;
   }
 
-  parts.push(kv('事件类型', eventTyp));
-  parts.push(kv('状态', status));
+  const evtType = readField(item, ['EventType'], '事件类型');
+  const region  = readField(item, ['Region'], '地区');
+  const plat    = readField(item, ['Platform'], '平台类型');
+  const cplat   = readField(item, ['ConsolePlatform'], '主机类型');
+  const company = readField(item, ['Company'], '公司');
+  const desc    = readField(item, ['Description', 'Desc'], '描述');
+  const contr   = readField(item, ['Contributor', 'Submitter'], '贡献者');
+  const tagsRaw = readField(item, ['Tag', 'Tags'], '标签');
+  const tags    = Array.isArray(tagsRaw) ? tagsRaw : normalizeTags(tagsRaw);
+
+  const kv = (k, v) =>
+    v == null || v === '' ? '' : `<div><strong>${escapeHtml(k)}：</strong>${escapeHtml(String(v))}</div>`;
+
+  const parts = [];
+  parts.push(kv('事件名称', resolveTitle(item)));
+  if (item.start) parts.push(kv('开始时间', fmtDate(item.start)));
+  if (item.end)   parts.push(kv('结束时间', fmtDate(item.end)));
+  parts.push(kv('事件类型', evtType));
   parts.push(kv('地区', region));
-  parts.push(kv('平台类型', platform));
+  parts.push(kv('平台类型', plat));
   parts.push(kv('主机类型', cplat));
   parts.push(kv('公司', company));
-  if (tagList.length) parts.push(kv('标签', tagList.join('，')));
+  if (tags.length) parts.push(kv('标签', tags.join('，')));
   parts.push(kv('描述', desc));
   parts.push(kv('贡献者', contr));
 
-  return `${titleLine}<div style="font-size:13px;line-height:1.6">${parts.join('')}</div>`;
+  return `
+    <div style="font-weight:600;margin-bottom:6px">${escapeHtml(resolveTitle(item))}</div>
+    <div style="font-size:13px;line-height:1.6">
+      ${parts.join('')}
+    </div>
+  `;
+}
+
+// 兼容 DataSet 中 id 的字符串/数字差异
+function getItemByIdSafe(dataset, id) {
+  return dataset.get(id) ?? dataset.get(
+    typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : String(id)
+  );
 }
 
 /**
@@ -215,7 +224,6 @@ export async function mountTimeline(container, overrides = {}) {
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  // 在闭包里维护这些句柄，便于返回/销毁
   let resizeHandler = null;
   let timeline = null;
   let items = null;
@@ -231,19 +239,13 @@ export async function mountTimeline(container, overrides = {}) {
     window.__timelineItems = null;
   }
 
-  // 安全设置 items
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
-    if (Array.isArray(nextItems) && nextItems.length) {
-      items.add(nextItems);
-    }
-    if (timeline && timeline.redraw) {
-      requestAnimationFrame(() => timeline.redraw());
-    }
+    if (Array.isArray(nextItems) && nextItems.length) items.add(nextItems);
+    if (timeline && timeline.redraw) requestAnimationFrame(() => timeline.redraw());
   }
 
-  // 动态 patch options（浅合并）
   function setOptions(patch = {}) {
     if (timeline && patch && typeof patch === 'object') {
       timeline.setOptions(mergeOptions(timeline.options || {}, patch));
@@ -265,7 +267,7 @@ export async function mountTimeline(container, overrides = {}) {
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 5) 计算时间范围（容错：若无 start/end，跳过范围设定）
+    // 5) 计算时间范围（容错）
     const raw = items.get();
     const times = raw
       .map(it => toMs((it && (it.start != null ? it.start : it.end))))
@@ -284,9 +286,8 @@ export async function mountTimeline(container, overrides = {}) {
       if (!Number.isNaN(+e)) endDate = e;
     }
 
-    // 6) 默认参数（核心调节区），合并 constants 默认
+    // 6) 默认参数（先用英文避免月份乱码）
     const baseDefaults = {
-      // 先用英文避免月份乱码
       locale: 'en',
       minHeight: 720,
       maxHeight: 720,
@@ -304,12 +305,12 @@ export async function mountTimeline(container, overrides = {}) {
     };
 
     const options = mergeOptions(
-      TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
-      baseDefaults,             // 本文件默认
-      overrides                 // 调用方覆盖
+      TIMELINE_DEFAULT_OPTIONS,
+      baseDefaults,
+      overrides
     );
     if (startDate instanceof Date) options.start = startDate;
-    if (endDate instanceof Date) options.end = endDate;
+    if (endDate   instanceof Date) options.end   = endDate;
 
     // 7) 创建时间轴
     const vis = window.vis;
@@ -320,7 +321,7 @@ export async function mountTimeline(container, overrides = {}) {
     // === 覆盖式弹窗逻辑 ===
     // ======================
 
-    // 1) 创建/获取弹窗节点（绝对定位：覆盖起点，但允许自适应更大宽高）
+    // 弹窗节点（绝对定位，覆盖点击的事件框；给定最小/最大尺寸和较高层级）
     function ensurePopover() {
       let pop = container.querySelector('#event-popover');
       if (!pop) {
@@ -328,25 +329,26 @@ export async function mountTimeline(container, overrides = {}) {
         pop.id = 'event-popover';
         pop.style.cssText = [
           'position:absolute',
-          'z-index:1000',
+          'z-index:10000',
           'background:#fff',
           'border:1px solid #e5e7eb',
           'box-shadow:0 8px 24px rgba(0,0,0,.15)',
-          'border-radius:8px',
-          'pointer-events:auto',
+          'border-radius:10px',
           'padding:12px',
+          'overflow:auto',
+          'pointer-events:auto',
           'min-width:280px',
+          'min-height:140px',
           'max-width:520px',
           'max-height:60vh',
-          'overflow:auto',
-          'display:none'
+          'font-size:14px',
+          'line-height:1.5'
         ].join(';');
         container.appendChild(pop);
       }
       return pop;
     }
 
-    // 2) 关闭弹窗
     let currentAnchor = null; // 当前锚定的事件框元素
     function hidePopover() {
       const pop = container.querySelector('#event-popover');
@@ -354,55 +356,79 @@ export async function mountTimeline(container, overrides = {}) {
       currentAnchor = null;
     }
 
-    // 3) 定位并显示弹窗：覆盖点击的事件框（左上对齐，宽度≥item 宽，必要时扩展）
-    function showPopoverOverItem(itemId) {
-      const pop = ensurePopover();
+    // 稳定拿到点击的 .vis-item（优先用 srcEvent.target，再回退 data-id）
+    function findAnchorElementFromClick(props) {
+      const evt = props && (props.event?.srcEvent || props.event);
+      const t = evt && evt.target;
+      const hit = t && t.closest ? t.closest('.vis-item') : null;
+      if (hit) return hit;
 
-      // vis 会给每个 item 一个 data-id
-      const selectorId = (window.CSS && CSS.escape) ? CSS.escape(String(itemId)) : String(itemId).replace(/"/g, '\\"');
-      const itemEl = container.querySelector(`.vis-item[data-id="${selectorId}"]`);
-      if (!itemEl) return;
-
-      // 取出该 Item 的数据，构建内容
-      const item = items.get(itemId);
-      pop.innerHTML = buildDetailHTML(item);
-
-      // 计算相对容器的定位
-      const cb = container.getBoundingClientRect();
-      const ib = itemEl.getBoundingClientRect();
-
-      const left = ib.left - cb.left + container.scrollLeft;
-      const top  = ib.top  - cb.top  + container.scrollTop;
-
-      // 让弹窗至少与 item 同宽，但保留上限
-      const itemWidth = Math.max(ib.width, 1);
-      const targetWidth = Math.max(itemWidth, 280); // 至少 280
-      pop.style.width = Math.min(targetWidth, 520) + 'px';
-      pop.style.left  = left + 'px';
-      pop.style.top   = top  + 'px';
-      pop.style.display = 'block';
-
-      // 边界防护：若超出容器右侧，向左回退
-      const cScrollW = container.scrollWidth;
-      const cClientW = container.clientWidth;
-      // 以容器可视宽度为准做一次矫正
-      const overflowX = (left + pop.offsetWidth) - cClientW - container.scrollLeft;
-      if (overflowX > 0) {
-        const newLeft = Math.max(0, left - overflowX - 8);
-        pop.style.left = newLeft + 'px';
-      }
-
-      currentAnchor = itemEl;
+      if (!props || props.item == null) return null;
+      const selectorId = (window.CSS && CSS.escape)
+        ? CSS.escape(String(props.item))
+        : String(props.item).replace(/"/g, '\\"');
+      return container.querySelector(`.vis-item[data-id="${selectorId}"]`);
     }
 
-    // 4) 点击行为：点击事件框 → 弹出；点击空白 → 关闭
+    function showPopoverOverItem(props) {
+      const pop = ensurePopover();
+      const itemId = props.item;
+
+      // 先找点击锚点
+      const anchorEl = findAnchorElementFromClick(props);
+      if (!anchorEl) return;
+
+      // 滚动参照：vis 内部通常是 .vis-content 滚动
+      const scroller = container.querySelector('.vis-panel > .vis-content')
+                      || container.querySelector('.vis-content')
+                      || container;
+
+      const cb = container.getBoundingClientRect();
+      const ib = anchorEl.getBoundingClientRect();
+
+      let top  = ib.top  - cb.top + scroller.scrollTop;
+      let left = ib.left - cb.left + scroller.scrollLeft;
+
+      // 期望尺寸（不至于过小）
+      const MIN_W = 280, MIN_H = 140;
+      const MAX_W = Math.min(520, container.clientWidth);
+      const MAX_H = Math.min(container.clientHeight * 0.6, 600);
+
+      let width  = Math.max(ib.width,  MIN_W);
+      let height = Math.max(ib.height, MIN_H);
+      width  = Math.min(width,  MAX_W);
+      height = Math.min(height, MAX_H);
+
+      // 取数据
+      const item = getItemByIdSafe(items, itemId);
+      if (!item) return;
+      pop.innerHTML = buildDetailHTML(item);
+
+      // 边界修正
+      const maxLeft = scroller.scrollLeft + (container.clientWidth  - width  - 8);
+      const maxTop  = scroller.scrollTop  + (container.clientHeight - height - 8);
+      left = Math.max(scroller.scrollLeft, Math.min(left, maxLeft));
+      top  = Math.max(scroller.scrollTop,  Math.min(top,  maxTop));
+
+      // 定位显示
+      pop.style.left = `${left}px`;
+      pop.style.top  = `${top}px`;
+      pop.style.width  = `${width}px`;
+      pop.style.height = `${height}px`;
+      pop.style.display = 'block';
+
+      currentAnchor = anchorEl;
+    }
+
+    // 点击 item → 弹出；点击空白 → 关闭（兼容不同版本事件名）
     const onClick = (props) => {
-      if (!props || !props.item) { hidePopover(); return; }
-      showPopoverOverItem(props.item);
+      if (!props || props.item == null) { hidePopover(); return; }
+      showPopoverOverItem(props);
     };
     timeline.on('click', onClick);
+    timeline.on('itemclick', onClick);
 
-    // 外部点击关闭：点击容器内非弹窗/非锚点区域 & 点击容器外
+    // 外部点击关闭：既不在弹窗里也不在锚点里
     function outsideClickHandler(e) {
       const pop = container.querySelector('#event-popover');
       if (!pop || pop.style.display === 'none') return;
@@ -417,10 +443,9 @@ export async function mountTimeline(container, overrides = {}) {
     }
     document.addEventListener('mousedown', outsideClickHandler);
 
-    // 8) 自适应窗口
+    // 8) 自适应窗口（并关闭弹窗避免错位）
     resizeHandler = () => {
       timeline.redraw();
-      // 关闭弹窗（避免窗口改变后错位）
       hidePopover();
     };
     window.addEventListener('resize', resizeHandler);
@@ -436,7 +461,6 @@ export async function mountTimeline(container, overrides = {}) {
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
 
-    // 9) 返回可操作句柄
     return { timeline, items, destroy, setItems, setOptions };
   } catch (err) {
     console.error(err);
