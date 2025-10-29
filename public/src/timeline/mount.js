@@ -72,23 +72,23 @@ function pickTitleFromBlob(blob) {
 /** 兼容各种形态，尽力取出“可显示的标题纯文本” */
 function resolveTitle(item) {
   // 1) 显式字段优先
-  const t1 = toPlainText(item && item.Title);
+  const t1 = toPlainText(item?.Title);
   if (t1) return t1;
-  const t2 = toPlainText(item && item.title);
+  const t2 = toPlainText(item?.title);
   if (t2) return t2;
 
-  // 2) 有些数据把“全量详情”塞进 title 或 content；从中解析“事件名称：xxx”
-  const fromTitleBlob = pickTitleFromBlob(item && item.title);
+  // 2) 从大段详情里解析“事件名称：xxx”
+  const fromTitleBlob = pickTitleFromBlob(item?.title);
   if (fromTitleBlob) return fromTitleBlob;
 
-  const fromContentBlob = pickTitleFromBlob(item && item.content);
+  const fromContentBlob = pickTitleFromBlob(item?.content);
   if (fromContentBlob) return fromContentBlob;
 
-  // 3) 仍不行，就退回到 content/label 的纯文本
-  const t3 = toPlainText(item && item.content);
+  // 3) 退回到 content/label 的纯文本
+  const t3 = toPlainText(item?.content);
   if (t3) return t3;
 
-  const t4 = toPlainText(item && item.label);
+  const t4 = toPlainText(item?.label);
   if (t4) return t4;
 
   // 4) 最终兜底
@@ -97,8 +97,8 @@ function resolveTitle(item) {
 
 /**
  * 主入口：渲染时间轴
- * @param {HTMLElement} container
- * @param {Object} overrides
+ * @param {HTMLElement} container - 目标容器
+ * @param {Object} overrides - 可覆盖的 vis 选项（与 TIMELINE_DEFAULT_OPTIONS & 本地 defaults 合并）
  * @returns {Promise<{timeline:any, items:any, destroy:Function, setItems:Function, setOptions:Function}>}
  */
 export async function mountTimeline(container, overrides = {}) {
@@ -130,7 +130,7 @@ export async function mountTimeline(container, overrides = {}) {
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  // 在闭包里维护这些句柄，便于返回/销毁
+  // 局部句柄
   let resizeHandler = null;
   let timeline = null;
   let items = null;
@@ -150,12 +150,8 @@ export async function mountTimeline(container, overrides = {}) {
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
-    if (Array.isArray(nextItems) && nextItems.length) {
-      items.add(nextItems);
-    }
-    if (timeline && timeline.redraw) {
-      requestAnimationFrame(() => timeline.redraw());
-    }
+    if (Array.isArray(nextItems) && nextItems.length) items.add(nextItems);
+    if (timeline?.redraw) requestAnimationFrame(() => timeline.redraw());
   }
 
   // 动态 patch options（浅合并）
@@ -180,51 +176,38 @@ export async function mountTimeline(container, overrides = {}) {
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 5) 计算时间范围（容错：若无 start/end，跳过范围设定）
-    const raw = items.get();
-    const times = raw
-      .map(it => toMs((it && (it.start != null ? it.start : it.end))))
-      .filter(Number.isFinite);
+    // 5) 计算时间范围
+    const ts = items.get().map(it => toMs(it.start || it.end)).filter(Number.isFinite);
+    const minT = ts.length ? Math.min(...ts) : NaN;
+    const maxT = ts.length ? Math.max(...ts) : NaN;
+    const pad = ts.length ? Math.max(7, Math.round((maxT - minT) * 0.05)) : 0;
 
-    let startDate, endDate;
-    if (times.length) {
-      const minT = Math.min(...times);
-      const maxT = Math.max(...times);
-      const DAY = 24 * 60 * 60 * 1000;
-      const span = Math.max(0, maxT - minT);
-      const padMs = Math.max(7 * DAY, Math.round(span * 0.05));
-      const s = new Date(minT - padMs);
-      const e = new Date(maxT + padMs);
-      if (!Number.isNaN(+s)) startDate = s;
-      if (!Number.isNaN(+e)) endDate = e;
-    }
-
-    // 6) 默认参数（核心调节区），合并 constants 默认
+    // 6) 默认参数（核心调节区）
     const baseDefaults = {
-      // 先用英文避免月份乱码
-      locale: 'en',
       minHeight: 720,
       maxHeight: 720,
+      // 为避免月份乱码，先用英文。后续换 zh-cn 再配合 moment/locale
+      locale: 'en',
+      start: Number.isFinite(minT) ? new Date(minT - pad) : undefined,
+      end: Number.isFinite(maxT) ? new Date(maxT + pad) : undefined,
+      // 仅显示“标题”
       template: (item, element) => {
-        const titleText = resolveTitle(item);
-        const host = (element && element.closest) ? (element.closest('.vis-item') || element) : element;
-        if (host && host.classList) host.classList.add('event');
+        const host = element?.closest?.('.vis-item') || element;
+        if (host) host.classList.add('event');
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
-        h4.textContent = titleText;
+        h4.textContent = resolveTitle(item);
         root.appendChild(h4);
         return root;
       },
     };
 
     const options = mergeOptions(
-      TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
-      baseDefaults,             // 本文件默认
-      overrides                 // 调用方覆盖
+      TIMELINE_DEFAULT_OPTIONS,
+      baseDefaults,
+      overrides
     );
-    if (startDate instanceof Date) options.start = startDate;
-    if (endDate instanceof Date) options.end = endDate;
 
     // 7) 创建时间轴
     const vis = window.vis;
@@ -235,15 +218,18 @@ export async function mountTimeline(container, overrides = {}) {
     // === 覆盖式弹窗逻辑 ===
     // ======================
 
-    // 1) 创建/获取弹窗节点（绝对定位，覆盖点击的事件框）
+    // 关键：vis 的可视内容容器
+    const contentEl = container.querySelector('.vis-content') || container;
+
+    // 1) 创建/获取弹窗节点（挂到 .vis-content 里）
     function ensurePopover() {
-      let pop = container.querySelector('#event-popover');
+      let pop = contentEl.querySelector('#event-popover');
       if (!pop) {
         pop = document.createElement('div');
         pop.id = 'event-popover';
         pop.style.cssText = [
           'position:absolute',
-          'z-index:1000',
+          'z-index:9999',
           'background:#fff',
           'border:1px solid #e5e7eb',
           'box-shadow:0 8px 24px rgba(0,0,0,.15)',
@@ -252,7 +238,7 @@ export async function mountTimeline(container, overrides = {}) {
           'pointer-events:auto',
           'padding:10px'
         ].join(';');
-        container.appendChild(pop);
+        contentEl.appendChild(pop);
       }
       return pop;
     }
@@ -260,57 +246,57 @@ export async function mountTimeline(container, overrides = {}) {
     // 2) 关闭弹窗
     let currentAnchor = null; // 当前锚定的事件框元素
     function hidePopover() {
-      const pop = container.querySelector('#event-popover');
+      const pop = contentEl.querySelector('#event-popover');
       if (pop) pop.style.display = 'none';
       currentAnchor = null;
     }
 
     // 3) 渲染弹窗内容（优先用 item.title 的 HTML，否则拼装）
     function buildDetailHTML(item) {
-      if (typeof item.title === 'string' && item.title.trim()) {
-        return item.title;
-      }
-      const lines = [];
+      if (typeof item.title === 'string' && item.title.trim()) return item.title;
       const safe = (v) => (v == null ? '' : String(v));
       const kv = (k, v) => `<div><strong>${k}：</strong>${safe(v)}</div>`;
-
-      lines.push(kv('事件名称', resolveTitle(item)));
-      if (item.start) lines.push(kv('开始时间', safe(item.start)));
-      if (item.end)   lines.push(kv('结束时间', safe(item.end)));
-      if (item.EventType)       lines.push(kv('事件类型', item.EventType));
-      if (item.Region)          lines.push(kv('地区', item.Region));
-      if (item.Platform)        lines.push(kv('平台类型', item.Platform));
-      if (item.ConsolePlatform) lines.push(kv('主机类型', item.ConsolePlatform));
-      if (item.Company)         lines.push(kv('公司', item.Company));
+      const parts = [];
+      parts.push(kv('事件名称', resolveTitle(item)));
+      if (item.start) parts.push(kv('开始时间', safe(item.start)));
+      if (item.end)   parts.push(kv('结束时间', safe(item.end)));
+      if (item.EventType)       parts.push(kv('事件类型', item.EventType));
+      if (item.Region)          parts.push(kv('地区', item.Region));
+      if (item.Platform)        parts.push(kv('平台类型', item.Platform));
+      if (item.ConsolePlatform) parts.push(kv('主机类型', item.ConsolePlatform));
+      if (item.Company)         parts.push(kv('公司', item.Company));
       if (Array.isArray(item.Tag) && item.Tag.length) {
-        lines.push(kv('标签', item.Tag.join('，')));
+        parts.push(kv('标签', item.Tag.join('，')));
       }
-      return lines.join('');
+      return parts.join('');
     }
 
     // 4) 定位并显示弹窗：覆盖点击的事件框
     function showPopoverOverItem(itemId) {
       const pop = ensurePopover();
 
-      // vis 会给每个 item 一个 data-id
-      const selectorId = CSS && CSS.escape ? CSS.escape(String(itemId)) : String(itemId).replace(/"/g, '\\"');
-      const itemEl = container.querySelector(`.vis-item[data-id="${selectorId}"]`);
+      // 在 .vis-content 里查找 item 节点
+      const selectorId = (window.CSS && CSS.escape)
+        ? CSS.escape(String(itemId))
+        : String(itemId).replace(/"/g, '\\"');
+
+      const itemEl = contentEl.querySelector(`.vis-item[data-id="${selectorId}"]`);
       if (!itemEl) return;
 
-      // 计算相对容器的定位
-      const cb = container.getBoundingClientRect();
+      // 以 .vis-content 为参照计算定位
+      const cb = contentEl.getBoundingClientRect();
       const ib = itemEl.getBoundingClientRect();
 
-      const top  = ib.top  - cb.top + container.scrollTop;
-      const left = ib.left - cb.left + container.scrollLeft;
+      const top  = ib.top  - cb.top;
+      const left = ib.left - cb.left;
       const width  = ib.width;
       const height = ib.height;
 
-      // 取出该 Item 的数据，构建内容
+      // 读取数据 & 填充内容
       const item = items.get(itemId);
       pop.innerHTML = buildDetailHTML(item);
 
-      // 覆盖定位与尺寸
+      // 覆盖到 item 位置和尺寸
       pop.style.top = `${top}px`;
       pop.style.left = `${left}px`;
       pop.style.width = `${width}px`;
@@ -327,36 +313,34 @@ export async function mountTimeline(container, overrides = {}) {
     };
     timeline.on('click', onClick);
 
-    // 外部点击关闭：点击容器内非弹窗/非锚点区域 & 点击容器外
+    // 点击容器或文档其他位置时关闭（不在弹窗内且不在锚点上）
     function outsideClickHandler(e) {
-      const pop = container.querySelector('#event-popover');
+      const pop = contentEl.querySelector('#event-popover');
       if (!pop || pop.style.display === 'none') return;
 
-      const target = e.target;
-      const clickInPop = pop.contains(target);
-      const clickOnAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(target);
+      const t = e.target;
+      const clickInPop = pop.contains(t);
+      const clickOnAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(t);
 
-      if (!clickInPop && !clickOnAnchor) {
-        hidePopover();
-      }
+      if (!clickInPop && !clickOnAnchor) hidePopover();
     }
     document.addEventListener('mousedown', outsideClickHandler);
 
-    // 8) 自适应窗口
-    resizeHandler = () => {
-      timeline.redraw();
-      // 关闭弹窗（避免窗口改变后错位）
-      hidePopover();
-    };
+    // 窗口变化：重绘并关闭弹窗避免错位
+    resizeHandler = () => { timeline.redraw(); hidePopover(); };
     window.addEventListener('resize', resizeHandler);
 
-    // 完整销毁：移除监听、弹窗
+    // 覆盖 destroy，加入清理
     const _baseDestroy = destroy;
     destroy = function () {
       document.removeEventListener('mousedown', outsideClickHandler);
       hidePopover();
       _baseDestroy();
     };
+
+    // ======================
+    // === 覆盖式弹窗逻辑 End
+    // ======================
 
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
@@ -366,7 +350,7 @@ export async function mountTimeline(container, overrides = {}) {
   } catch (err) {
     console.error(err);
     container.innerHTML =
-      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err && err.message ? err.message : String(err))}</div>`;
+      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err?.message || String(err))}</div>`;
     window.__timelineInit = 'error';
     return { timeline: null, items: null, destroy, setItems, setOptions };
   } finally {
