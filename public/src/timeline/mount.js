@@ -271,7 +271,7 @@ function ensurePopover() {
       currentAnchor = null;
     }
 
-   // 解析 “字段名：值” 的通用函数（支持中文/英文冒号）
+// 解析 “字段名：值” 的通用函数（支持中文/英文冒号）
 function pickFromBlob(blob, label) {
   const s = toPlainText(blob);
   if (!s) return '';
@@ -280,12 +280,11 @@ function pickFromBlob(blob, label) {
   return m ? m[1].trim() : '';
 }
 
-// 多候选键读取：item[key]、item[key 的变体]、item._raw[key]…；再兜底从 blob 里捞
+// 多候选键读取：item[key]、变体、_raw[key]；再兜底从 blob 里捞
 function readField(item, keys = [], blobLabel = '') {
   const tryKeys = [];
   keys.forEach(k => {
     tryKeys.push(k);
-    // 常见大小写/首字母小写变体
     tryKeys.push(k.charAt(0).toLowerCase() + k.slice(1));
     tryKeys.push(k.toUpperCase());
     tryKeys.push(k.toLowerCase());
@@ -294,13 +293,11 @@ function readField(item, keys = [], blobLabel = '') {
   for (const k of tryKeys) {
     if (item && item[k] != null && item[k] !== '') return item[k];
   }
-  // _raw 兜底
   if (item && item._raw) {
     for (const k of tryKeys) {
       if (item._raw[k] != null && item._raw[k] !== '') return item._raw[k];
     }
   }
-  // 从 title/content 的多行文本里兜底解析
   if (blobLabel) {
     const v1 = pickFromBlob(item && item.title, blobLabel);
     if (v1) return v1;
@@ -314,20 +311,18 @@ function readField(item, keys = [], blobLabel = '') {
 function normalizeTags(v) {
   if (!v && v !== 0) return [];
   if (Array.isArray(v)) return v.filter(Boolean);
-  return String(v)
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+  return String(v).split(',').map(s => s.trim()).filter(Boolean);
 }
 
-// ✅ 替换原来的 buildDetailHTML
-function buildDetailHTML(item) {
-  // 优先保留你旧数据里已有的 HTML（如之前做过 tooltip 拼装）
-  if (typeof item?.title === 'string' && item.title.trim()) {
-    return item.title;
-  }
+// key-value 行：空值直接不渲染
+function kv(k, v) {
+  const s = (v == null) ? '' : String(v).trim();
+  if (!s) return '';
+  return `<div><strong>${escapeHtml(k)}：</strong>${escapeHtml(s)}</div>`;
+}
 
-  // 读取字段（多路兜底 + 从 blob 提取）
+// ✅ 重新实现：不再直接返回 item.title；统一解析后“干净渲染”
+function buildDetailHTML(item) {
   const evtType = readField(item, ['EventType'], '事件类型');
   const region  = readField(item, ['Region'], '地区');
   const plat    = readField(item, ['Platform'], '平台类型');
@@ -338,14 +333,13 @@ function buildDetailHTML(item) {
   const tagsRaw = readField(item, ['Tag', 'Tags'], '标签');
   const tags    = Array.isArray(tagsRaw) ? tagsRaw : normalizeTags(tagsRaw);
 
-  const kv = (k, v) =>
-    v == null || v === '' ? '' : `<div><strong>${escapeHtml(k)}：</strong>${escapeHtml(String(v))}</div>`;
-
-  // 统一标题仍用 resolveTitle（已做多路兜底）
   const parts = [];
-  parts.push(kv('事件名称', resolveTitle(item)));
-  if (item.start) parts.push(kv('开始时间', item.start));
-  if (item.end)   parts.push(kv('结束时间', item.end));
+  // 标题单独加粗一行
+  const titleLine = `<div style="font-weight:600;margin-bottom:6px">${escapeHtml(resolveTitle(item))}</div>`;
+  // 时间行
+  parts.push(kv('开始时间', item.start));
+  parts.push(kv('结束时间', item.end));
+  // 其它字段
   parts.push(kv('事件类型', evtType));
   parts.push(kv('地区', region));
   parts.push(kv('平台类型', plat));
@@ -355,13 +349,7 @@ function buildDetailHTML(item) {
   parts.push(kv('描述', desc));
   parts.push(kv('贡献者', contr));
 
-  // 少量样式微调：标题更醒目
-  return `
-    <div style="font-weight:600;margin-bottom:6px">${escapeHtml(resolveTitle(item))}</div>
-    <div style="font-size:13px;line-height:1.6">
-      ${parts.join('')}
-    </div>
-  `;
+  return `${titleLine}<div style="font-size:13px;line-height:1.6">${parts.join('')}</div>`;
 }
 
 
