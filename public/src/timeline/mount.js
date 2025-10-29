@@ -72,23 +72,23 @@ function pickTitleFromBlob(blob) {
 /** 兼容各种形态，尽力取出“可显示的标题纯文本” */
 function resolveTitle(item) {
   // 1) 显式字段优先
-  const t1 = toPlainText(item?.Title);
+  const t1 = toPlainText(item && item.Title);
   if (t1) return t1;
-  const t2 = toPlainText(item?.title);
+  const t2 = toPlainText(item && item.title);
   if (t2) return t2;
 
   // 2) 有些数据把“全量详情”塞进 title 或 content；从中解析“事件名称：xxx”
-  const fromTitleBlob = pickTitleFromBlob(item?.title);
+  const fromTitleBlob = pickTitleFromBlob(item && item.title);
   if (fromTitleBlob) return fromTitleBlob;
 
-  const fromContentBlob = pickTitleFromBlob(item?.content);
+  const fromContentBlob = pickTitleFromBlob(item && item.content);
   if (fromContentBlob) return fromContentBlob;
 
   // 3) 仍不行，就退回到 content/label 的纯文本
-  const t3 = toPlainText(item?.content);
+  const t3 = toPlainText(item && item.content);
   if (t3) return t3;
 
-  const t4 = toPlainText(item?.label);
+  const t4 = toPlainText(item && item.label);
   if (t4) return t4;
 
   // 4) 最终兜底
@@ -97,11 +97,15 @@ function resolveTitle(item) {
 
 /**
  * 主入口：渲染时间轴
+ * @param {HTMLElement} container
+ * @param {Object} overrides
+ * @returns {Promise<{timeline:any, items:any, destroy:Function, setItems:Function, setOptions:Function}>}
  */
 export async function mountTimeline(container, overrides = {}) {
   window.__timelineInit = 'mounting';
   log('mountTimeline start');
 
+  // 0) 防御：检查容器和 vis.js
   if (!container) {
     console.error('mountTimeline: 容器不存在');
     window.__timelineInit = 'container-missing';
@@ -115,19 +119,23 @@ export async function mountTimeline(container, overrides = {}) {
     return;
   }
 
+  // 1) 初始化全局状态（可选）
   window.__timelineItems = new window.vis.DataSet([]);
   window.__timeline = null;
 
+  // 2) 显示“加载中”
   const loading = createLoadingOverlay();
   const originalPosition = container.style.position;
   const needRel = getComputedStyle(container).position === 'static';
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
+  // 在闭包里维护这些句柄，便于返回/销毁
   let resizeHandler = null;
   let timeline = null;
   let items = null;
 
+  // 销毁：移除监听、还原样式、清空内容
   function destroy() {
     try { if (resizeHandler) window.removeEventListener('resize', resizeHandler); } catch {}
     try { if (timeline && timeline.destroy) timeline.destroy(); } catch {}
@@ -138,13 +146,19 @@ export async function mountTimeline(container, overrides = {}) {
     window.__timelineItems = null;
   }
 
+  // 安全设置 items
   function setItems(nextItems = []) {
     if (!items) return;
     items.clear();
-    if (Array.isArray(nextItems) && nextItems.length) items.add(nextItems);
-    if (timeline?.redraw) requestAnimationFrame(() => timeline.redraw());
+    if (Array.isArray(nextItems) && nextItems.length) {
+      items.add(nextItems);
+    }
+    if (timeline && timeline.redraw) {
+      requestAnimationFrame(() => timeline.redraw());
+    }
   }
 
+  // 动态 patch options（浅合并）
   function setOptions(patch = {}) {
     if (timeline && patch && typeof patch === 'object') {
       timeline.setOptions(mergeOptions(timeline.options || {}, patch));
@@ -153,6 +167,7 @@ export async function mountTimeline(container, overrides = {}) {
   }
 
   try {
+    // 3) 拉数据 + 规范化
     const data = await fetchAndNormalize();
     if (!Array.isArray(data) || data.length === 0) {
       container.innerHTML =
@@ -161,12 +176,16 @@ export async function mountTimeline(container, overrides = {}) {
       return { timeline: null, items: null, destroy, setItems, setOptions };
     }
 
+    // 4) 写入 DataSet
     items = new window.vis.DataSet(data);
     window.__timelineItems = items;
 
-    // 时间范围
+    // 5) 计算时间范围（容错：若无 start/end，跳过范围设定）
     const raw = items.get();
-    const times = raw.map(it => toMs(it && (it.start ?? it.end))).filter(Number.isFinite);
+    const times = raw
+      .map(it => toMs((it && (it.start != null ? it.start : it.end))))
+      .filter(Number.isFinite);
+
     let startDate, endDate;
     if (times.length) {
       const minT = Math.min(...times);
@@ -180,15 +199,16 @@ export async function mountTimeline(container, overrides = {}) {
       if (!Number.isNaN(+e)) endDate = e;
     }
 
-    // 先用英文避免月份乱码
+    // 6) 默认参数（核心调节区），合并 constants 默认
     const baseDefaults = {
+      // 先用英文避免月份乱码
+      locale: 'en',
       minHeight: 720,
       maxHeight: 720,
-      locale: 'en',
       template: (item, element) => {
         const titleText = resolveTitle(item);
-        const host = element?.closest?.('.vis-item') || element;
-        if (host) host.classList.add('event');
+        const host = (element && element.closest) ? (element.closest('.vis-item') || element) : element;
+        if (host && host.classList) host.classList.add('event');
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
@@ -199,28 +219,154 @@ export async function mountTimeline(container, overrides = {}) {
     };
 
     const options = mergeOptions(
-      TIMELINE_DEFAULT_OPTIONS,
-      baseDefaults,
-      overrides
+      TIMELINE_DEFAULT_OPTIONS, // 全局默认（constants.js）
+      baseDefaults,             // 本文件默认
+      overrides                 // 调用方覆盖
     );
     if (startDate instanceof Date) options.start = startDate;
     if (endDate instanceof Date) options.end = endDate;
 
+    // 7) 创建时间轴
     const vis = window.vis;
     timeline = new vis.Timeline(container, items, options);
     window.__timeline = timeline;
 
-    resizeHandler = () => timeline.redraw();
+    // ======================
+    // === 覆盖式弹窗逻辑 ===
+    // ======================
+
+    // 1) 创建/获取弹窗节点（绝对定位，覆盖点击的事件框）
+    function ensurePopover() {
+      let pop = container.querySelector('#event-popover');
+      if (!pop) {
+        pop = document.createElement('div');
+        pop.id = 'event-popover';
+        pop.style.cssText = [
+          'position:absolute',
+          'z-index:1000',
+          'background:#fff',
+          'border:1px solid #e5e7eb',
+          'box-shadow:0 8px 24px rgba(0,0,0,.15)',
+          'border-radius:8px',
+          'overflow:auto',
+          'pointer-events:auto',
+          'padding:10px'
+        ].join(';');
+        container.appendChild(pop);
+      }
+      return pop;
+    }
+
+    // 2) 关闭弹窗
+    let currentAnchor = null; // 当前锚定的事件框元素
+    function hidePopover() {
+      const pop = container.querySelector('#event-popover');
+      if (pop) pop.style.display = 'none';
+      currentAnchor = null;
+    }
+
+    // 3) 渲染弹窗内容（优先用 item.title 的 HTML，否则拼装）
+    function buildDetailHTML(item) {
+      if (typeof item.title === 'string' && item.title.trim()) {
+        return item.title;
+      }
+      const lines = [];
+      const safe = (v) => (v == null ? '' : String(v));
+      const kv = (k, v) => `<div><strong>${k}：</strong>${safe(v)}</div>`;
+
+      lines.push(kv('事件名称', resolveTitle(item)));
+      if (item.start) lines.push(kv('开始时间', safe(item.start)));
+      if (item.end)   lines.push(kv('结束时间', safe(item.end)));
+      if (item.EventType)       lines.push(kv('事件类型', item.EventType));
+      if (item.Region)          lines.push(kv('地区', item.Region));
+      if (item.Platform)        lines.push(kv('平台类型', item.Platform));
+      if (item.ConsolePlatform) lines.push(kv('主机类型', item.ConsolePlatform));
+      if (item.Company)         lines.push(kv('公司', item.Company));
+      if (Array.isArray(item.Tag) && item.Tag.length) {
+        lines.push(kv('标签', item.Tag.join('，')));
+      }
+      return lines.join('');
+    }
+
+    // 4) 定位并显示弹窗：覆盖点击的事件框
+    function showPopoverOverItem(itemId) {
+      const pop = ensurePopover();
+
+      // vis 会给每个 item 一个 data-id
+      const selectorId = CSS && CSS.escape ? CSS.escape(String(itemId)) : String(itemId).replace(/"/g, '\\"');
+      const itemEl = container.querySelector(`.vis-item[data-id="${selectorId}"]`);
+      if (!itemEl) return;
+
+      // 计算相对容器的定位
+      const cb = container.getBoundingClientRect();
+      const ib = itemEl.getBoundingClientRect();
+
+      const top  = ib.top  - cb.top + container.scrollTop;
+      const left = ib.left - cb.left + container.scrollLeft;
+      const width  = ib.width;
+      const height = ib.height;
+
+      // 取出该 Item 的数据，构建内容
+      const item = items.get(itemId);
+      pop.innerHTML = buildDetailHTML(item);
+
+      // 覆盖定位与尺寸
+      pop.style.top = `${top}px`;
+      pop.style.left = `${left}px`;
+      pop.style.width = `${width}px`;
+      pop.style.height = `${height}px`;
+      pop.style.display = 'block';
+
+      currentAnchor = itemEl;
+    }
+
+    // 5) 点击行为：点击事件框 → 弹出；点击空白 → 关闭
+    const onClick = (props) => {
+      if (!props || !props.item) { hidePopover(); return; }
+      showPopoverOverItem(props.item);
+    };
+    timeline.on('click', onClick);
+
+    // 外部点击关闭：点击容器内非弹窗/非锚点区域 & 点击容器外
+    function outsideClickHandler(e) {
+      const pop = container.querySelector('#event-popover');
+      if (!pop || pop.style.display === 'none') return;
+
+      const target = e.target;
+      const clickInPop = pop.contains(target);
+      const clickOnAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(target);
+
+      if (!clickInPop && !clickOnAnchor) {
+        hidePopover();
+      }
+    }
+    document.addEventListener('mousedown', outsideClickHandler);
+
+    // 8) 自适应窗口
+    resizeHandler = () => {
+      timeline.redraw();
+      // 关闭弹窗（避免窗口改变后错位）
+      hidePopover();
+    };
     window.addEventListener('resize', resizeHandler);
+
+    // 完整销毁：移除监听、弹窗
+    const _baseDestroy = destroy;
+    destroy = function () {
+      document.removeEventListener('mousedown', outsideClickHandler);
+      hidePopover();
+      _baseDestroy();
+    };
 
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
 
+    // 9) 返回可操作句柄
     return { timeline, items, destroy, setItems, setOptions };
   } catch (err) {
     console.error(err);
     container.innerHTML =
-      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err?.message || String(err))}</div>`;
+      `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${escapeHtml(err && err.message ? err.message : String(err))}</div>`;
     window.__timelineInit = 'error';
     return { timeline: null, items: null, destroy, setItems, setOptions };
   } finally {
