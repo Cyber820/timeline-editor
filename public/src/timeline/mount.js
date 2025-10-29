@@ -171,6 +171,47 @@ export async function mountTimeline(container, overrides = {}) {
       window.__timelineInit = 'empty-data';
       return { timeline: null, items: null, destroy, setItems, setOptions };
     }
+// —— 追加：时间字段归一化（消除 [object Object] 问题）——
+function normalizeTimeLike(v) {
+  if (!v) return undefined;
+  // 已是 Date/number/string：直接用
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') return v;            // 时间戳
+  if (typeof v === 'string') return v;            // "YYYY-MM-DD" / ISO
+
+  // 常见对象形态兜底：{date:"..."}, {value:"..."}, {year,month,day}
+  if (v && typeof v === 'object') {
+    if (typeof v.date === 'string' || typeof v.date === 'number') return v.date;
+    if (typeof v.value === 'string' || typeof v.value === 'number') return v.value;
+    if (
+      Number.isFinite(v.year) &&
+      Number.isFinite(v.month) &&
+      Number.isFinite(v.day)
+    ) {
+      // month/day 补零
+      const mm = String(v.month).padStart(2, '0');
+      const dd = String(v.day).padStart(2, '0');
+      return `${v.year}-${mm}-${dd}`;
+    }
+  }
+  return undefined; // 其余直接置空，避免抛错
+}
+
+// 对每条记录做 start/end 归一化；并输出首个异常样本
+let firstBad = null;
+const safeData = (Array.isArray(data) ? data : []).map((it, i) => {
+  const startN = normalizeTimeLike(it.start ?? it.Start);
+  const endN   = normalizeTimeLike(it.end   ?? it.End);
+
+  if (!startN && !endN && !firstBad) {
+    firstBad = { index: i, rawStart: it.start ?? it.Start, rawEnd: it.end ?? it.End, item: it };
+  }
+  return { ...it, start: startN, end: endN };
+});
+
+if (firstBad) {
+  console.warn('[timeline] 首个无可用时间的条目（已置空避免抛错）：', firstBad);
+}
 
     // 4) 写入 DataSet
     items = new window.vis.DataSet(data);
