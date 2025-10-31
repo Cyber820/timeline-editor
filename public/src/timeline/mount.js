@@ -2,7 +2,7 @@
 // ✅ 职责：创建并挂载 vis Timeline；旧版映射 + 点击覆盖式弹窗（不自动消失）
 // 依赖：window.ENDPOINT 由外部注入；TIMELINE_DEFAULT_OPTIONS 提供基础配置
 import { escapeHtml } from '../utils/dom.js';
-import { TIMELINE_DEFAULT_OPTIONS } from '../_staging/constants.js';
+import { TIMELINE_DEFAULT_OPTIONS, ENDPOINT } from '../_staging/constants.js';
 
 // ======== 调试标记（可选） ========
 window.__timelineInit = 'not-started';
