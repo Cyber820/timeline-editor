@@ -1,4 +1,7 @@
 // public/src/mount.js
+
+
+// 首次挂载或后续刷新：仅更新数据，避免重建整棵 DOM（确保弹窗不消失）
 async function loadAndRender() {
 // 取消上一次中的请求，避免竞态
 if (inflight) inflight.abort();
