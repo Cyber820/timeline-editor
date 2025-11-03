@@ -143,8 +143,8 @@ function injectScopedStyles(container, ui = UI) {
       position: absolute; z-index: 1000; background: #fff;
       border: 1px solid #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,.15);
       border-radius: 10px; padding: 12px; overflow: auto; pointer-events: auto;
-      min-width: 280px; min-height: 140px; max-width: 520px; max-height: 60vh;
-      font-size: 14px; line-height: 1.5; display: none;
+      min-width: 280px; min-height: 140px; max-width: 700px; max-height: 70vh;
+      font-size: 12px; line-height: 1; display: none;
     }
   `.trim();
 
