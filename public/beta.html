@@ -2,365 +2,128 @@
 <html lang="zh-cn">
 <head>
   <meta charset="utf-8" />
-  <title>时间轴（结构化弹窗版）</title>
+  <title>beta | Timeline Debug Shell</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- 你可以用自己的 vis.js 引入；这里示意用 CDN（如你本地已有，就删掉这两行） -->
+
+  <!-- vis-timeline（如你已有本地版本，可替换为本地引入） -->
   <link rel="stylesheet" href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css">
   <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
+
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
-    #timeline { height: 720px; border: 1px solid #eee; border-radius: 10px; }
-    .event-title { margin: 0; font-size: 14px; }
-    /* 弹窗样式 */
-    #event-popover {
-      position: absolute; z-index: 1000; background: #fff;
-      border: 1px solid #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,.15);
-      border-radius: 10px; padding: 12px; overflow: auto; pointer-events: auto;
-      min-width: 280px; min-height: 140px; max-width: 520px; max-height: 60vh;
-      font-size: 14px; line-height: 1.5; display: none;
-    }
-    #event-popover .kv { display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.6; }
-    #event-popover .kv-row { display: flex; align-items: flex-start; gap: 8px; }
-    #event-popover .kv-key { min-width: 84px; flex: 0 0 auto; font-weight: 600; color:#111; }
-    #event-popover .kv-val { margin: 0; white-space: pre-wrap; word-break: break-word; color:#333; }
-    .toolbar { margin: 12px 0; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    .topbar { display:flex; gap:8px; align-items:center; padding:8px 12px; background:#f8fafc; border-bottom:1px solid #e5e7eb; }
+    #timeline { height: 720px; border: 1px solid #e5e7eb; border-radius: 10px; margin:12px; }
+    .pill { padding:2px 8px; background:#eef2ff; color:#3730a3; border-radius:999px; font-size:12px; }
+    .hint { color:#64748b; font-size:12px; }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <label>属性：
-      <select id="filter-attribute"></select>
-    </label>
-    <label>选项：
-      <select id="filter-options" multiple></select>
-    </label>
+  <div class="topbar">
+    <strong>Beta Debug</strong>
+    <span id="ep" class="pill">endpoint: (loading)</span>
+    <span class="hint">点击任意事件卡片后，查看控制台输出（ARRAY_FOR_DEBUG / ITEM_OBJECT / RAW_OBJECT）。</span>
   </div>
 
   <div id="timeline"></div>
-  <div id="event-popover" aria-live="polite" role="dialog"></div>
 
+  <!-- 你的模块入口 -->
   <script type="module">
-    /********** 配置 **********/
-    const ENDPOINT =
-      (globalThis.TIMELINE_ENDPOINT)
-      || 'https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec';
+    /**********************
+     * 可选：在这里覆写 ENDPOINT（不写就用 constants.js 里的默认）
+     **********************/
+    // globalThis.TIMELINE_ENDPOINT = 'https://你的接口地址/exec';
 
-    /********** 工具函数 **********/
-    const escapeHtml = (s) => String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    // 显示一下当前 ENDPOINT（便于你确认用的哪个）
+    (function showEP(){
+      const el = document.getElementById('ep');
+      const ep = globalThis.TIMELINE_ENDPOINT ?? '(constants.js 默认值)';
+      el.textContent = 'endpoint: ' + ep;
+    })();
 
-    const toPlain = (x) => {
-      if (x == null) return '';
-      return String(x).replace(/<[^>]*>/g,'').trim();
-    };
+    /**********************
+     * 引入你已有的 mount.js
+     * 路径请与你项目实际一致（下列为你给的路径风格）
+     **********************/
+    import { mountTimeline } from './src/timeline/mount.js';
 
-    const asDisplay = (v) => {
-      if (v == null) return '—';
-      const s = String(v).trim();
-      return s === '' ? '—' : s;
-    };
-
-    // 解析类似「事件类型：xxx」「公司：xxx」支持中文/英文冒号；并在“下一字段”或换行前收束
-    function parseBlobKV(blob, labels){
-      const s = toPlain(blob);
-      const out = {};
-      if (!s) return out;
-      // 构造一个“任意已知标签”的前瞻，用于截断本字段的值
-      const escaped = labels.map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const lookahead = `(?=\\s*(?:${escaped.join('|')})\\s*[:：]|$)`;
-      labels.forEach(label => {
-        const re = new RegExp(`${label}\\s*[:：]\\s*([\\s\\S]*?)${lookahead}`, 'i');
-        const m = re.exec(s);
-        if (m) out[label] = m[1].replace(/\\n/g, '\n').trim();
-      });
-      return out;
-    }
-
-    function normalizeTags(v){
-      if (!v && v !== 0) return [];
-      if (Array.isArray(v)) return v.filter(Boolean);
-      return String(v).split(',').map(s=>s.trim()).filter(Boolean);
-    }
-
-    /********** 弹窗渲染（结构化，防串行） **********/
-    const LABELS = ['事件名称','开始时间','结束时间','事件类型','地区','平台类型','主机类型','公司','标签','描述','贡献者'];
-    function buildDetailHTML(item) {
-      const popTitle = resolveTitle(item);
-      const kv = [
-        ['事件名称', popTitle],
-        ['开始时间', item.start ?? ''],
-        ['结束时间', item.end ?? ''],
-        ['事件类型', item.EventType ?? ''],
-        ['地区', item.Region ?? ''],
-        ['平台类型', item.Platform ?? ''],
-        ['主机类型', item.ConsolePlatform ?? ''],
-        ['公司', item.Company ?? ''],
-        ['标签', (Array.isArray(item.Tag) ? item.Tag : normalizeTags(item.Tag)).join('，')],
-        ['描述', item.Description ?? ''],
-        ['贡献者', item.Contributor ?? item.Submitter ?? ''],
-      ];
-
-      // 若后端把整块文本塞入 title/content，也尝试从中补齐空白项（但不覆盖已有值）
-      const blobKV = parseBlobKV(item.title || item.content || '', LABELS);
-      for (let i=0;i<kv.length;i++){
-        const label = kv[i][0];
-        if (!kv[i][1]) kv[i][1] = blobKV[label] || '';
-      }
-
-      const rows = kv.map(([k,v]) => `
-        <div class="kv-row">
-          <dt class="kv-key">${escapeHtml(k)}</dt>
-          <dd class="kv-val">${escapeHtml(asDisplay(v))}</dd>
-        </div>
-      `).join('');
-
-      return `
-        <div style="font-weight:700;margin-bottom:8px">${escapeHtml(asDisplay(popTitle))}</div>
-        <dl class="kv">${rows}</dl>
-      `;
-    }
-
-    function resolveTitle(item) {
-      const c1 = toPlain(item?.Title);
-      if (c1) return c1;
-      const c2 = toPlain(item?.title);
-      if (c2) {
-        const m = /(事件名称)\s*[:：]\s*([^\n<]+)/.exec(c2);
-        if (m) return m[2].trim();
-      }
-      const c3 = toPlain(item?.content);
-      if (c3) return c3;
-      const c4 = toPlain(item?.label);
-      if (c4) return c4;
-      return '(无标题)';
-    }
-
-    /********** 渲染主流程（旧版结构） **********/
-    let originalItems = [];
-    let timeline = null;
-
-    window.addEventListener('style:ready', () => {
-      fetch(ENDPOINT, { cache: 'no-store' })
-        .then(res => res.json())
-        .then(data => {
-          originalItems = (data || []).map((event, i) => {
-            const contentText = event.content ?? event.Title ?? '(无标题)';
-            const Start = event.Start ?? event.start ?? '';
-            const End   = event.End   ?? event.end   ?? '';
-            const blob  = (event.title ?? '').toString();
-
-            // 仅作为“兜底补齐”的解析：真正的弹窗不再直接用 blob 原样注入
-            const known = ['事件类型','地区','平台类型','公司','状态','主机类型','标签'];
-            const blobPicked = parseBlobKV(blob, known);
-
-            const EventType       = event.EventType       ?? event.eventType       ?? blobPicked['事件类型'] ?? '';
-            const Region          = event.Region          ?? event.region          ?? blobPicked['地区'] ?? '';
-            const Platform        = event.Platform        ?? event.platform        ?? blobPicked['平台类型'] ?? '';
-            const Company         = event.Company         ?? event.company         ?? blobPicked['公司'] ?? '';
-            const Status          = event.Status          ?? event.status          ?? blobPicked['状态'] ?? '';
-            const ConsolePlatform = event.ConsolePlatform ?? event.consolePlatform ?? blobPicked['主机类型'] ?? '';
-
-            const TagRaw = event.Tag ?? event.tag ?? blobPicked['标签'] ?? '';
-            const Tag = normalizeTags(TagRaw);
-
-            // 注意：这里的 title 仅作为“原样显示的备选”，我们实际弹窗会调用 buildDetailHTML
-            const fallbackTitleHtml = [
-              `事件名称：${contentText || ''}`,
-              `事件类型：${EventType || ''}`,
-              `时间：${Start || ''}${End ? ' ~ ' + End : ''}`,
-              `状态：${Status || ''}`,
-              `地区：${Region || ''}`,
-              `平台类型：${Platform || ''}`,
-              `主机类型：${ConsolePlatform || ''}`,
-              `公司：${Company || ''}`
-            ].join('\n');
-
-            return {
-              id: event.id || `auto-${i + 1}`,
-              content: contentText,
-              start: Start,
-              end: End || undefined,
-              // 不再信任 blob 原 HTML：仅在需要时作为纯文本来源
-              title: blob || fallbackTitleHtml,
-              EventType, Region, Platform, Company, Status, ConsolePlatform,
-              Tag
-            };
-          });
-
-          // 初始化 Timeline：把标记打到外层 .vis-item
-          timeline = new vis.Timeline(
-            document.getElementById("timeline"),
-            originalItems,
-            {
-              locale: "zh-cn",
-              editable: false,
-              margin: { item: 10, axis: 50 },
-              orientation: { axis: 'bottom', item: 'bottom' },
-              tooltip: { followMouse: true, overflowMethod: 'flip' },
-              verticalScroll: true,
-              zoomKey: "ctrlKey",
-              stack: true,
-              template: (item, element) => {
-                const host = element?.closest?.('.vis-item') || element; // 外层容器
-                if (host && window.__styleEngine) {
-                  window.__styleEngine.attachEventDataAttrs(host, item);
-                  host.classList.add('event'); // .vis-item.event
-                }
-                const root = document.createElement('div');
-                const h4 = document.createElement('h4');
-                h4.className = 'event-title';
-                h4.textContent = item.content || '(无标题)';
-                root.appendChild(h4);
-                return root;
-              }
-            }
-          );
-
-          // 点击显示结构化弹窗
-          const pop = document.getElementById('event-popover');
-          let currentAnchor = null;
-
-          function hidePopover(){ pop.style.display = 'none'; currentAnchor = null; }
-
-          function findAnchorFromProps(props){
-            const t = props?.event?.target;
-            const hit = t && t.closest ? t.closest('.vis-item') : null;
-            if (hit) return hit;
-            if (props?.item == null) return null;
-            const idSel = (window.CSS && CSS.escape) ? CSS.escape(String(props.item)) : String(props.item).replace(/"/g,'\\"');
-            return document.querySelector(`.vis-item[data-id="${idSel}"]`);
-          }
-
-          function showPopoverOverItem(props){
-            const anchor = findAnchorFromProps(props);
-            if (!anchor) return;
-            const dsItem = originalItems.find(x => String(x.id) === String(props.item));
-            pop.innerHTML = buildDetailHTML(dsItem || {});
-            const cb = document.getElementById('timeline').getBoundingClientRect();
-            const ib = anchor.getBoundingClientRect();
-
-            const MIN_W = 280, MIN_H = 140;
-            const MAX_W = Math.min(520, document.getElementById('timeline').clientWidth);
-            const MAX_H = Math.min(document.getElementById('timeline').clientHeight * 0.6, 600);
-
-            let left = ib.left - cb.left + document.getElementById('timeline').scrollLeft;
-            let top  = ib.top  - cb.top  + document.getElementById('timeline').scrollTop;
-            let width  = Math.min(Math.max(ib.width,  MIN_W), MAX_W);
-            let height = Math.min(Math.max(ib.height, MIN_H), MAX_H);
-
-            const maxLeft = document.getElementById('timeline').scrollLeft + (document.getElementById('timeline').clientWidth  - width  - 8);
-            const maxTop  = document.getElementById('timeline').scrollTop  + (document.getElementById('timeline').clientHeight - height - 8);
-            left = Math.max(document.getElementById('timeline').scrollLeft, Math.min(left, maxLeft));
-            top  = Math.max(document.getElementById('timeline').scrollTop,  Math.min(top,  maxTop));
-
-            pop.style.left = left + 'px';
-            pop.style.top = top + 'px';
-            pop.style.width = width + 'px';
-            pop.style.height = height + 'px';
-            pop.style.display = 'block';
-            currentAnchor = anchor;
-          }
-
-          timeline.on('click', (props) => {
-            if (!props || props.item == null) { hidePopover(); return; }
-            showPopoverOverItem(props);
-          });
-
-          document.addEventListener('mousedown', (e) => {
-            if (pop.style.display === 'none') return;
-            const inPop = pop.contains(e.target);
-            const onAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(e.target);
-            if (!inPop && !onAnchor) hidePopover();
-          });
-
-          // （可选）应用一次本地保存的样式状态
-          try {
-            const saved = localStorage.getItem('timelineStyle.v1');
-            if (saved) {
-              const state = JSON.parse(saved);
-              window.__styleEngine?.applyStyleState(state, {
-                selectorBase: '.vis-item.event, .vis-item-content.event',
-                titleSelector: '.event-title'
-              });
-            }
-          } catch (e) {
-            console.warn('[style] load saved style failed:', e);
-          }
-        });
-    });
-
-    /********** 下拉选项（最小实现） **********/
-    let allOptions = {};
-    const attributeLabels = {
-      EventType: '事件类型',
-      Region: '地区',
-      Platform: '平台类型',
-      ConsolePlatform: '主机类型',
-      Company: '公司',
-      Status: '状态',
-      Tag: '标签'
-    };
-
-    function getFilterOptionsForKey(key) {
-      // 优先使用后端返回
-      const fromApi = allOptions && allOptions[key];
-      if (Array.isArray(fromApi)) return fromApi;
-
-      // 回退：从当前 items 聚合
-      const vals = new Set();
-      (originalItems || []).forEach(it => {
-        if (key === 'Tag') {
-          normalizeTags(it.Tag).forEach(v => v && vals.add(v));
-        } else {
-          const v = it[key];
-          if (v != null && String(v).trim() !== '') vals.add(String(v).trim());
-        }
-      });
-      return Array.from(vals);
-    }
-
-    // 拉取 options 并填充两个下拉
-    fetch(ENDPOINT + '?action=options', { cache: 'no-store' })
-      .then(res => res.json())
-      .then(options => {
-        allOptions = options || {};
-
-        const fill = (id, list) => {
-          const select = document.getElementById(id);
-          if (!select) return;
-          select.innerHTML = '';
-          (list || []).forEach(opt => {
-            const o = document.createElement('option');
-            o.value = o.textContent = opt;
-            select.appendChild(o);
-          });
-        };
-
-        // 属性下拉
-        const attrSel = document.getElementById("filter-attribute");
-        attrSel.innerHTML = '';
-        Object.keys(attributeLabels).forEach(key => {
-          const o = document.createElement("option");
-          o.value = key;
-          o.textContent = attributeLabels[key];
-          attrSel.appendChild(o);
-        });
-
-        // 选项下拉随属性变更
-        const optSel = document.getElementById("filter-options");
-        const refreshOptions = () => {
-          const key = attrSel.value;
-          const opts = getFilterOptionsForKey(key);
-          fill("filter-options", opts);
-        };
-        attrSel.addEventListener("change", refreshOptions);
-        attrSel.dispatchEvent(new Event("change"));
-      });
-
-    /********** 让示例能跑起来：手动派发 style:ready **********/
-    // 如果你的项目里会在样式系统完成后派发，这里可以删掉这行。
+    // 1) 让样式系统/旧逻辑“就绪”
+    //    如果你的工程里会在别处派发，则可以删掉这一行。
     window.dispatchEvent(new Event('style:ready'));
+
+    // 2) 挂载时间轴（按你的 mount.js 实现）
+    await mountTimeline(
+      document.getElementById('timeline'),
+      {
+        // 这里可以加你需要覆盖的 vis 选项；留空则用 mount.js 内默认
+      }
+    );
+
+    /**********************
+     * 调试钩子（超稳）：捕获点击的 .vis-item 并打印真实数据
+     * —— 解决“点了没有输出”的问题；用于定位“空值串行”
+     **********************/
+    (function attachItemClickLogger() {
+      // 尝试从多个位置拿 DataSet（不同版本 vis 或不同实现）
+      function getItemById(id) {
+        // 你之前在 mount.js 里导出的全局句柄（如果有）
+        try {
+          if (window.__timelineItems?.get) {
+            const it = window.__timelineItems.get(id);
+            if (it) return it;
+          }
+        } catch(e){}
+        try {
+          const tl = window.__timeline;
+          if (tl?.itemsData?.get) return tl.itemsData.get(id) || null;
+          if (tl?.itemsData?._data?.get) return tl.itemsData._data.get(id) || null;
+        } catch(e){}
+        return null;
+      }
+
+      function toTags(v){
+        return Array.isArray(v) ? v : String(v ?? '').split(',').map(s=>s.trim()).filter(Boolean);
+      }
+
+      // 捕获阶段监听，确保最早拿到事件
+      document.addEventListener('click', (e) => {
+        // 优先用 composedPath 提升命中率
+        const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+        const chain = path.length ? path : (function climb(n){ const arr=[]; for(let el=n; el; el=el.parentElement) arr.push(el); return arr; })(e.target);
+
+        let hit = null;
+        for (const el of chain) {
+          if (!el || !el.classList) continue;
+          if (el.classList.contains('vis-item') || (el.matches && el.matches('[class*="vis-item"]'))) {
+            hit = el; break;
+          }
+        }
+        if (!hit) return; // 没点到事件卡片
+
+        const id = hit.getAttribute('data-id') || hit.id || hit.getAttribute('aria-label') || '';
+        let it = id ? getItemById(id) : null;
+
+        const arr = [
+          ['事件名称', it?.Title ?? it?.title ?? it?.content ?? it?.label ?? ''],
+          ['开始时间', it?.start ?? ''],
+          ['结束时间', it?.end ?? ''],
+          ['事件类型', it?.EventType ?? ''],
+          ['地区', it?.Region ?? ''],
+          ['平台类型', it?.Platform ?? ''],
+          ['主机类型', it?.ConsolePlatform ?? ''],
+          ['公司', it?.Company ?? ''],
+          ['标签', toTags(it?.Tags ?? it?.Tag).join('，')],
+          ['描述', it?.Description ?? it?.Desc ?? ''],
+          ['贡献者', it?.Contributor ?? it?.Submitter ?? ''],
+        ];
+
+        console.group('%c[DEBUG] 点击事件数据', 'color:#2563eb');
+        console.log('CLICKED_ID:', id);
+        console.log('ARRAY_FOR_DEBUG:', arr);
+        console.log('ITEM_OBJECT:', it);
+        console.log('RAW_OBJECT:', it && (it.__raw || it._raw || null));
+        console.groupEnd();
+      }, true);
+    })();
   </script>
 </body>
 </html>
