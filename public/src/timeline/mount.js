@@ -24,10 +24,10 @@ import { fetchAndNormalize } from './fetch.js';
  * ---------------------------------------------------------------- */
 const UI = {
   canvas: {
-    height: 720,            // px：画布高度
+    height: 1000,            // px：画布高度
   },
   item: {
-    fontSize: 14,           // px：事件标题字号
+    fontSize: 10,           // px：事件标题字号
     paddingX: 10,           // px：左右内边距
     paddingY: 6,            // px：上下内边距
     borderRadius: 10,       // px：圆角
