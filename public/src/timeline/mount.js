@@ -1,44 +1,70 @@
 // src/timeline/mount.js
-// ✅ 只显示“点击弹窗”，不显示悬停提示
-// 关键点：不设置 item.title（否则 vis 会启用 hover tooltip）
-//        详情放到 item.detailHtml，自绘点击弹窗
+// ✅ 版本要点：
+// - 仅“点击弹窗”，无悬停 tooltip（不设置 item.title，不配置 options.tooltip）
+// - 事件卡片只显示“事件名称”
+// - 顶部集中一块【显示参数配置区】，可调：画布高度、事件框尺寸/圆角/字体、
+//   事件框上下位置、轴位置、最小间距（竖直间距）、是否堆叠、缩放键等
 
 import { fetchAndNormalize } from './fetch.js';
 
-/* ============ 小工具 ============ */
-const log = (...a) => { try { console.log('[timeline]', ...a); } catch {} };
+/* ----------------------------------------------------------------
+ * 🧩 显示参数配置区（你主要调整这里）
+ * ----------------------------------------------------------------
+ * canvas.height            → 时间轴可视高度（px）
+ * item.fontSize            → 事件框标题字号（px）
+ * item.paddingX/paddingY   → 事件框内边距（px）
+ * item.borderRadius        → 事件框圆角（px）
+ * item.maxWidth            → 事件框最大宽度（px，防止过长一行撑爆）
+ * layout.itemPosition      → 事件框在轴线之上/之下：'top' | 'bottom'
+ * layout.axisPosition      → 轴线位置：'top' | 'bottom'
+ * layout.verticalItemGap   → 事件框的最小竖直间距（vis 的 margin.item）
+ * layout.stack             → 是否允许垂直堆叠（true/false）
+ * zoom.key                 → 缩放热键：'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'
+ * zoom.verticalScroll      → 是否允许垂直滚动（true/false）
+ * ---------------------------------------------------------------- */
+const UI = {
+  canvas: {
+    height: 720,            // px：画布高度
+  },
+  item: {
+    fontSize: 14,           // px：事件标题字号
+    paddingX: 10,           // px：左右内边距
+    paddingY: 6,            // px：上下内边距
+    borderRadius: 10,       // px：圆角
+    maxWidth: 320,          // px：最大宽度（防止内容过长）
+  },
+  layout: {
+    itemPosition: 'bottom', // 'top' | 'bottom'：事件框在轴线的上下位置
+    axisPosition: 'bottom', // 'top' | 'bottom'：时间轴位置
+    verticalItemGap: 10,    // px：事件框最小竖直间距（vis 的 margin.item）
+    stack: true,            // 事件是否允许堆叠
+  },
+  zoom: {
+    key: 'ctrlKey',         // 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'
+    verticalScroll: true,   // 是否允许垂直滚动
+  },
+};
 
-function mergeOptions(...objs) {
-  const out = {};
-  for (const o of objs) {
-    if (!o || typeof o !== 'object') continue;
-    for (const k of Object.keys(o)) {
-      const v = o[k];
-      if (v && typeof v === 'object' && !Array.isArray(v)) {
-        out[k] = { ...(out[k] || {}), ...v };
-      } else if (v !== undefined) out[k] = v;
-    }
-  }
-  return out;
-}
-const toPlain = (x) => x == null ? '' : String(x).replace(/<[^>]*>/g,'').trim();
+/* ====================== 工具函数 ====================== */
+const toPlain = (x) => (x == null ? '' : String(x).replace(/<[^>]*>/g, '').trim());
 const asDisplay = (v) => {
   const s = v == null ? '' : String(v).trim();
   return s ? s : '—';
 };
 
-// 解析中文多行 blob 的字段
-const FIELD_LABELS = ['事件名称','事件类型','时间','状态','地区','平台类型','主机类型','公司','标签','描述','贡献者'];
-function parseBlobFields(blob){
+// 解析中文多行 blob：支持“字段名：值”，中文/英文冒号；以前瞻“下一个字段名/结尾”截断，避免串行
+const FIELD_LABELS = ['事件名称', '事件类型', '时间', '状态', '地区', '平台类型', '主机类型', '公司', '标签', '描述', '贡献者'];
+function parseBlobFields(blob) {
   const s = toPlain(blob);
   const out = {}; if (!s) return out;
-  const escaped = FIELD_LABELS.map(l => l.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  const escaped = FIELD_LABELS.map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const lookahead = `(?=\\s*(?:${escaped.join('|')})\\s*[:：]|$)`;
   for (const label of FIELD_LABELS) {
     const re = new RegExp(`${label}\\s*[:：]\\s*([\\s\\S]*?)${lookahead}`, 'i');
     const m = re.exec(s);
-    if (m) out[label] = m[1].replace(/\\n/g,'\n').trim();
+    if (m) out[label] = m[1].replace(/\\n/g, '\n').trim();
   }
+  // 拆“时间”为 start/end
   const t = out['时间'];
   if (t) {
     const m1 = /([0-9]{4}-[0-9]{2}-[0-9]{2})\s*[~—–-]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(t);
@@ -50,12 +76,12 @@ function parseBlobFields(blob){
   }
   return out;
 }
-function normalizeTags(v){
+function normalizeTags(v) {
   if (!v && v !== 0) return [];
   if (Array.isArray(v)) return v.filter(Boolean);
-  return String(v).split(',').map(s=>s.trim()).filter(Boolean);
+  return String(v).split(',').map(s => s.trim()).filter(Boolean);
 }
-function buildKvHTML(obj){
+function buildKvHTML(obj) {
   const kv = [
     ['事件名称', obj.title],
     ['开始时间', obj.start],
@@ -69,7 +95,7 @@ function buildKvHTML(obj){
     ['描述', obj.Description],
     ['贡献者', obj.Contributor || obj.Submitter],
   ];
-  const rows = kv.map(([k,v]) =>
+  const rows = kv.map(([k, v]) =>
     `<div class="kv-row" style="display:flex;gap:8px;align-items:flex-start;">
        <dt class="kv-key" style="min-width:84px;flex:0 0 auto;font-weight:600;">${k}</dt>
        <dd class="kv-val" style="margin:0;white-space:pre-wrap;word-break:break-word;">${asDisplay(v)}</dd>
@@ -80,18 +106,57 @@ function buildKvHTML(obj){
     <dl class="kv" style="display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.6;">${rows}</dl>
   `;
 }
-function createLoadingOverlay(){
+function createLoadingOverlay() {
   const el = document.createElement('div');
-  el.setAttribute('role','status');
-  el.setAttribute('aria-live','polite');
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
   el.textContent = '加载时间轴数据中…';
-  el.style.cssText = 'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
+  el.style.cssText =
+    'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
   return el;
 }
-function toMs(tsLike){ if (typeof tsLike==='number') return tsLike; const n=+new Date(tsLike); return Number.isFinite(n)?n:NaN; }
+function toMs(tsLike) { if (typeof tsLike === 'number') return tsLike; const n = +new Date(tsLike); return Number.isFinite(n) ? n : NaN; }
 
-/* ====== 映射：卡片仅展示“事件名称”，详情放 detailHtml（不用 title） ====== */
-function normalizeEvent(event, i){
+// 将 UI 配置注入为“容器级作用域样式”
+function injectScopedStyles(container, ui = UI) {
+  const scope = `tl-scope-${Math.random().toString(36).slice(2, 8)}`;
+  container.classList.add(scope);
+
+  const css = `
+    .${scope} .vis-item.event {
+      border-radius: ${ui.item.borderRadius}px;
+    }
+    .${scope} .vis-item .vis-item-content {
+      padding: ${ui.item.paddingY}px ${ui.item.paddingX}px;
+      max-width: ${ui.item.maxWidth}px;
+    }
+    .${scope} .event-title {
+      font-size: ${ui.item.fontSize}px;
+      line-height: 1.4;
+      margin: 0;
+      max-width: ${ui.item.maxWidth}px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .${scope} #event-popover {
+      position: absolute; z-index: 1000; background: #fff;
+      border: 1px solid #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      border-radius: 10px; padding: 12px; overflow: auto; pointer-events: auto;
+      min-width: 280px; min-height: 140px; max-width: 520px; max-height: 60vh;
+      font-size: 14px; line-height: 1.5; display: none;
+    }
+  `.trim();
+
+  const styleEl = document.createElement('style');
+  styleEl.setAttribute('data-scope', scope);
+  styleEl.textContent = css;
+  container.appendChild(styleEl);
+  return scope;
+}
+
+/* =================== 数据映射：卡片仅显示“事件名称” =================== */
+function normalizeEvent(event, i) {
   const Start = event.Start ?? event.start ?? '';
   const End   = event.End   ?? event.end   ?? '';
   const blob  = (event.title || event.content || '').toString();
@@ -129,16 +194,15 @@ function normalizeEvent(event, i){
     content: title,              // ✅ 卡片只显示“事件名称”
     start: start || undefined,
     end: end || undefined,
-    // ❌ 不设置 title，彻底禁用 vis 的 hover tooltip
-    detailHtml,                  // ✅ 我们自用的点击弹窗 HTML
+    // ❌ 不设置 title（禁用 hover tooltip）
+    detailHtml,                  // ✅ 点击弹窗内容
     titleText: title,            // 模板强制使用标题
     EventType, Region, Platform, Company, Status, ConsolePlatform,
     Tag,
-    __raw: event
   };
 }
 
-/* ============ 主挂载流（点击弹窗） ============ */
+/* ======================= 主挂载（点击弹窗版） ======================= */
 export async function mountTimeline(container, overrides = {}) {
   if (!container) { console.error('mountTimeline: 容器不存在'); return; }
   if (!window.vis || !window.vis.Timeline || !window.vis.DataSet) {
@@ -146,24 +210,24 @@ export async function mountTimeline(container, overrides = {}) {
     return;
   }
 
-  window.__timeline = null;
-  window.__timelineItems = null;
-
+  // loading
   const loading = createLoadingOverlay();
   const originalPosition = container.style.position;
   const needRel = getComputedStyle(container).position === 'static';
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  let timeline = null, items = null, resizeHandler = null;
+  // 样式作用域（按 UI 配置注入）
+  injectScopedStyles(container, UI);
 
-  function destroy(){
+  let timeline = null, items = null;
+  let resizeHandler = null;
+
+  function destroy() {
     try { if (resizeHandler) window.removeEventListener('resize', resizeHandler); } catch {}
     try { timeline?.destroy && timeline.destroy(); } catch {}
     try { container.contains(loading) && loading.remove(); } catch {}
     if (needRel) container.style.position = originalPosition || '';
-    window.__timeline = null;
-    window.__timelineItems = null;
   }
 
   try {
@@ -173,33 +237,41 @@ export async function mountTimeline(container, overrides = {}) {
       container.innerHTML = '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">接口返回 0 条记录。</div>';
       return { timeline: null, items: null, destroy };
     }
-    const mapped = data.map((evt,i)=>normalizeEvent(evt,i));
+    const mapped = data.map((evt, i) => normalizeEvent(evt, i));
     items = new window.vis.DataSet(mapped);
-    window.__timelineItems = items;
 
+    // 自动时间范围（带缓冲）
     const tvals = mapped.map(it => toMs(it.start ?? it.end)).filter(Number.isFinite);
     let startDate, endDate;
     if (tvals.length) {
       const minT = Math.min(...tvals), maxT = Math.max(...tvals);
-      const DAY=86400000, pad=Math.max(7*DAY, Math.round((maxT-minT)*0.05));
+      const DAY = 86400000, pad = Math.max(7 * DAY, Math.round((maxT - minT) * 0.05));
       startDate = new Date(minT - pad); endDate = new Date(maxT + pad);
     }
 
-    const baseDefaults = {
+    // vis 选项（由 UI 配置驱动，可用 overrides 覆盖）
+    const baseOptions = {
+      // 画布高度：用 minHeight/maxHeight 固定
+      minHeight: UI.canvas.height,
+      maxHeight: UI.canvas.height,
+
+      // 事件框上下位置 & 轴位置
+      orientation: { item: UI.layout.itemPosition, axis: UI.layout.axisPosition },
+
+      // 事件框最小竖直间距
+      margin: { item: UI.layout.verticalItemGap, axis: 50 },
+
+      // 布局 & 交互
       locale: 'zh-cn',
       editable: false,
-      margin: { item: 10, axis: 50 },
-      orientation: { axis: 'bottom', item: 'bottom' },
-      // ❌ 不配置 tooltip，且 item 不含 title => 不会出现 hover 提示
-      verticalScroll: true,
-      zoomKey: 'ctrlKey',
-      stack: true,
+      stack: UI.layout.stack,
+      verticalScroll: UI.zoom.verticalScroll,
+      zoomKey: UI.zoom.key,
+
+      // 模板：强制只显示标题
       template: (item, element) => {
         const host = element?.closest?.('.vis-item') || element;
-        if (host && window.__styleEngine) {
-          window.__styleEngine.attachEventDataAttrs(host, item);
-          host.classList.add('event');
-        }
+        if (host) host.classList.add('event'); // 标记便于样式作用域命中
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
@@ -208,45 +280,38 @@ export async function mountTimeline(container, overrides = {}) {
         return root;
       }
     };
-    const options = mergeOptions(baseDefaults, overrides);
+    const options = { ...baseOptions, ...overrides };
     if (startDate) options.start = startDate;
     if (endDate) options.end = endDate;
 
+    // 创建时间轴
     const vis = window.vis;
     timeline = new vis.Timeline(container, items, options);
-    window.__timeline = timeline;
 
-    // ===== 点击弹窗（自绘） =====
-    function ensurePopover(){
+    /* ===== 点击弹窗（自绘） ===== */
+    function ensurePopover() {
       let pop = container.querySelector('#event-popover');
       if (!pop) {
         pop = document.createElement('div');
         pop.id = 'event-popover';
-        pop.style.cssText = [
-          'position:absolute','z-index:1000','background:#fff',
-          'border:1px solid #e5e7eb','box-shadow:0 8px 24px rgba(0,0,0,.15)',
-          'border-radius:10px','padding:12px','overflow:auto','pointer-events:auto',
-          'min-width:280px','min-height:140px','max-width:520px','max-height:60vh',
-          'font-size:14px','line-height:1.5','display:none'
-        ].join(';');
         container.appendChild(pop);
       }
       return pop;
     }
     const pop = ensurePopover();
     let currentAnchor = null;
-    function hidePopover(){ pop.style.display='none'; currentAnchor=null; }
+    function hidePopover() { pop.style.display = 'none'; currentAnchor = null; }
 
-    function findAnchorFromProps(props){
+    function findAnchorFromProps(props) {
       const t = props?.event?.target;
       const hit = t && t.closest ? t.closest('.vis-item') : null;
       if (hit) return hit;
       if (props?.item == null) return null;
-      const idSel = (window.CSS && CSS.escape) ? CSS.escape(String(props.item)) : String(props.item).replace(/"/g,'\\"');
+      const idSel = (window.CSS && CSS.escape) ? CSS.escape(String(props.item)) : String(props.item).replace(/"/g, '\\"');
       return container.querySelector(`.vis-item[data-id="${idSel}"]`);
     }
 
-    function showPopoverOverItem(props){
+    function showPopoverOverItem(props) {
       const anchor = findAnchorFromProps(props);
       if (!anchor) return;
       const dsItem = items.get(props.item);
@@ -255,9 +320,9 @@ export async function mountTimeline(container, overrides = {}) {
       const cb = container.getBoundingClientRect();
       const ib = anchor.getBoundingClientRect();
 
-      const MIN_W=280, MIN_H=140;
-      const MAX_W=Math.min(520, container.clientWidth);
-      const MAX_H=Math.min(container.clientHeight*0.6, 600);
+      const MIN_W = 280, MIN_H = 140;
+      const MAX_W = Math.min(520, container.clientWidth);
+      const MAX_H = Math.min(container.clientHeight * 0.6, 600);
 
       let left = ib.left - cb.left + container.scrollLeft;
       let top  = ib.top  - cb.top  + container.scrollTop;
@@ -282,7 +347,7 @@ export async function mountTimeline(container, overrides = {}) {
       showPopoverOverItem(props);
     });
 
-    function outsideClickHandler(e){
+    function outsideClickHandler(e) {
       if (pop.style.display === 'none') return;
       const inPop = pop.contains(e.target);
       const onAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(e.target);
@@ -290,6 +355,7 @@ export async function mountTimeline(container, overrides = {}) {
     }
     document.addEventListener('mousedown', outsideClickHandler);
 
+    // 重绘时隐藏弹窗，避免错位
     resizeHandler = () => { timeline.redraw(); hidePopover(); };
     window.addEventListener('resize', resizeHandler);
 
