@@ -1,15 +1,12 @@
 // src/timeline/mount.js
-// ✅ 职责：创建并挂载 vis Timeline；只负责渲染与交互
-// 依赖：fetchAndNormalize() 返回“原始事件数组”（可是你接口直返的数据）
-// 提供：mountTimeline(container, overrides?)、默认导出；并暴露调试句柄到 window
+// ✅ 只负责创建并挂载 vis Timeline（不处理悬停/点击弹窗）
+// 关键修复：事件卡片只显示“事件名称”（content = title），
+//           其它详情放在 item.title（结构化 <dl>），彻底避免把整块 blob 渲染到卡片上。
 
 import { fetchAndNormalize } from './fetch.js';
 
-// ======================
-// ===== 小工具区 =======
-// ======================
-
-function log(...args) { try { console.log('[timeline]', ...args); } catch {} }
+/* ============ 小工具 ============ */
+const log = (...a) => { try { console.log('[timeline]', ...a); } catch {} };
 
 // 浅合并（仅一层），满足 vis options 的常见结构
 function mergeOptions(...objs) {
@@ -37,8 +34,7 @@ function asDisplay(v) {
   return s ? s : '—';
 }
 
-// —— 从中文多行 blob 解析字段 ——
-// 支持 “字段名：值”，中文或英文冒号；用“下一个字段名 / 结尾”做前瞻截断，杜绝串行
+// 从中文多行 blob 解析字段（“字段名：值”，中文/英文冒号；以前瞻“下一个字段名/结尾”截断，避免串行）
 const FIELD_LABELS = ['事件名称','事件类型','时间','状态','地区','平台类型','主机类型','公司','标签','描述','贡献者'];
 function parseBlobFields(blob) {
   const s = toPlain(blob);
@@ -73,7 +69,7 @@ function normalizeTags(v) {
   return String(v).split(',').map(s => s.trim()).filter(Boolean);
 }
 
-// 结构化弹窗（<dl> 行排版，空值用 “—”，从结构上杜绝串行）
+// 结构化详情 HTML（<dl> 行排版，空值用 “—”，从结构上杜绝串行）
 function buildKvHTML(obj) {
   const kv = [
     ['事件名称', obj.title],
@@ -116,20 +112,27 @@ function toMs(tsLike) {
   return Number.isFinite(n) ? n : NaN;
 }
 
-// =============== 数据映射核心（修复点） ===============
-// 把“原始事件 event” → “vis item”，并在此阶段解析 blob、回填字段、生成结构化弹窗 HTML
+/* ====== 数据映射核心（只让卡片显示“事件名称”） ====== */
 function normalizeEvent(event, i) {
-  const fallbackContent = event.content ?? event.Title ?? '';
   const Start = event.Start ?? event.start ?? '';
   const End   = event.End   ?? event.end   ?? '';
-  const blob  = (event.title || event.content || '').toString(); // content/title 任意处都尝试
+  const blob  = (event.title || event.content || '').toString();
 
+  // 先解析 blob
   const parsed = parseBlobFields(blob);
 
-  const title = toPlain(event.Title) || parsed['事件名称'] || toPlain(event.title) || toPlain(event.content) || '(无标题)';
+  // 事件名称（优先顺序：显式 Title -> blob 的“事件名称” -> title 文本 -> content 文本 -> 兜底）
+  const title = toPlain(event.Title)
+             || parsed['事件名称']
+             || toPlain(event.title)
+             || toPlain(event.content)
+             || '(无标题)';
+
+  // 时间
   const start = Start || parsed.__start || '';
   const end   = End   || parsed.__end   || '';
 
+  // 其它字段（显式优先，其次 blob）
   const EventType       = event.EventType       ?? event.eventType       ?? parsed['事件类型'] ?? '';
   const Region          = event.Region          ?? event.region          ?? parsed['地区'] ?? '';
   const Platform        = event.Platform        ?? event.platform        ?? parsed['平台类型'] ?? '';
@@ -142,7 +145,10 @@ function normalizeEvent(event, i) {
   const TagRaw = event.Tag ?? event.tag ?? parsed['标签'] ?? '';
   const Tag = normalizeTags(TagRaw);
 
-  const contentText = fallbackContent || title;
+  // ✅ 关键：事件卡片文字只用“事件名称”
+  const contentText = title;
+
+  // 详情用结构化 HTML
   const detailHTML = buildKvHTML({
     title, start, end, EventType, Region, Platform, Company,
     ConsolePlatform, Tag, Description: Desc, Contributor: Contrib, Status
@@ -150,20 +156,18 @@ function normalizeEvent(event, i) {
 
   return {
     id: event.id || `auto-${i + 1}`,
-    content: contentText || title,
+    content: contentText,          // ← 卡片只显示事件名称
     start: start || undefined,
     end: end || undefined,
-    title: detailHTML,               // 👈 弹窗/tooltip 用结构化 HTML，不再用原 blob
+    title: detailHTML,             // ← 详情/tooltip：结构化 HTML（安全、不会串行）
+    titleText: title,              // ← 供 template 强制使用标题时可用
     EventType, Region, Platform, Company, Status, ConsolePlatform,
     Tag,
-    __raw: event                     // 调试保留
+    __raw: event
   };
 }
 
-// ======================
-// ===== 主挂载流 =======
-// ======================
-
+/* ============ 主挂载流 ============ */
 export async function mountTimeline(container, overrides = {}) {
   log('mountTimeline start');
 
@@ -219,7 +223,7 @@ export async function mountTimeline(container, overrides = {}) {
   }
 
   try {
-    // 取数（允许你在 fetchAndNormalize 内直接返回接口数据，本函数负责映射）
+    // 取数（允许 fetchAndNormalize 直接返回接口数组，这里做映射）
     const rawData = await fetchAndNormalize();
     const data = Array.isArray(rawData) ? rawData : [];
     if (data.length === 0) {
@@ -228,7 +232,6 @@ export async function mountTimeline(container, overrides = {}) {
       return { timeline: null, items: null, destroy, setItems, setOptions };
     }
 
-    // —— 关键：在此映射并生成结构化弹窗 —— //
     const mapped = data.map((evt, i) => normalizeEvent(evt, i));
 
     items = new window.vis.DataSet(mapped);
@@ -258,6 +261,7 @@ export async function mountTimeline(container, overrides = {}) {
       verticalScroll: true,
       zoomKey: "ctrlKey",
       stack: true,
+      // ⚠️ 即使有人把 content 塞成了长文本，这里也强制只渲染“标题”
       template: (item, element) => {
         const host = element?.closest?.('.vis-item') || element;
         if (host && window.__styleEngine) {
@@ -267,7 +271,7 @@ export async function mountTimeline(container, overrides = {}) {
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
-        h4.textContent = item.content || '(无标题)';
+        h4.textContent = item.titleText || item.content || '(无标题)'; // ← 只用标题
         root.appendChild(h4);
         return root;
       }
@@ -281,101 +285,9 @@ export async function mountTimeline(container, overrides = {}) {
     timeline = new vis.Timeline(container, items, options);
     window.__timeline = timeline;
 
-    // ============== 点击弹窗（仅点击，无悬停） ==============
-    function ensurePopover() {
-      let pop = container.querySelector('#event-popover');
-      if (!pop) {
-        pop = document.createElement('div');
-        pop.id = 'event-popover';
-        pop.style.cssText = [
-          'position:absolute','z-index:1000','background:#fff',
-          'border:1px solid #e5e7eb','box-shadow:0 8px 24px rgba(0,0,0,.15)',
-          'border-radius:10px','padding:12px','overflow:auto','pointer-events:auto',
-          'min-width:280px','min-height:140px','max-width:520px','max-height:60vh',
-          'font-size:14px','line-height:1.5','display:none'
-        ].join(';');
-        container.appendChild(pop);
-      }
-      return pop;
-    }
-    const pop = ensurePopover();
-    let currentAnchor = null;
-
-    function hidePopover(){ pop.style.display = 'none'; currentAnchor = null; }
-
-    function findAnchorFromProps(props){
-      const t = props?.event?.target;
-      const hit = t && t.closest ? t.closest('.vis-item') : null;
-      if (hit) return hit;
-      if (props?.item == null) return null;
-      const idSel = (window.CSS && CSS.escape) ? CSS.escape(String(props.item)) : String(props.item).replace(/"/g,'\\"');
-      return container.querySelector(`.vis-item[data-id="${idSel}"]`);
-    }
-
-    function showPopoverOverItem(props){
-      const anchor = findAnchorFromProps(props);
-      if (!anchor) return;
-
-      // 用我们映射阶段生成的结构化 HTML
-      const dsItem = items.get(props.item);
-      pop.innerHTML = dsItem?.title || buildKvHTML({
-        title: dsItem?.content || '(无标题)',
-        start: dsItem?.start, end: dsItem?.end,
-        EventType: dsItem?.EventType, Region: dsItem?.Region,
-        Platform: dsItem?.Platform, Company: dsItem?.Company,
-        ConsolePlatform: dsItem?.ConsolePlatform, Tag: dsItem?.Tag,
-        Description: dsItem?.Description, Contributor: dsItem?.Contributor
-      });
-
-      const cb = container.getBoundingClientRect();
-      const ib = anchor.getBoundingClientRect();
-
-      const MIN_W = 280, MIN_H = 140;
-      const MAX_W = Math.min(520, container.clientWidth);
-      const MAX_H = Math.min(container.clientHeight * 0.6, 600);
-
-      let left = ib.left - cb.left + container.scrollLeft;
-      let top  = ib.top  - cb.top  + container.scrollTop;
-      let width  = Math.min(Math.max(ib.width,  MIN_W), MAX_W);
-      let height = Math.min(Math.max(ib.height, MIN_H), MAX_H);
-
-      const maxLeft = container.scrollLeft + (container.clientWidth  - width  - 8);
-      const maxTop  = container.scrollTop  + (container.clientHeight - height - 8);
-      left = Math.max(container.scrollLeft, Math.min(left, maxLeft));
-      top  = Math.max(container.scrollTop,  Math.min(top,  maxTop));
-
-      pop.style.left = left + 'px';
-      pop.style.top = top + 'px';
-      pop.style.width = width + 'px';
-      pop.style.height = height + 'px';
-      pop.style.display = 'block';
-      currentAnchor = anchor;
-    }
-
-    timeline.on('click', (props) => {
-      if (!props || props.item == null) { hidePopover(); return; }
-      showPopoverOverItem(props);
-    });
-
-    function outsideClickHandler(e) {
-      if (pop.style.display === 'none') return;
-      const inPop = pop.contains(e.target);
-      const onAnchor = currentAnchor && currentAnchor.contains && currentAnchor.contains(e.target);
-      if (!inPop && !onAnchor) hidePopover();
-    }
-    document.addEventListener('mousedown', outsideClickHandler);
-
     // 自适应
-    resizeHandler = () => { timeline.redraw(); hidePopover(); };
+    resizeHandler = () => { timeline.redraw(); };
     window.addEventListener('resize', resizeHandler);
-
-    // 完整销毁
-    const _destroy = destroy;
-    destroy = function () {
-      document.removeEventListener('mousedown', outsideClickHandler);
-      hidePopover();
-      _destroy();
-    };
 
     window.__timelineInit = 'mounted';
     log('mounted with items:', items.get().length);
