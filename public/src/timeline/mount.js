@@ -36,7 +36,7 @@ const UI = {
   layout: {
     itemPosition: 'bottom', // 'top' | 'bottom'：事件框在轴线的上下位置
     axisPosition: 'bottom', // 'top' | 'bottom'：时间轴位置
-    verticalItemGap: 10,    // px：事件框最小竖直间距（vis 的 margin.item）
+    verticalItemGap: 5,    // px：事件框最小竖直间距（vis 的 margin.item）
     stack: true,            // 事件是否允许堆叠
   },
   zoom: {
@@ -262,7 +262,7 @@ export async function mountTimeline(container, overrides = {}) {
       margin: { item: UI.layout.verticalItemGap, axis: 50 },
 
       // 布局 & 交互
-      locale: 'zh-cn',
+      locale: 'en',
       editable: false,
       stack: UI.layout.stack,
       verticalScroll: UI.zoom.verticalScroll,
