@@ -46,6 +46,23 @@ function toMs(tsLike) {
   const n = +new Date(tsLike);
   return Number.isFinite(n) ? n : NaN;
 }
+/** 将空值统一成占位符，防止相邻行黏连 */
+function asDisplay(v) {
+  if (v == null) return '—';
+  const s = String(v).trim();
+  return s === '' ? '—' : s;
+}
+
+/** 生成一行 <dt><dd>，保证结构完整，不会互相吞并 */
+function row(label, value) {
+  const vv = asDisplay(value);
+  return `
+    <div class="kv-row" style="display:flex;align-items:flex-start;gap:8px;">
+      <dt class="kv-key" style="min-width:84px;flex:0 0 auto;font-weight:600;">${escapeHtml(label)}</dt>
+      <dd class="kv-val" style="margin:0;white-space:pre-wrap;word-break:break-word;">${escapeHtml(vv)}</dd>
+    </div>
+  `;
+}
 
 /** 将任意输入转成“去标签的纯文本” */
 function toPlainText(x) {
@@ -322,10 +339,10 @@ function normalizeTags(v) {
 
 // ✅ 替换原来的 buildDetailHTML
 function buildDetailHTML(item) {
-  // 优先保留你旧数据里已有的 HTML（如之前做过 tooltip 拼装）
-  if (typeof item?.title === 'string' && item.title.trim()) {
-    return item.title;
-  }
+  // 🚫 不再信任旧的 item.title HTML，避免结构不闭合/把下个属性名吞进去
+  // if (typeof item?.title === 'string' && item.title.trim()) {
+  //   return item.title;
+  // }
 
   // 读取字段（多路兜底 + 从 blob 提取）
   const evtType = readField(item, ['EventType'], '事件类型');
@@ -338,31 +355,30 @@ function buildDetailHTML(item) {
   const tagsRaw = readField(item, ['Tag', 'Tags'], '标签');
   const tags    = Array.isArray(tagsRaw) ? tagsRaw : normalizeTags(tagsRaw);
 
-  const kv = (k, v) =>
-    v == null || v === '' ? '' : `<div><strong>${escapeHtml(k)}：</strong>${escapeHtml(String(v))}</div>`;
+  const titleText = resolveTitle(item);
+  const startText = item.start ?? '';
+  const endText   = item.end ?? '';
+  const tagText   = tags.length ? tags.join('，') : '';
 
-  // 统一标题仍用 resolveTitle（已做多路兜底）
-  const parts = [];
-  parts.push(kv('事件名称', resolveTitle(item)));
-  if (item.start) parts.push(kv('开始时间', item.start));
-  if (item.end)   parts.push(kv('结束时间', item.end));
-  parts.push(kv('事件类型', evtType));
-  parts.push(kv('地区', region));
-  parts.push(kv('平台类型', plat));
-  parts.push(kv('主机类型', cplat));
-  parts.push(kv('公司', company));
-  if (tags.length) parts.push(kv('标签', tags.join('，')));
-  parts.push(kv('描述', desc));
-  parts.push(kv('贡献者', contr));
-
-  // 少量样式微调：标题更醒目
+  // 用 <dl> + 每行一个容器，彻底避免“下一属性名进来当值”
   return `
-    <div style="font-weight:600;margin-bottom:6px">${escapeHtml(resolveTitle(item))}</div>
-    <div style="font-size:13px;line-height:1.6">
-      ${parts.join('')}
-    </div>
+    <div style="font-weight:700;margin-bottom:8px">${escapeHtml(asDisplay(titleText))}</div>
+    <dl class="kv" style="display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.6;">
+      ${row('事件名称', titleText)}
+      ${row('开始时间', startText)}
+      ${row('结束时间', endText)}
+      ${row('事件类型', evtType)}
+      ${row('地区', region)}
+      ${row('平台类型', plat)}
+      ${row('主机类型', cplat)}
+      ${row('公司', company)}
+      ${row('标签', tagText)}
+      ${row('描述', desc)}
+      ${row('贡献者', contr)}
+    </dl>
   `;
 }
+
 
 
     // 利用点击事件的 target 来定位，失败时再回退到 data-id 查询
