@@ -6,6 +6,17 @@
 //   事件框上下位置、轴位置、最小间距（竖直间距）、是否堆叠、缩放键等
 
 import { fetchAndNormalize } from './fetch.js';
+// public/src/mount.js（示意片段）
+import { initFilterUI } from './filter/filter-ui.js';
+
+// …你的 timeline 初始化逻辑完成后：
+initFilterUI({ beforeElSelector: '#timeline' });
+
+// （可选）先监听一下事件，确认按键能正常发出信号
+window.addEventListener('filter:add-rule', () => console.log('[filter] add rule'));
+window.addEventListener('filter:reset', () => console.log('[filter] reset'));
+window.addEventListener('filter:set-logic', (e) => console.log('[filter] logic =', e.detail.mode));
+window.addEventListener('filter:close-ui', () => console.log('[filter] close ui'));
 
 /* ----------------------------------------------------------------
  * 🧩 显示参数配置区（你主要调整这里）
