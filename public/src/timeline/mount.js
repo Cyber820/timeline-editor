@@ -1,4 +1,4 @@
-// src/timeline/mount.js
+// public/src/timeline/mount.js
 // ✅ 版本要点：
 // - 仅“点击弹窗”，无悬停 tooltip（不设置 item.title，不配置 options.tooltip）
 // - 事件卡片只显示“事件名称”
@@ -6,17 +6,7 @@
 //   事件框上下位置、轴位置、最小间距（竖直间距）、是否堆叠、缩放键等
 
 import { fetchAndNormalize } from './fetch.js';
-// public/src/mount.js（示意片段）
-import { initFilterUI } from './filter/filter-ui.js';
-
-// …你的 timeline 初始化逻辑完成后：
-initFilterUI({ beforeElSelector: '#timeline' });
-
-// （可选）先监听一下事件，确认按键能正常发出信号
-window.addEventListener('filter:add-rule', () => console.log('[filter] add rule'));
-window.addEventListener('filter:reset', () => console.log('[filter] reset'));
-window.addEventListener('filter:set-logic', (e) => console.log('[filter] logic =', e.detail.mode));
-window.addEventListener('filter:close-ui', () => console.log('[filter] close ui'));
+import { initFilterUI } from '../filter/filter-ui.js';
 
 /* ----------------------------------------------------------------
  * 🧩 显示参数配置区（你主要调整这里）
@@ -35,24 +25,24 @@ window.addEventListener('filter:close-ui', () => console.log('[filter] close ui'
  * ---------------------------------------------------------------- */
 const UI = {
   canvas: {
-    height: 1000,            // px：画布高度
+    height: 1000,
   },
   item: {
-    fontSize: 10,           // px：事件标题字号
-    paddingX: 10,           // px：左右内边距
-    paddingY: 6,            // px：上下内边距
-    borderRadius: 10,       // px：圆角
-    maxWidth: 320,          // px：最大宽度（防止内容过长）
+    fontSize: 10,
+    paddingX: 10,
+    paddingY: 6,
+    borderRadius: 10,
+    maxWidth: 320,
   },
   layout: {
-    itemPosition: 'bottom', // 'top' | 'bottom'：事件框在轴线的上下位置
-    axisPosition: 'bottom', // 'top' | 'bottom'：时间轴位置
-    verticalItemGap: 5,    // px：事件框最小竖直间距（vis 的 margin.item）
-    stack: true,            // 事件是否允许堆叠
+    itemPosition: 'bottom', // 'top' | 'bottom'
+    axisPosition: 'bottom', // 'top' | 'bottom'
+    verticalItemGap: 5,     // px
+    stack: true,
   },
   zoom: {
     key: 'ctrlKey',         // 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'
-    verticalScroll: true,   // 是否允许垂直滚动
+    verticalScroll: true,
   },
 };
 
@@ -63,7 +53,6 @@ const asDisplay = (v) => {
   return s ? s : '—';
 };
 
-// 解析中文多行 blob：支持“字段名：值”，中文/英文冒号；以前瞻“下一个字段名/结尾”截断，避免串行
 const FIELD_LABELS = ['事件名称', '事件类型', '时间', '状态', '地区', '平台类型', '主机类型', '公司', '标签', '描述', '贡献者'];
 function parseBlobFields(blob) {
   const s = toPlain(blob);
@@ -87,11 +76,13 @@ function parseBlobFields(blob) {
   }
   return out;
 }
+
 function normalizeTags(v) {
   if (!v && v !== 0) return [];
   if (Array.isArray(v)) return v.filter(Boolean);
   return String(v).split(',').map(s => s.trim()).filter(Boolean);
 }
+
 function buildKvHTML(obj) {
   const kv = [
     ['事件名称', obj.title],
@@ -117,6 +108,7 @@ function buildKvHTML(obj) {
     <dl class="kv" style="display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.6;">${rows}</dl>
   `;
 }
+
 function createLoadingOverlay() {
   const el = document.createElement('div');
   el.setAttribute('role', 'status');
@@ -126,6 +118,7 @@ function createLoadingOverlay() {
     'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
   return el;
 }
+
 function toMs(tsLike) { if (typeof tsLike === 'number') return tsLike; const n = +new Date(tsLike); return Number.isFinite(n) ? n : NaN; }
 
 // 将 UI 配置注入为“容器级作用域样式”
@@ -214,11 +207,26 @@ function normalizeEvent(event, i) {
 }
 
 /* ======================= 主挂载（点击弹窗版） ======================= */
+/**
+ * @param {HTMLElement|string} container - 容器元素或选择器，如 '#timeline'
+ * @param {Object} overrides - 可选的 vis 选项覆盖
+ * @returns {Promise<{timeline: any, items: any, destroy: Function}>}
+ */
 export async function mountTimeline(container, overrides = {}) {
-  if (!container) { console.error('mountTimeline: 容器不存在'); return; }
+  // 允许传入 CSS 选择器
+  if (typeof container === 'string') {
+    const node = document.querySelector(container);
+    if (!node) {
+      console.error('mountTimeline: 未找到容器选择器：', container);
+      return { timeline: null, items: null, destroy: () => {} };
+    }
+    container = node;
+  }
+
+  if (!container) { console.error('mountTimeline: 容器不存在'); return { timeline: null, items: null, destroy: () => {} }; }
   if (!window.vis || !window.vis.Timeline || !window.vis.DataSet) {
     container.innerHTML = '<div style="padding:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">vis.js 未加载，请检查脚本引入顺序。</div>';
-    return;
+    return { timeline: null, items: null, destroy: () => {} };
   }
 
   // loading
@@ -230,6 +238,16 @@ export async function mountTimeline(container, overrides = {}) {
 
   // 样式作用域（按 UI 配置注入）
   injectScopedStyles(container, UI);
+
+  // 初始化“过滤/筛选”按钮 UI（插在时间轴容器前）
+  const beforeSelector = container.id ? `#${container.id}` : '#timeline';
+  initFilterUI({ beforeElSelector: beforeSelector });
+
+  // （可选）监听事件，确认按键能正常发出信号（后续步骤接逻辑）
+  window.addEventListener('filter:add-rule', () => console.log('[filter] add rule'));
+  window.addEventListener('filter:reset', () => console.log('[filter] reset'));
+  window.addEventListener('filter:set-logic', (e) => console.log('[filter] logic =', e?.detail?.mode));
+  window.addEventListener('filter:close-ui', () => console.log('[filter] close ui'));
 
   let timeline = null, items = null;
   let resizeHandler = null;
@@ -262,7 +280,7 @@ export async function mountTimeline(container, overrides = {}) {
 
     // vis 选项（由 UI 配置驱动，可用 overrides 覆盖）
     const baseOptions = {
-      // 画布高度：用 minHeight/maxHeight 固定
+      // 固定画布高度
       minHeight: UI.canvas.height,
       maxHeight: UI.canvas.height,
 
@@ -367,8 +385,9 @@ export async function mountTimeline(container, overrides = {}) {
     document.addEventListener('mousedown', outsideClickHandler);
 
     // 重绘时隐藏弹窗，避免错位
-    resizeHandler = () => { timeline.redraw(); hidePopover(); };
-    window.addEventListener('resize', resizeHandler);
+    const resizeHandlerImpl = () => { timeline.redraw(); hidePopover(); };
+    resizeHandler = resizeHandlerImpl;
+    window.addEventListener('resize', resizeHandlerImpl);
 
     return { timeline, items, destroy };
   } catch (err) {
