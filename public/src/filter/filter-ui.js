@@ -57,8 +57,8 @@ export function initFilterUI({
         <button type="button" class="tl-btn" data-action="reset">复原过滤/筛选标准</button>
       </div>
       <div class="tl-filter-panel__row">
-        <button type="button" class="tl-btn" data-action="and">用和逻辑过滤/筛选</button>
-        <button type="button" class="tl-btn" data-action="or">用或逻辑过滤/筛选</button>
+        <button type="button" class="tl-btn" data-action="and">用和“逻”辑过滤/筛选</button>
+        <button type="button" class="tl-btn" data-action="or">用“或”逻辑过滤/筛选</button>
       </div>
 
       <!-- ✅ 已选规则清单 -->
