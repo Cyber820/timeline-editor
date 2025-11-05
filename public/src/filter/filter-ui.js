@@ -1,12 +1,11 @@
 // public/src/filter/filter-ui.js
-// 面板：主按钮 + 子面板（新增过滤规则）
+// 面板：主按钮 + 子面板（新增过滤规则）+ 已选规则清单
 // 事件：
-// - 'filter:add-rule'                → 打开新增规则子面板
-// - 'filter:add-rule:confirm'        → { key, values } 确认新增/更新规则
-// - 'filter:reset' / 'filter:set-logic' / 'filter:close-ui' 同之前
-//
-// 依赖（可选）：无须第三方，多选与检索为原生实现
-import { getOptionKeys, getOptionsForKey } from './filter-engine.js';
+// - 'filter:add-rule'                 → 打开新增规则子面板
+// - 'filter:add-rule:confirm'         → { key, values } 仅更新规则，不立刻应用
+// - 'filter:remove-rule'              → { key } 清空该属性已选项（仅更新规则）
+// - 'filter:reset' / 'filter:set-logic' / 'filter:close-ui'
+import { getOptionKeys, getOptionsForKey, keyToLabel } from './filter-engine.js';
 
 export function initFilterUI({
   beforeElSelector = '#timeline',
@@ -62,6 +61,9 @@ export function initFilterUI({
         <button type="button" class="tl-btn" data-action="or">用或逻辑过滤/筛选</button>
       </div>
 
+      <!-- ✅ 已选规则清单 -->
+      <div id="tl-rule-summary" class="tl-rule-summary"></div>
+
       <!-- 子面板：新增规则 -->
       <div class="tl-filter-builder" id="tl-filter-builder" hidden>
         <div class="tl-filter-builder__row">
@@ -87,7 +89,7 @@ export function initFilterUI({
     `;
     document.body.appendChild(panel);
 
-    // 事件委托（主按钮们）
+    // 主按钮事件
     panel.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -102,10 +104,12 @@ export function initFilterUI({
       } else if (action === 'or') {
         window.dispatchEvent(new CustomEvent('filter:set-logic', { detail: { mode: 'OR' } }));
       } else if (action === 'confirm') {
+        // ✅ 仅更新规则，不立刻应用
         const { key, values } = readBuilder();
         if (key && values.length) {
           window.dispatchEvent(new CustomEvent('filter:add-rule:confirm', { detail: { key, values } }));
-          hideBuilder(); // 保留面板，关闭子面板
+          hideBuilder();
+          renderRuleSummary(); // 立刻刷新右侧规则清单
         }
       } else if (action === 'cancel') {
         hideBuilder();
@@ -124,18 +128,26 @@ export function initFilterUI({
       hidePanel();
     });
 
-    // 监听外部“打开新增规则”
+    // 外部事件：打开新增规则
     window.addEventListener('filter:add-rule', () => openBuilder());
 
-    // 搜索
-    panel.querySelector('#tl-search').addEventListener('input', () => {
-      refreshOptions();
-    });
+    // 外部状态更新（来自 state.js）
+    window.addEventListener('filter:state:updated', () => renderRuleSummary());
 
-    // 属性切换
+    // 搜索与属性切换
+    panel.querySelector('#tl-search').addEventListener('input', () => refreshOptions());
     panel.querySelector('#tl-attr-select').addEventListener('change', () => {
       refreshOptions(true);
-      restoreCheckedFromExistingRule(); // 同属性时回显已选
+      restoreCheckedFromExistingRule();
+    });
+
+    // 清单里的“×”按钮（清空该属性）
+    panel.addEventListener('click', (e) => {
+      const x = e.target.closest('button[data-clear-key]');
+      if (!x) return;
+      const key = x.getAttribute('data-clear-key');
+      window.dispatchEvent(new CustomEvent('filter:remove-rule', { detail: { key } }));
+      renderRuleSummary();
     });
 
     return panel;
@@ -146,8 +158,8 @@ export function initFilterUI({
     panel.classList.toggle('is-open');
     if (panel.classList.contains('is-open')) {
       positionPanel();
-      // 每次打开时，同步一下 builder 的可选属性与回显
       prepareAttrOptions();
+      renderRuleSummary();
     }
   }
 
@@ -165,6 +177,7 @@ export function initFilterUI({
     panel.style.left = `${rect.left + window.scrollX}px`;
   }
 
+  /* ---------- 新增规则子面板 ---------- */
   function openBuilder() {
     const panel = ensurePanel();
     prepareAttrOptions();
@@ -180,10 +193,9 @@ export function initFilterUI({
     const sel = ensurePanel().querySelector('#tl-attr-select');
     const keys = getOptionKeys();
     const current = sel.value;
-    sel.innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
+    // 用中文文案展示
+    sel.innerHTML = keys.map(k => `<option value="${k}">${keyToLabel(k)}</option>`).join('');
     if (keys.includes(current)) sel.value = current;
-
-    // 初次/无当前值→默认第一个
     if (!sel.value && keys.length) sel.value = keys[0];
     refreshOptions(true);
   }
@@ -193,7 +205,6 @@ export function initFilterUI({
     const key = ensurePanel().querySelector('#tl-attr-select').value;
     const exists = rules.find(r => r.key === key);
     if (!exists) return;
-    // 勾选现有 values
     const boxWrap = ensurePanel().querySelector('#tl-options');
     const checks = boxWrap.querySelectorAll('input[type="checkbox"][data-val]');
     const set = new Set((exists.values || []).map(v => String(v)));
@@ -222,7 +233,6 @@ export function initFilterUI({
     box.innerHTML = '';
     const frag = document.createDocumentFragment();
 
-    // 生成复选项
     options
       .filter(o => !search || String(o).toLowerCase().includes(search))
       .forEach(val => {
@@ -239,6 +249,31 @@ export function initFilterUI({
     box.appendChild(frag);
     if (resetScroll) box.scrollTop = 0;
   }
+
+  /* ---------- 已选规则清单 ---------- */
+  function renderRuleSummary() {
+    const host = ensurePanel().querySelector('#tl-rule-summary');
+    const rules = getCurrentRules() || [];
+    if (!rules.length) {
+      host.innerHTML = `<div class="tl-hint">（尚未添加任何过滤/筛选标准）</div>`;
+      return;
+    }
+    const html = rules.map(r => {
+      const chips = (r.values || []).map(v => `<span class="chip">${String(v)}</span>`).join('');
+      return `
+        <div class="rule-row">
+          <div class="rule-left">
+            <span class="rule-key">${keyToLabel(r.key)}</span>
+            <div class="rule-values">${chips || '<span class="chip chip--empty">（空）</span>'}</div>
+          </div>
+          <div class="rule-right">
+            <button type="button" class="tl-x" title="清空该属性" data-clear-key="${r.key}">×</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    host.innerHTML = `<div class="rule-list">${html}</div>`;
+  }
 }
 
 function ensureStylesInjected() {
@@ -246,34 +281,38 @@ function ensureStylesInjected() {
   const style = document.createElement('style');
   style.id = 'tl-filter-styles';
   style.textContent = `
-    .tl-toolbar {
-      display: flex; align-items: center; justify-content: flex-start;
-      gap: 8px; margin: 8px 0 12px;
-    }
+    .tl-toolbar { display:flex; align-items:center; gap:8px; margin:8px 0 12px; }
     .tl-filter-trigger, .tl-btn {
-      padding: 6px 12px; border-radius: 8px; border: 1px solid #ddd;
-      background: #fff; cursor: pointer; font-size: 14px; line-height: 1.2;
+      padding:6px 12px; border-radius:8px; border:1px solid #ddd; background:#fff; cursor:pointer; font-size:14px; line-height:1.2;
     }
-    .tl-filter-trigger:hover, .tl-btn:hover { background: #f7f7f7; }
-    .tl-btn--ghost { background: transparent; }
+    .tl-filter-trigger:hover, .tl-btn:hover { background:#f7f7f7; }
+    .tl-btn--ghost { background:transparent; }
 
     .tl-filter-panel {
-      position: absolute; top: 48px; left: 0; min-width: 320px; max-width: 92vw;
-      background: #fff; border: 1px solid #e5e5e5; border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 12px; display: none; z-index: 9999;
+      position:absolute; top:48px; left:0; min-width:360px; max-width:92vw; background:#fff;
+      border:1px solid #e5e5e5; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.12);
+      padding:12px; display:none; z-index:9999;
     }
-    .tl-filter-panel.is-open { display: block; }
-    .tl-filter-panel__row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-    .tl-filter-panel__row--end { justify-content: flex-end; margin-bottom: 0; }
+    .tl-filter-panel.is-open { display:block; }
+    .tl-filter-panel__row { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+    .tl-filter-panel__row--end { justify-content:flex-end; margin-bottom:0; }
 
-    /* builder */
-    .tl-filter-builder { border-top: 1px dashed #e5e7eb; padding-top: 10px; margin-top: 6px; }
-    .tl-filter-builder__row { display: flex; gap: 10px; align-items: center; margin: 8px 0; }
-    .tl-label { min-width: 72px; font-size: 13px; color: #374151; }
-    .tl-input { border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
-    .tl-multi { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 460px; }
-    .tl-options { border: 1px solid #e5e7eb; border-radius: 8px; max-height: 220px; overflow: auto; padding: 6px; display: grid; gap: 4px; grid-template-columns: 1fr 1fr; }
-    .tl-opt { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+    .tl-rule-summary { border-top:1px dashed #e5e7eb; padding-top:10px; margin-top:6px; }
+    .rule-list { display:flex; flex-direction:column; gap:6px; }
+    .rule-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:6px; border:1px solid #eef2f7; border-radius:8px; }
+    .rule-key { font-weight:600; color:#111827; margin-right:8px; }
+    .rule-values { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip { display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; font-size:12px; background:#f9fafb; }
+    .chip--empty { color:#6b7280; }
+    .tl-x { border:1px solid #e5e7eb; background:#fff; border-radius:6px; width:24px; height:24px; cursor:pointer; }
+
+    .tl-filter-builder { border-top:1px dashed #e5e7eb; padding-top:10px; margin-top:10px; }
+    .tl-filter-builder__row { display:flex; gap:10px; align-items:center; margin:8px 0; }
+    .tl-label { min-width:72px; font-size:13px; color:#374151; }
+    .tl-input { border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:13px; }
+    .tl-multi { display:flex; flex-direction:column; gap:6px; width:100%; max-width:480px; }
+    .tl-options { border:1px solid #e5e7eb; border-radius:8px; max-height:220px; overflow:auto; padding:6px; display:grid; gap:4px; grid-template-columns: 1fr 1fr; }
+    .tl-opt { display:flex; gap:6px; align-items:center; font-size:13px; }
   `;
   document.head.appendChild(style);
 }
