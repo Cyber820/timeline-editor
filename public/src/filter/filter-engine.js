@@ -1,14 +1,27 @@
 // public/src/filter/filter-engine.js
 // 过滤引擎：候选项生成 + 结果筛选（与 UI 解耦）
 
+// ✅ 英文 key ↔ 中文显示文案（用于 UI）
+export const KEY_LABEL = {
+  Region: '地区',
+  Platform: '平台类型',
+  ConsolePlatform: '主机类型',
+  EventType: '事件类型',
+  Company: '公司',
+  Tag: '标签',
+};
+export const LABEL_KEY = Object.fromEntries(Object.entries(KEY_LABEL).map(([k, v]) => [v, k]));
+export function keyToLabel(k) { return KEY_LABEL[k] || k; }
+export function labelToKey(l) { return LABEL_KEY[l] || l; }
+
 export function getOptionKeys() {
+  // 使用固定顺序，便于 UI 稳定展示
   return ['Region', 'Platform', 'ConsolePlatform', 'EventType', 'Company', 'Tag'];
 }
 
 export function normalizeValueByKey(key, v) {
   if (v == null) return '';
   if (key === 'Tag') {
-    // 可能是数组或逗号字符串
     if (Array.isArray(v)) return v.map(s => String(s).trim()).filter(Boolean);
     return String(v).split(',').map(s => s.trim()).filter(Boolean);
   }
@@ -42,7 +55,6 @@ function matchOne(item, rule) {
     return values.some(v => bag.has(String(v)));
   }
 
-  // 等值匹配（大小写严格，若要忽略大小写可统一 toLowerCase）
   const left = normalizeValueByKey(key, item[key]);
   const want = new Set(values.map(v => String(v).trim()));
   return want.has(left);
@@ -57,7 +69,7 @@ export function applyFilters(items = [], { logic = 'AND', rules = [] } = {}) {
     for (const r of rules) {
       const ok = matchOne(it, r);
       if (ok) {
-        if (!isAND) return true;  // OR：命中其一即可
+        if (!isAND) return true;  // OR：命中即保留
         hits++;
       } else if (isAND) {
         return false;             // AND：有一条未命中即淘汰
