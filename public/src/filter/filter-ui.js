@@ -1,4 +1,4 @@
-// public/src/filter/ui.js
+// public/src/filter/filter-ui.js
 // 作用：在时间轴上方插入“过滤/筛选”按钮；点击后弹出面板（含5个操作按钮）
 // 事件约定：
 // - window.dispatchEvent(new CustomEvent('filter:add-rule'))
@@ -12,7 +12,7 @@ export function initFilterUI({ beforeElSelector = '#timeline' } = {}) {
   // 找到插入位置（默认在 #timeline 之前插入工具条）
   const timelineEl = document.querySelector(beforeElSelector);
   if (!timelineEl) {
-    console.warn('[filter/ui] 未找到插入参考元素：', beforeElSelector);
+    console.warn('[filter-ui] 未找到插入参考元素：', beforeElSelector);
     return;
   }
 
@@ -62,6 +62,7 @@ export function initFilterUI({ beforeElSelector = '#timeline' } = {}) {
     `;
     document.body.appendChild(panel);
 
+    // 面板内按钮事件分发
     panel.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -128,55 +129,4 @@ function ensureStylesInjected() {
   if (document.getElementById('tl-filter-styles')) return;
   const style = document.createElement('style');
   style.id = 'tl-filter-styles';
-  style.textContent = `
-    .tl-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      margin: 8px 0 12px;
-    }
-    .tl-filter-trigger, .tl-btn {
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: 1px solid #ddd;
-      background: #fff;
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1.2;
-    }
-    .tl-filter-trigger:hover, .tl-btn:hover {
-      background: #f7f7f7;
-    }
-    .tl-btn--ghost {
-      background: transparent;
-    }
-
-    .tl-filter-panel {
-      position: absolute;
-      top: 48px;
-      left: 0;
-      min-width: 280px;
-      max-width: 92vw;
-      background: #fff;
-      border: 1px solid #e5e5e5;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-      padding: 12px;
-      display: none;
-      z-index: 9999;
-    }
-    .tl-filter-panel.is-open { display: block; }
-    .tl-filter-panel__row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-    }
-    .tl-filter-panel__row--end {
-      justify-content: flex-end;
-      margin-bottom: 0;
-    }
-  `;
-  document.head.appendChild(style);
-}
+  style.textContent
