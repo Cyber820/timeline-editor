@@ -4,7 +4,7 @@
 // - 事件卡片只显示“事件名称”
 // - 过滤逻辑分离：“确定”只更新规则，AND/OR 按钮才实际过滤
 // - 集成 filter-ui.js / filter-state.js / filter-engine.js
-// - ➕ 在“筛选/过滤”右侧插入 5 个样式按钮，点击打开你现有的样式面板（style-panel.js）
+// - ➕ 在“筛选/过滤”右侧插入 5 个样式按钮，点击打开你现有的样式面板（style-panel.js）并派发 te:open-style-panel
 
 import { fetchAndNormalize } from './fetch.js';
 import { initFilterUI } from '../filter/filter-ui.js';
@@ -18,7 +18,7 @@ import {
 } from '../filter/filter-state.js';
 import { applyFilters } from '../filter/filter-engine.js';
 
-// ✅ 复用你现有的样式面板与运行时内存（路径按你的目录结构）
+// ✅ 复用你现有的样式面板与运行时内存
 import { openStylePanel } from '../ui/style-panel.js';
 import { stateMem } from '../style/stateMem.js';
 
@@ -256,7 +256,7 @@ function findFilterButtonNear(container) {
 
 /**
  * 在“筛选/过滤”按钮右侧挂载 5 个样式按钮。
- * 点击后：设置 stateMem.currentStyleAttr，并打开你现有的样式面板（style-panel）。
+ * 点击后：设置 stateMem.currentStyleAttr，打开 style-panel，并派发 te:open-style-panel 让外部脚本显示窗口。
  */
 function mountStyleButtonsRightOfFilter(container) {
   injectStyleBtnCss();
@@ -275,8 +275,14 @@ function mountStyleButtonsRightOfFilter(container) {
       btn.addEventListener('click', () => {
         // 指定当前编辑的属性（EventType/Platform/...）
         stateMem.currentStyleAttr = def.field;
-        // 打开你的面板（style-panel.js 会自动把持久态注入 stateMem & 渲染表格）
+        // 打开你的面板（style-panel.js 会完成持久态注入 stateMem、表格重建等）
         openStylePanel({ selectorBase: '.vis-item.event', titleSelector: '.event-title' });
+        // 通知页面“显示面板”与“刷新视图模型”
+        window.dispatchEvent(new Event('te:open-style-panel'));
+        // 如你没有在页面脚本监听上面的事件，也可直接尝试调用全局钩子：
+        if (typeof window.__showStylePanel === 'function') {
+          try { window.__showStylePanel(); } catch {}
+        }
       });
       frag.appendChild(btn);
     });
@@ -336,7 +342,7 @@ function normalizeEvent(event, i) {
     id: event.id || `auto-${i + 1}`,
     content: title,
     start: start || undefined,
-    end: end || undefined,  // ✅
+    end: end || undefined,
     detailHtml,
     titleText: title,
     EventType,
@@ -441,7 +447,7 @@ export async function mountTimeline(container, overrides = {}) {
       getCurrentRules: () => getState().rules,
     });
 
-    /* 在“筛选/过滤”按钮右侧挂载 5 个样式按钮（点击打开 style-panel） */
+    /* 在“筛选/过滤”按钮右侧挂载 5 个样式按钮（点击打开 style-panel + 事件通知） */
     mountStyleButtonsRightOfFilter(container);
 
     /* ===== 点击弹窗 ===== */
