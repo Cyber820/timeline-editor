@@ -4,6 +4,7 @@
 // - 事件卡片只显示“事件名称”
 // - 过滤逻辑分离：“确定”只更新规则，AND/OR 按钮才实际过滤
 // - 集成 filter-ui.js / filter-state.js / filter-engine.js
+// - ➕ 新增：在“筛选/过滤”按钮右侧插入 5 个样式按钮（事件/平台/主机/公司/地区），并提供对应面板（仅UI骨架）
 
 import { fetchAndNormalize } from './fetch.js';
 import { initFilterUI } from '../filter/filter-ui.js';
@@ -186,6 +187,240 @@ function injectScopedStyles(container, ui = UI) {
   return scope;
 }
 
+/* =================== 样式 UI：按钮与面板（第1步：仅UI骨架） =================== */
+
+const STYLE_BUTTONS = [
+  { key: 'event',    label: '事件样式',  title: '事件样式设置' },
+  { key: 'platform', label: '平台样式',  title: '平台样式设置' },
+  { key: 'console',  label: '主机样式',  title: '主机样式设置' },
+  { key: 'company',  label: '公司样式',  title: '公司样式设置' },
+  { key: 'region',   label: '地区样式',  title: '地区样式设置' },
+];
+
+let styleUiCssInjected = false;
+
+function injectStyleUiCss() {
+  if (styleUiCssInjected) return;
+  const css = `
+  .te-style-btn {
+    display:inline-flex; align-items:center; gap:.25rem;
+    padding:.35rem .6rem; border:1px solid var(--te-border, #dadde1);
+    border-radius:.5rem; background:#fff; cursor:pointer; font-size:.9rem;
+  }
+  .te-style-btn + .te-style-btn { margin-left:.5rem; }
+  .te-style-btn:hover { background:#f6f7f9; }
+
+  .te-style-portal { position:fixed; inset:0; z-index:1000; display:none; }
+  .te-style-portal.active { display:block; }
+
+  .te-style-backdrop {
+    position:absolute; inset:0; background:rgba(0,0,0,.35);
+  }
+
+  .te-style-dialog {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(900px, 92vw); max-height:80vh; overflow:auto;
+    background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.25);
+    display:flex; flex-direction:column;
+  }
+
+  .te-style-header {
+    padding:14px 18px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between;
+  }
+  .te-style-title { font-size:1.05rem; font-weight:600; }
+  .te-style-close {
+    border:none; background:transparent; font-size:1.25rem; cursor:pointer; line-height:1;
+  }
+
+  .te-style-body { padding:16px 18px; display:grid; gap:14px; }
+  .te-style-grid { display:grid; grid-template-columns: 260px 1fr; gap:16px; }
+  .te-style-card { border:1px solid #eee; border-radius:8px; padding:12px; background:#fafbfc; }
+  .te-style-card h4 { margin:0 0 8px 0; font-size:.95rem; }
+  .te-style-footer { border-top:1px solid #eee; padding:12px 18px; display:flex; justify-content:flex-end; gap:8px; }
+  .te-style-link { background:transparent; border:none; color:#444; cursor:pointer; }
+  .te-style-primary { background:#111; color:#fff; border:1px solid #111; border-radius:8px; padding:8px 12px; cursor:pointer; }
+  .te-style-muted { color:#666; font-size:.9rem; }
+
+  @media (max-width: 720px) {
+    .te-style-grid { grid-template-columns: 1fr; }
+  }
+  `;
+  const tag = document.createElement('style');
+  tag.setAttribute('data-te-style-ui', 'true');
+  tag.textContent = css;
+  document.head.appendChild(tag);
+  styleUiCssInjected = true;
+}
+
+function ensureStylePanelRoot() {
+  let root = document.querySelector('#te-style-panels-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'te-style-panels-root';
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function createStylePanel({ key, title }) {
+  const portal = document.createElement('div');
+  portal.className = 'te-style-portal';
+  portal.dataset.key = key;
+
+  portal.innerHTML = `
+    <div class="te-style-backdrop" data-role="backdrop"></div>
+    <div class="te-style-dialog" role="dialog" aria-modal="true" aria-labelledby="te-style-title-${key}">
+      <div class="te-style-header">
+        <div class="te-style-title" id="te-style-title-${key}">${title}</div>
+        <button class="te-style-close" title="关闭" aria-label="关闭">×</button>
+      </div>
+
+      <div class="te-style-body">
+        <div class="te-style-grid">
+          <section class="te-style-card" data-area="style-type">
+            <h4>样式类型（占位）</h4>
+            <div class="te-style-muted">这里将在第2步放入“为该属性选择<strong>唯一</strong>的样式类型”（如：字体颜色 / 背景色 / 边框色 / 字体粗细…）。</div>
+          </section>
+
+          <section class="te-style-card" data-area="style-mapping">
+            <h4>属性值 → 样式映射（占位）</h4>
+            <div class="te-style-muted">这里将在第2步放入“为该属性下各个具体值指定样式”，同一种样式可复用到多个值。</div>
+          </section>
+        </div>
+      </div>
+
+      <div class="te-style-footer">
+        <button class="te-style-link" data-role="clear" title="清除当前设置（占位，不生效）">清除</button>
+        <button class="te-style-primary" data-role="ok">完成</button>
+      </div>
+    </div>
+  `;
+
+  const close = () => {
+    portal.classList.remove('active');
+    portal.dispatchEvent(new Event('te:close'));
+  };
+  portal.querySelector('.te-style-backdrop')?.addEventListener('click', close);
+  portal.querySelector('.te-style-close')?.addEventListener('click', close);
+  portal.querySelector('[data-role="ok"]')?.addEventListener('click', close);
+
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  portal.addEventListener('te:open', () => document.addEventListener('keydown', onKeydown));
+  portal.addEventListener('te:close', () => document.removeEventListener('keydown', onKeydown));
+
+  portal.open = () => {
+    portal.classList.add('active');
+    portal.dispatchEvent(new Event('te:open'));
+  };
+
+  return portal;
+}
+
+function makeStyleButton(btn, onClick) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'te-style-btn';
+  el.dataset.key = btn.key;
+  el.textContent = btn.label;
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+/**
+ * 寻找“筛选/过滤”按钮：尽量保真地插到它的右侧
+ * 1) 优先找 data-role/data-* 标记
+ * 2) 再退化到按文本匹配 “筛选” / “过滤”
+ * 返回 { toolbarEl, filterBtn }
+ */
+function findFilterButtonNear(container) {
+  // 常见语义钩子（如你的 filter-ui 可能会加的标记）
+  let filterBtn = document.querySelector('[data-role="filter-toggle"], [data-te-filter-toggle]');
+  let toolbarEl = filterBtn?.parentElement;
+
+  // 若未命中，尝试文本匹配（中文“筛选”“过滤”）
+  if (!filterBtn) {
+    const candidates = Array.from(document.querySelectorAll('button, [role="button"]'));
+    filterBtn = candidates.find(b => {
+      const t = (b.textContent || '').trim();
+      return t === '筛选' || t === '过滤' || t.includes('筛选') || t.includes('过滤');
+    });
+    toolbarEl = filterBtn?.parentElement || null;
+  }
+
+  // 如果还没有，尝试容器前后兄弟节点内寻找
+  if (!filterBtn && container) {
+    const siblings = [];
+    if (container.previousElementSibling) siblings.push(container.previousElementSibling);
+    if (container.nextElementSibling) siblings.push(container.nextElementSibling);
+    for (const sib of siblings) {
+      const btn = sib.querySelector('[data-role="filter-toggle"], [data-te-filter-toggle]') ||
+                  Array.from(sib.querySelectorAll('button, [role="button"]'))
+                    .find(b => /筛选|过滤/.test((b.textContent || '').trim()));
+      if (btn) {
+        filterBtn = btn;
+        toolbarEl = btn.parentElement;
+        break;
+      }
+    }
+  }
+
+  return { toolbarEl: toolbarEl || null, filterBtn: filterBtn || null };
+}
+
+/**
+ * 将 5 个样式按钮插到“筛选/过滤”按钮右侧，并创建对应面板（仅UI）
+ * - 若此时筛选按钮尚未渲染，会使用 MutationObserver 监听并自动挂载
+ */
+function mountStyleUIRightOfFilter(container) {
+  injectStyleUiCss();
+  const panelRoot = ensureStylePanelRoot();
+
+  // 先创建所有面板并缓存
+  const panels = new Map();
+  STYLE_BUTTONS.forEach(def => {
+    const p = createStylePanel(def);
+    panelRoot.appendChild(p);
+    panels.set(def.key, p);
+  });
+
+  // 内部方法：真正插入按钮
+  const doAttach = () => {
+    const { toolbarEl, filterBtn } = findFilterButtonNear(container);
+    if (!toolbarEl || !filterBtn) return false;
+
+    const frag = document.createDocumentFragment();
+    STYLE_BUTTONS.forEach(def => {
+      const btn = makeStyleButton(def, () => panels.get(def.key)?.open());
+      frag.appendChild(btn);
+    });
+
+    // 插入到“筛选/过滤”按钮之后
+    if (filterBtn.nextSibling) {
+      filterBtn.parentElement.insertBefore(frag, filterBtn.nextSibling);
+    } else {
+      filterBtn.parentElement.appendChild(frag);
+    }
+    return true;
+  };
+
+  // 1) 立即尝试一次
+  if (doAttach()) return;
+
+  // 2) 使用 MutationObserver 监听（filter-ui 异步渲染时）
+  const observer = new MutationObserver(() => {
+    if (doAttach()) {
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // 3) 兜底：延时多次尝试（减少极端情况下未挂载概率）
+  const retries = [120, 400, 1000];
+  retries.forEach(ms => setTimeout(() => doAttach(), ms));
+}
+
 /* =================== 数据映射 =================== */
 function normalizeEvent(event, i) {
   const Start = event.Start ?? event.start ?? '';
@@ -223,7 +458,7 @@ function normalizeEvent(event, i) {
     id: event.id || `auto-${i + 1}`,
     content: title,
     start: start || undefined,
-    end: end || undefined,  // ✅ 修复冒号错误
+    end: end || undefined,
     detailHtml,
     titleText: title,
     EventType,
@@ -321,12 +556,15 @@ export async function mountTimeline(container, overrides = {}) {
     const vis = window.vis;
     timeline = new vis.Timeline(container, dataset, options);
 
-    /* 初始化过滤 UI */
+    /* 初始化过滤 UI（保留你原有行为） */
     initFilterUI({
       beforeElSelector: beforeSelector,
       getItems: () => mapped,
       getCurrentRules: () => getState().rules,
     });
+
+    /* 在“筛选/过滤”按钮右侧挂载 5 个样式按钮（仅UI） */
+    mountStyleUIRightOfFilter(container);
 
     /* ===== 点击弹窗 ===== */
     function ensurePopover() {
