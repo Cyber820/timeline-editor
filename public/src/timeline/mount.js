@@ -4,7 +4,7 @@
 // - 事件卡片只显示标题
 // - 过滤逻辑：确定=只更新规则；AND/OR 按钮才实际过滤
 // - 样式系统：自包含面板（自动注入），5 个入口按钮 + 绑定/行编辑/保存&应用
-// - 全局唯一样式类型绑定：字体颜色/背景颜色/边框颜色/字体/光晕颜色
+// - 单属性只能绑定一种样式类型（字体颜色/背景颜色/边框颜色/字体/光晕颜色，绑定后禁用下拉；需“重置”解锁）
 
 import { fetchAndNormalize } from './fetch.js';
 import { initFilterUI } from '../filter/filter-ui.js';
@@ -21,11 +21,12 @@ import { applyFilters } from '../filter/filter-engine.js';
 import { stateMem } from '../style/stateMem.js';
 import {
   buildEngineStyleState,
-  ENGINE_KEY_MAP,                // 引擎键映射：fontColor→textColor 等
+  ENGINE_KEY_MAP,
+  createEmptyRuleForType,
+  ensureBucketIn,
 } from '../_staging/constants.js';
 import { setStyleState } from '../state/styleState.js';
 import { applyStyleState } from '../style/engine.js';
-import { createEmptyRuleForType, ensureBucketIn, getFilterOptionsForKeyFrom } from '../_staging/constants.js';
 
 /* ----------------------------------------------------------------
  * 显示参数
@@ -141,7 +142,7 @@ const UI_STYLE_TYPES = [
   { key:'backgroundColor', label:'背景颜色',     input:'color' },
   { key:'borderColor',     label:'边框颜色',     input:'color' },
   { key:'fontFamily',      label:'字体',         input:'font'  },
-  { key:'haloColor',       label:'光晕颜色',     input:'color' }, // 外发光：颜色-only；半径交给引擎默认
+  { key:'haloColor',       label:'光晕颜色',     input:'color' },
 ];
 
 // 面板 DOM 注入（仅一次）
@@ -210,6 +211,8 @@ function buildFontControl(rule){
     <option value="SimHei">黑体 (SimHei)</option>
     <option value="SimSun">宋体 (SimSun)</option>
     <option value="KaiTi">楷体 (KaiTi)</option>
+    <option value="LiSu">隶书 (LiSu)</option>
+    <option value="YouYuan">幼圆 (YouYuan)</option>
     <option value="STCaiyun">华文彩云 (STCaiyun)</option>
     <option value="FZShuTi">方正舒体 (FZShuTi)</option>
   `;
@@ -254,9 +257,15 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr){
     });
     panel.appendChild(grid);
     const footer=document.createElement('div'); footer.style.cssText='display:flex;justify-content:flex-end;gap:8px;margin-top:10px;';
-    const ok=document.createElement('button'); ok.textContent='确定'; ok.addEventListener('click',()=>{ rule.values = Array.from(current); renderChips(chips, rule.values); document.body.removeChild(box); });
-    const cancel=document.createElement('button'); cancel.textContent='取消'; cancel.addEventListener('click',()=>document.body.removeChild(box));
-    footer.appendChild(cancel); footer.appendChild(ok); panel.appendChild(footer);
+    // ✅ 调整按钮顺序：左“确定” 右“取消”
+    const ok=document.createElement('button'); ok.textContent='确定';
+    const cancel=document.createElement('button'); cancel.textContent='取消';
+    ok.addEventListener('click',()=>{ rule.values = Array.from(current); renderChips(chips, rule.values); document.body.removeChild(box); });
+    cancel.addEventListener('click',()=>document.body.removeChild(box));
+    // 左确定右取消：先添加“确定”，后添加“取消”
+    footer.appendChild(ok);
+    footer.appendChild(cancel);
+    panel.appendChild(footer);
     box.appendChild(panel); document.body.appendChild(box);
   });
 
@@ -287,8 +296,9 @@ function collectOptionsForAttr(mapped, attrKey){
   return uniqueSorted(vals.filter(Boolean));
 }
 
-// 刷新类型下拉（全局唯一占用提示）
+// 刷新类型下拉（全局唯一占用提示 + 本属性已绑定则禁用）
 function refreshTypeOptions(selectEl){
+  if (!selectEl) return;
   Array.from(selectEl.options).forEach(opt=>{
     if(!opt.dataset.baseText) opt.dataset.baseText = opt.textContent;
     const type = opt.value;
@@ -341,7 +351,8 @@ function mountStyleButtonsRightOfFilter(container, mapped){
  * ---------------------------------------------------------------- */
 function openStyleEditorFor(attrKey, mapped){
   ensureStylePanelInjected();
-  // 绑定当前属性
+
+  // 绑定当前属性 & 初始化容器
   stateMem.currentStyleAttr = attrKey;
   stateMem.boundStyleType ||= {};
   stateMem.styleTypeOwner ||= {};
@@ -360,24 +371,37 @@ function openStyleEditorFor(attrKey, mapped){
   const btnSave=document.getElementById('style-save');
 
   titleEl.textContent = `${attrKey} 样式`;
-  // 重建下拉提示
-  refreshTypeOptions(typeSel);
-  // 初始化按钮态
-  const bound = stateMem.boundStyleType[attrKey] || 'none';
-  hintEl.textContent = bound==='none' ? '当前样式：无' : `当前样式：${bound}`;
-  btnConfirm.disabled = true; btnAdd.disabled = (bound==='none'); btnReset.style.display = (bound==='none')?'none':'inline-block';
-
   // 重绘行
   tbody.innerHTML='';
   (stateMem.styleRules[attrKey]||[]).forEach(rule=> renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey)));
 
-  // 交互：选择类型
+  // 读取“实时”已绑定类型（🚫 修复：避免使用初次打开时的闭包常量）
+  const boundNow = () => stateMem.boundStyleType[attrKey] || 'none';
+
+  // 状态初始化
+  refreshTypeOptions(typeSel);
+  typeSel.value = 'none';
+  btnConfirm.disabled = true;
+
+  const currentBound = boundNow();
+  hintEl.textContent = currentBound==='none' ? '当前样式：无' : `当前样式：${currentBound}`;
+  btnAdd.disabled = (currentBound==='none');
+  btnReset.style.display = (currentBound==='none') ? 'none' : 'inline-block';
+  // 🔒 若已绑定，禁用下拉，必须“重置”后才能换
+  typeSel.disabled = currentBound !== 'none';
+
+  // 交互：选择类型（实时读取 boundNow()）
   let stagedType='none';
-  typeSel.value='none';
   typeSel.onchange = ()=>{
+    const current = boundNow();
     const val = typeSel.value || 'none';
-    // 若已绑定且尝试切换，必须先重置
-    if (bound!=='none') { typeSel.value='none'; btnConfirm.disabled=true; hintEl.textContent=`当前绑定：${bound}（如需更改，请先“重置”）`; return; }
+    if (current !== 'none') {
+      // 已绑定的属性，禁止切换
+      typeSel.value = 'none';
+      btnConfirm.disabled = true;
+      hintEl.textContent = `当前绑定：${current}（如需更改，请先“重置”）`;
+      return;
+    }
     // 全局占用
     const owner = stateMem.styleTypeOwner[val];
     if (val!=='none' && owner && owner!==attrKey) {
@@ -388,14 +412,21 @@ function openStyleEditorFor(attrKey, mapped){
 
   // 确认绑定
   btnConfirm.onclick = ()=>{
+    const curr = boundNow();
+    if (curr !== 'none') return;      // 二次校验
     if (stagedType==='none') return;
+
     // 写入占用与绑定
     stateMem.boundStyleType[attrKey] = stagedType;
     stateMem.styleTypeOwner[stagedType] = attrKey;
+
+    // UI 禁用下拉，提示更新
     hintEl.textContent = `当前样式：${stagedType}`;
     btnConfirm.disabled = true;
     btnReset.style.display = 'inline-block';
     btnAdd.disabled = false;
+    typeSel.disabled = true;
+
     // 默认新增一行
     const rule = createEmptyRuleForType(stagedType, () => `rule_${Math.random().toString(36).slice(2,8)}`);
     ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
@@ -404,17 +435,27 @@ function openStyleEditorFor(attrKey, mapped){
 
   // 重置/解绑（清空所有行）
   btnReset.onclick = ()=>{
-    if ((stateMem.styleRules[attrKey]||[]).length && !confirm('重置将清空该属性下所有样式行，是否继续？')) return;
-    const prev = stateMem.boundStyleType[attrKey];
-    if (prev && stateMem.styleTypeOwner[prev]===attrKey) delete stateMem.styleTypeOwner[prev];
+    const bucketLen = (stateMem.styleRules[attrKey]||[]).length;
+    if (bucketLen && !confirm('重置将清空该属性下所有样式行，是否继续？')) return;
+
+    const prev = boundNow();
+    if (prev !== 'none' && stateMem.styleTypeOwner[prev]===attrKey) delete stateMem.styleTypeOwner[prev];
     stateMem.boundStyleType[attrKey]='none';
     const bucket=stateMem.styleRules[attrKey]; if (bucket) bucket.length=0;
-    tbody.innerHTML=''; hintEl.textContent='当前样式：无'; btnAdd.disabled=true; btnReset.style.display='none'; typeSel.value='none';
+
+    // UI 复位
+    tbody.innerHTML='';
+    hintEl.textContent='当前样式：无';
+    btnAdd.disabled=true;
+    btnReset.style.display='none';
+    typeSel.value='none';
+    typeSel.disabled = false; // 解锁下拉
+    btnConfirm.disabled = true;
   };
 
   // 新增一行
   btnAdd.onclick = ()=>{
-    const t=stateMem.boundStyleType[attrKey];
+    const t = boundNow();
     if (!t || t==='none') { alert('请先绑定样式类型'); return; }
     const rule = createEmptyRuleForType(t, () => `rule_${Math.random().toString(36).slice(2,8)}`);
     ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
