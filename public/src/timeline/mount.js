@@ -1,9 +1,9 @@
 // public/src/timeline/mount.js
 // -------------------------------------------------------------
-// 时间轴挂载（对齐当前 constants.js / styleState.js / engine.js）
-// - 只显示标题；点击卡片显示详情弹窗
-// - 过滤 UI 已接；过滤后会重新应用样式
-// - 样式应用使用 DEFAULTS.SELECTOR_BASE / TITLE_SELECTOR
+// 清理：中文化样式标题/提示，移除调试字样；页面标题=“电子游戏时间轴Beta版本”
+// - 样式面板标题、提示、下拉“已绑定”均显示中文
+// - 仅显示标题；点击卡片显示详情弹窗
+// - 过滤/重绘后都会重新应用样式
 // -------------------------------------------------------------
 
 import { fetchAndNormalize } from './fetch.js';
@@ -18,10 +18,18 @@ import {
   buildEngineStyleState,
   createEmptyRuleForType,
   ensureBucketIn,
+  attributeLabels,
+  STYLE_LABELS,
+  styleLabel,
 } from '../_staging/constants.js';
 
 import { setStyleState, getStyleState } from '../state/styleState.js';
 import { applyStyleState, attachEventDataAttrs } from '../style/engine.js';
+
+// 统一页面标题（移除“Beta Debug”等测试字样）
+(function ensurePageTitle(){
+  try { if (document && document.title !== '电子游戏时间轴Beta版本') document.title = '电子游戏时间轴Beta版本'; } catch {}
+})();
 
 // ---------------- UI 预设 ----------------
 const UI = {
@@ -125,16 +133,16 @@ function safeApplyStyles(reason=''){
     const saved = getStyleState();
     if (saved && (saved.boundTypes || saved.rules)) {
       applyStyleState(saved, {
-        selectorBase: DEFAULTS.SELECTOR_BASE,     // '.vis-item.event, .vis-item-content.event'
-        titleSelector: DEFAULTS.TITLE_SELECTOR,   // '.event-title'
+        selectorBase: DEFAULTS.SELECTOR_BASE,
+        titleSelector: DEFAULTS.TITLE_SELECTOR,
       });
     }
   }catch(e){
-    console.warn('[safeApplyStyles]', reason, e);
+    // 静默失败，避免调试字样
   }
 }
 
-// ---------------- 样式面板（轻量按钮+持久化） ----------------
+// ---------------- 样式面板（中文化） ----------------
 const STYLE_ATTR_BTNS = [
   { label:'事件样式', field:'EventType' },
   { label:'平台样式', field:'Platform' },
@@ -144,11 +152,11 @@ const STYLE_ATTR_BTNS = [
 ];
 
 const UI_STYLE_TYPES = [
-  { key:'fontColor', label:'字体颜色' },
-  { key:'backgroundColor', label:'背景颜色' },
-  { key:'borderColor', label:'边框颜色' },
-  { key:'fontFamily', label:'字体' },
-  { key:'haloColor', label:'光晕颜色' },
+  { key:'fontColor', label: STYLE_LABELS.fontColor || '字体颜色' },
+  { key:'backgroundColor', label: STYLE_LABELS.backgroundColor || '背景颜色' },
+  { key:'borderColor', label: STYLE_LABELS.borderColor || '边框颜色' },
+  { key:'fontFamily', label: STYLE_LABELS.fontFamily || '字体' },
+  { key:'haloColor', label: STYLE_LABELS.haloColor || '光晕颜色' },
 ];
 
 let panelInjected=false;
@@ -219,7 +227,7 @@ function buildFontControl(rule){
 function buildStyleCellControl(rule){
   if(['fontColor','backgroundColor','borderColor','haloColor'].includes(rule.type)) return buildColorControl(rule);
   if(rule.type==='fontFamily') return buildFontControl(rule);
-  const span=document.createElement('span'); span.textContent=rule.type; return span;
+  const span=document.createElement('span'); span.textContent=STYLE_LABELS[rule.type] || rule.type; return span;
 }
 
 function uniqueSorted(list){ return Array.from(new Set((list||[]).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b))); }
@@ -339,7 +347,8 @@ function refreshTypeOptions(selectEl){
     const owner = stateMem.styleTypeOwner?.[type];
     const isMine = owner === stateMem.currentStyleAttr;
     opt.disabled = !!(owner && !isMine);
-    opt.textContent = opt.dataset.baseText + (owner && !isMine ? `（已绑定：${owner}）` : '');
+    const ownerCN = owner ? (attributeLabels[owner] || owner) : '';
+    opt.textContent = (STYLE_LABELS[type] || opt.dataset.baseText) + (owner && !isMine ? `（已绑定：${ownerCN}）` : '');
   });
 }
 
@@ -394,7 +403,9 @@ function openStyleEditorFor(attrKey, mapped){
   const btnAdd=document.getElementById('style-add');
   const btnSave=document.getElementById('style-save');
 
-  titleEl && (titleEl.textContent = `${attrKey} 样式`);
+  // 标题中文：属性中文名 + “样式”
+  const attrCN = attributeLabels[attrKey] || attrKey;
+  titleEl && (titleEl.textContent = `${attrCN} 样式`);
 
   if(tbody){
     tbody.innerHTML='';
@@ -409,7 +420,8 @@ function openStyleEditorFor(attrKey, mapped){
   btnConfirm && (btnConfirm.disabled=true);
 
   const currentBound=boundNow();
-  hintEl && (hintEl.textContent = currentBound==='none' ? '当前样式：无' : `当前样式：${currentBound}`);
+  const currentLabel = currentBound==='none' ? '无' : (styleLabel(currentBound) || currentBound);
+  hintEl && (hintEl.textContent = `当前样式：${currentLabel}`);
   btnAdd && (btnAdd.disabled = currentBound==='none');
   btnReset && (btnReset.style.display = currentBound==='none' ? 'none' : 'inline-block');
   typeSel && (typeSel.disabled = currentBound!=='none');
@@ -421,13 +433,16 @@ function openStyleEditorFor(attrKey, mapped){
       const val=typeSel.value||'none';
       if(current!=='none'){
         typeSel.value='none'; btnConfirm && (btnConfirm.disabled=true);
-        hintEl && (hintEl.textContent=`当前绑定：${current}（如需更改，请先“重置”）`);
+        const currLabel = styleLabel(current) || current;
+        hintEl && (hintEl.textContent=`当前绑定：${currLabel}（如需更改，请先“重置”）`);
         return;
       }
       const owner=stateMem.styleTypeOwner?.[val];
       if(val!=='none' && owner && owner!==attrKey){
+        const ownerCN = attributeLabels[owner] || owner;
         typeSel.value='none'; btnConfirm && (btnConfirm.disabled=true);
-        hintEl && (hintEl.textContent=`“${val}”已绑定到【${owner}】`); return;
+        hintEl && (hintEl.textContent=`“${styleLabel(val)||val}”已绑定到【${ownerCN}】`);
+        return;
       }
       stagedType=val; btnConfirm && (btnConfirm.disabled = (stagedType==='none'));
     };
@@ -438,7 +453,7 @@ function openStyleEditorFor(attrKey, mapped){
     stateMem.boundStyleType[attrKey]=stagedType;
     stateMem.styleTypeOwner[stagedType]=attrKey;
 
-    hintEl && (hintEl.textContent=`当前样式：${stagedType}`);
+    hintEl && (hintEl.textContent=`当前样式：${styleLabel(stagedType) || stagedType}`);
     btnConfirm.disabled=true; btnReset && (btnReset.style.display='inline-block');
     btnAdd && (btnAdd.disabled=false); typeSel && (typeSel.disabled=true);
 
@@ -462,7 +477,6 @@ function openStyleEditorFor(attrKey, mapped){
     if(typeSel){ typeSel.value='none'; typeSel.disabled=false; }
     btnConfirm && (btnConfirm.disabled=true);
 
-    // 立刻清空后应用
     persistAndApply();
   });
 
@@ -539,7 +553,6 @@ export async function mountTimeline(container, overrides = {}){
       locale:'en', editable:false, stack:UI.layout.stack,
       verticalScroll:UI.zoom.verticalScroll, zoomKey:UI.zoom.key,
       template:(item,element)=>{
-        // element 为 .vis-item-content，给两层都打上 'event'
         try{
           const contentEl = element;
           const itemEl = element?.closest?.('.vis-item');
@@ -564,10 +577,10 @@ export async function mountTimeline(container, overrides = {}){
     // 样式按钮
     mountStyleButtonsRightOfFilter(container, mapped);
 
-    // 初次挂载：应用已有样式
+    // 初次挂载样式
     safeApplyStyles('mount:init');
 
-    // 点击弹窗（点击显示，点击外部/滚动关闭）
+    // 点击弹窗
     function ensurePopover(){ let pop=container.querySelector('#event-popover');
       if(!pop){ pop=document.createElement('div'); pop.id='event-popover'; container.appendChild(pop); } return pop; }
     const pop=ensurePopover(); let currentAnchor=null;
@@ -616,7 +629,6 @@ export async function mountTimeline(container, overrides = {}){
       requestAnimationFrame(()=> safeApplyStyles('filter:remove-rule'));
     });
 
-    // timeline 变动后也补一次（防止 redraw 覆盖 class）
     timeline.on('changed', ()=> requestAnimationFrame(()=> safeApplyStyles('timeline:changed')));
 
     return { timeline, items: dataset, destroy(){ try{ timeline.destroy(); }catch{} } };
