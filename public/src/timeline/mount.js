@@ -1,7 +1,7 @@
 // public/src/timeline/mount.js
 // 修复要点：
 // - 属性选择器「唯一占用」：同一属性的值不会在多行重复占用（除当前行已选）
-// - 初次挂载 & 保存后都会 applyStyleState；selectorBase 固定 .vis-item.event
+// - 初次挂载 & 过滤后 & timeline.changed & resize 后都会 reapplyStyles
 // - 事件卡只显示标题；点击弹窗分栏显示
 // - 样式按钮挂在过滤按钮右侧；字体含“隶书/幼圆”
 
@@ -19,7 +19,7 @@ const UI = {
   canvas: { height: 1000 },
   item: { fontSize: 10, paddingX: 10, paddingY: 6, borderRadius: 10, maxWidth: 320 },
   layout: { itemPosition: 'bottom', axisPosition: 'bottom', verticalItemGap: 5, stack: true },
-  zoom: { key: 'ctrlKey', verticalScroll: true },
+  zoom: { key: 'ctrlKey', verticalScroll: true }
 };
 
 function toPlain(x){ return x==null?'':String(x).replace(/<[^>]*>/g,'').trim(); }
@@ -116,7 +116,7 @@ const STYLE_ATTR_BTNS = [
   { label:'平台样式', field:'Platform' },
   { label:'主机样式', field:'ConsolePlatform' },
   { label:'公司样式', field:'Company' },
-  { label:'地区样式', field:'Region' },
+  { label:'地区样式', field:'Region' }
 ];
 
 const UI_STYLE_TYPES = [
@@ -124,7 +124,7 @@ const UI_STYLE_TYPES = [
   { key:'backgroundColor', label:'背景颜色' },
   { key:'borderColor', label:'边框颜色' },
   { key:'fontFamily', label:'字体' },
-  { key:'haloColor', label:'光晕颜色' },
+  { key:'haloColor', label:'光晕颜色' }
 ];
 
 let panelInjected=false;
@@ -203,8 +203,10 @@ function uniqueSorted(list){ return Array.from(new Set((list||[]).filter(Boolean
 
 function renderChips(container, values){
   container.innerHTML='';
-  const list=Array.isArray(values)?values:[];
-  if(!list.length){ const s=document.createElement('span'); s.className='te-muted'; s.textContent='（未选择）'; container.appendChild(s); return; }
+  const list=Array.isArray(values)?values:[]; if(!list.length){
+    const s=document.createElement('span'); s.className='te-muted'; s.textContent='（未选择）';
+    container.appendChild(s); return;
+  }
   list.forEach(v=>{ const tag=document.createElement('span'); tag.textContent=v; container.appendChild(tag); });
 }
 
@@ -243,7 +245,7 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr){
   btnPick.addEventListener('click', ()=>{
     const list = uniqueSorted(allOptionsForAttr);
     const current = new Set(Array.isArray(rule.values)?rule.values:[]);
-    const taken = getTakenValuesForAttr(attrKey, rule.id); // 👈 除当前行之外的占用
+    const taken = getTakenValuesForAttr(attrKey, rule.id);
 
     const box=document.createElement('div');
     box.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
@@ -257,13 +259,11 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr){
       const label=document.createElement('label'); label.style.cssText='border:1px solid #e5e7eb;border-radius:8px;padding:6px;display:flex;gap:6px;align-items:center;';
       const cb=document.createElement('input'); cb.type='checkbox';
 
-      const isTaken = taken.has(v) && !current.has(v); // 仅当“被他行占用且当前行未选”时禁选
+      const isTaken = taken.has(v) && !current.has(v);
       cb.checked = current.has(v);
       cb.disabled = isTaken;
 
-      cb.addEventListener('change',()=>{
-        if(cb.checked) current.add(v); else current.delete(v);
-      });
+      cb.addEventListener('change',()=>{ if(cb.checked) current.add(v); else current.delete(v); });
       const span=document.createElement('span'); span.textContent = isTaken ? (v + '（已被占用）') : v;
       span.style.opacity = isTaken ? '0.55' : '1';
 
@@ -278,19 +278,16 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr){
     const cancel=document.createElement('button'); cancel.textContent='取消';
 
     ok.addEventListener('click',()=>{
-      // 最终再做一次冲突校验，防御性
       const finalSelected = Array.from(current);
       const finalTaken = getTakenValuesForAttr(attrKey, rule.id);
       const conflict = finalSelected.find(v=> finalTaken.has(v));
       if(conflict){ alert('“'+conflict+'” 已被同属性的其他样式行占用，请取消或更换。'); return; }
-
       rule.values = finalSelected;
       renderChips(chips, rule.values);
       document.body.removeChild(box);
     });
     cancel.addEventListener('click',()=>document.body.removeChild(box));
 
-    // 左确定，右取消
     footer.appendChild(ok); footer.appendChild(cancel);
     panel.appendChild(footer);
     box.appendChild(panel); document.body.appendChild(box);
@@ -331,7 +328,6 @@ function refreshTypeOptions(selectEl){
 function persistAndApply(){
   const engineState = buildEngineStyleState(stateMem.boundStyleType, stateMem.styleRules, ENGINE_KEY_MAP);
   const saved = setStyleState(engineState);
-  // 用与 template 同步的选择器：只针对外层 .vis-item.event
   applyStyleState(saved, { selectorBase: '.vis-item.event', titleSelector: '.event-title' });
 }
 
@@ -352,9 +348,10 @@ function mountStyleButtonsRightOfFilter(container, mapped){
       b.addEventListener('click',()=>openStyleEditorFor(def.field, mapped));
       frag.appendChild(b);
     });
-    filterBtn.parentElement && (filterBtn.nextSibling
-      ? filterBtn.parentElement.insertBefore(frag, filterBtn.nextSibling)
-      : filterBtn.parentElement.appendChild(frag));
+    if (filterBtn.parentElement){
+      if (filterBtn.nextSibling) filterBtn.parentElement.insertBefore(frag, filterBtn.nextSibling);
+      else filterBtn.parentElement.appendChild(frag);
+    }
     return true;
   }
   if(doAttach()) return;
@@ -382,7 +379,7 @@ function openStyleEditorFor(attrKey, mapped){
   const btnAdd=document.getElementById('style-add');
   const btnSave=document.getElementById('style-save');
 
-  titleEl && (titleEl.textContent = `${attrKey} 样式`);
+  if (titleEl) titleEl.textContent = `${attrKey} 样式`;
 
   // 绘制现有行
   if(tbody){
@@ -395,13 +392,13 @@ function openStyleEditorFor(attrKey, mapped){
   const boundNow=()=> stateMem.boundStyleType[attrKey] || 'none';
   refreshTypeOptions(typeSel);
   if(typeSel) typeSel.value='none';
-  btnConfirm && (btnConfirm.disabled=true);
+  if(btnConfirm) btnConfirm.disabled=true;
 
   const currentBound=boundNow();
-  hintEl && (hintEl.textContent = currentBound==='none' ? '当前样式：无' : `当前样式：${currentBound}`);
-  btnAdd && (btnAdd.disabled = currentBound==='none');
-  btnReset && (btnReset.style.display = currentBound==='none' ? 'none' : 'inline-block');
-  typeSel && (typeSel.disabled = currentBound!=='none');
+  if(hintEl) hintEl.textContent = currentBound==='none' ? '当前样式：无' : `当前样式：${currentBound}`;
+  if(btnAdd) btnAdd.disabled = currentBound==='none';
+  if(btnReset) btnReset.style.display = currentBound==='none' ? 'none' : 'inline-block';
+  if(typeSel) typeSel.disabled = currentBound!=='none';
 
   let stagedType='none';
   if(typeSel){
@@ -409,34 +406,34 @@ function openStyleEditorFor(attrKey, mapped){
       const current=boundNow();
       const val=typeSel.value||'none';
       if(current!=='none'){
-        typeSel.value='none'; btnConfirm && (btnConfirm.disabled=true);
-        hintEl && (hintEl.textContent=`当前绑定：${current}（如需更改，请先“重置”）`);
+        typeSel.value='none'; if(btnConfirm) btnConfirm.disabled=true;
+        if(hintEl) hintEl.textContent=`当前绑定：${current}（如需更改，请先“重置”）`;
         return;
       }
       const owner=stateMem.styleTypeOwner?.[val];
       if(val!=='none' && owner && owner!==attrKey){
-        typeSel.value='none'; btnConfirm && (btnConfirm.disabled=true);
-        hintEl && (hintEl.textContent=`“${val}”已绑定到【${owner}】`); return;
+        typeSel.value='none'; if(btnConfirm) btnConfirm.disabled=true;
+        if(hintEl) hintEl.textContent=`“${val}”已绑定到【${owner}】`; return;
       }
-      stagedType=val; btnConfirm && (btnConfirm.disabled = (stagedType==='none'));
+      stagedType=val; if(btnConfirm) btnConfirm.disabled = (stagedType==='none');
     };
   }
 
-  btnConfirm && (btnConfirm.onclick=()=>{
+  if(btnConfirm) btnConfirm.onclick=()=>{
     const curr=boundNow(); if(curr!=='none'||stagedType==='none') return;
     stateMem.boundStyleType[attrKey]=stagedType;
     stateMem.styleTypeOwner[stagedType]=attrKey;
 
-    hintEl && (hintEl.textContent=`当前样式：${stagedType}`);
-    btnConfirm.disabled=true; btnReset && (btnReset.style.display='inline-block');
-    btnAdd && (btnAdd.disabled=false); typeSel && (typeSel.disabled=true);
+    if(hintEl) hintEl.textContent=`当前样式：${stagedType}`;
+    btnConfirm.disabled=true; if(btnReset) btnReset.style.display='inline-block';
+    if(btnAdd) btnAdd.disabled=false; if(typeSel) typeSel.disabled=true;
 
     const rule=createEmptyRuleForType(stagedType, ()=> 'rule_'+Math.random().toString(36).slice(2,8));
     ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
-    tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
-  });
+    if(tbody) renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
+  };
 
-  btnReset && (btnReset.onclick=()=>{
+  if(btnReset) btnReset.onclick=()=>{
     const bucketLen=(stateMem.styleRules[attrKey]||[]).length;
     if(bucketLen && !confirm('重置将清空该属性下所有样式行，是否继续？')) return;
     const prev=boundNow();
@@ -444,25 +441,25 @@ function openStyleEditorFor(attrKey, mapped){
     stateMem.boundStyleType[attrKey]='none';
     const bucket=stateMem.styleRules[attrKey]; if(bucket) bucket.length=0;
 
-    tbody && (tbody.innerHTML='');
-    hintEl && (hintEl.textContent='当前样式：无');
-    btnAdd && (btnAdd.disabled=true);
+    if(tbody) tbody.innerHTML='';
+    if(hintEl) hintEl.textContent='当前样式：无';
+    if(btnAdd) btnAdd.disabled=true;
     btnReset.style.display='none';
     if(typeSel){ typeSel.value='none'; typeSel.disabled=false; }
-    btnConfirm && (btnConfirm.disabled=true);
+    if(btnConfirm) btnConfirm.disabled=true;
 
     // 即刻应用清空后的样式
     persistAndApply();
-  });
+  };
 
-  btnAdd && (btnAdd.onclick=()=>{
+  if(btnAdd) btnAdd.onclick=()=>{
     const t=boundNow(); if(!t||t==='none'){ alert('请先绑定样式类型'); return; }
     const rule=createEmptyRuleForType(t, ()=> 'rule_'+Math.random().toString(36).slice(2,8));
     ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
-    tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
-  });
+    if(tbody) renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
+  };
 
-  btnSave && (btnSave.onclick=()=>{
+  if(btnSave) btnSave.onclick=()=>{
     const bucket=stateMem.styleRules[attrKey]||[];
     for(let i=bucket.length-1;i>=0;i--){
       const r=bucket[i];
@@ -472,12 +469,12 @@ function openStyleEditorFor(attrKey, mapped){
     }
     persistAndApply();
     closeStylePanelLight();
-  });
+  };
 
   const closeBtn=document.getElementById('style-close');
-  closeBtn && (closeBtn.onclick=()=>closeStylePanelLight());
+  if (closeBtn) closeBtn.onclick=()=>closeStylePanelLight();
   const backdrop=document.querySelector('#style-window .sw-backdrop');
-  backdrop && (backdrop.onclick=()=>closeStylePanelLight());
+  if (backdrop) backdrop.onclick=()=>closeStylePanelLight();
 
   openStylePanelLight();
 }
@@ -530,8 +527,8 @@ export async function mountTimeline(container, overrides = {}){
       locale:'en', editable:false, stack:UI.layout.stack,
       verticalScroll:UI.zoom.verticalScroll, zoomKey:UI.zoom.key,
       template:(item,element)=>{
-        const host=element?.closest?.('.vis-item')||element;
-        if(host){ host.classList.add('event'); try{ attachEventDataAttrs(host, item); }catch{} }
+        const host=(element && element.closest) ? element.closest('.vis-item') : element;
+        if(host){ host.classList.add('event'); try{ attachEventDataAttrs(host, item); }catch(e){} }
         const root=document.createElement('div');
         const h4=document.createElement('h4'); h4.className='event-title'; h4.textContent=item.titleText||item.content||'(无标题)';
         root.appendChild(h4); return root;
@@ -540,7 +537,27 @@ export async function mountTimeline(container, overrides = {}){
     const options={...baseOptions, ...overrides};
     if(startDate) options.start=startDate; if(endDate) options.end=endDate;
 
-    const vis=window.vis; timeline=new vis.Timeline(container,dataset,options);
+    const vis=window.vis;
+    timeline=new vis.Timeline(container,dataset,options);
+
+    // 统一：重新应用样式
+    const reapplyStyles = () => {
+      try {
+        const saved = getStyleState();
+        if (saved && saved.boundTypes) {
+          applyStyleState(saved, { selectorBase: '.vis-item.event', titleSelector: '.event-title' });
+        }
+      } catch (e) { console.warn('reapplyStyles failed:', e); }
+    };
+
+    // 初渲染：等到 DOM 存在后再应用（两次以兼容不同环境）
+    requestAnimationFrame(() => {
+      reapplyStyles();
+      setTimeout(reapplyStyles, 0);
+    });
+
+    // vis 布局/重绘后
+    timeline.on('changed', reapplyStyles);
 
     // 顶部过滤 UI
     initFilterUI({ beforeElSelector: beforeSelector, getItems: ()=>mapped, getCurrentRules: ()=>getState().rules });
@@ -548,28 +565,22 @@ export async function mountTimeline(container, overrides = {}){
     // 样式按钮
     mountStyleButtonsRightOfFilter(container, mapped);
 
-    // 初次挂载：应用已有样式（修复“样式未显示”）
-    const saved = getStyleState();
-    if (saved && saved.boundTypes) {
-      applyStyleState(saved, { selectorBase: '.vis-item.event', titleSelector: '.event-title' });
-    }
-
     // 点击弹窗（仅点击）
     function ensurePopover(){ let pop=container.querySelector('#event-popover');
       if(!pop){ pop=document.createElement('div'); pop.id='event-popover'; container.appendChild(pop); } return pop; }
     const pop=ensurePopover(); let currentAnchor=null;
     function hidePopover(){ pop.style.display='none'; currentAnchor=null; }
     function findAnchorFromProps(props){
-      const t=props?.event?.target; const hit=t&&t.closest?t.closest('.vis-item'):null;
+      const t=props && props.event && props.event.target; const hit=t && t.closest ? t.closest('.vis-item') : null;
       if(hit) return hit;
-      if(props?.item==null) return null;
+      if(!props || props.item==null) return null;
       const idStr=String(props.item).replace(/"/g,'\\"');
       return container.querySelector('.vis-item[data-id="'+idStr+'"]');
     }
     function showPopoverOverItem(props){
       const anchor=findAnchorFromProps(props); if(!anchor) return;
       const dsItem=dataset.get(props.item);
-      pop.innerHTML=dsItem?.detailHtml||'<div style="padding:8px;">（无详情）</div>';
+      pop.innerHTML=dsItem && dsItem.detailHtml ? dsItem.detailHtml : '<div style="padding:8px;">（无详情）</div>';
       const cb=container.getBoundingClientRect(); const ib=anchor.getBoundingClientRect();
       const MIN_W=280, MIN_H=140; const MAX_W=Math.min(520,container.clientWidth); const MAX_H=Math.min(container.clientHeight*0.6,600);
       let left=ib.left-cb.left+container.scrollLeft; let top=ib.top-cb.top+container.scrollTop;
@@ -581,21 +592,32 @@ export async function mountTimeline(container, overrides = {}){
     }
     timeline.on('click',(props)=>{ if(!props||props.item==null){ hidePopover(); return; } showPopoverOverItem(props); });
     document.addEventListener('mousedown',(e)=>{ if(pop.style.display==='none') return; const inPop=pop.contains(e.target); const onAnchor=currentAnchor&&currentAnchor.contains(e.target); if(!inPop&&!onAnchor) hidePopover(); });
-    window.addEventListener('resize',()=>{ try{ timeline.redraw(); }catch{} hidePopover(); });
 
-    // 过滤对接
-    window.addEventListener('filter:add-rule:confirm',(e)=>{ const {key,values}=e.detail||{}; upsertRule(key,values); });
-    window.addEventListener('filter:set-logic',(e)=>{ const mode=e?.detail?.mode; setLogic(mode); const next=applyFilters(mapped,getState()); dataset.clear(); dataset.add(next); });
-    window.addEventListener('filter:reset',()=>{ clearRules(); dataset.clear(); dataset.add(mapped); });
-    window.addEventListener('filter:remove-rule',(e)=>{ const key=e?.detail?.key; if(key) removeRule(key); });
+    // 过滤对接（过滤后重填数据集 → 立即 reapplyStyles）
+    window.addEventListener('filter:add-rule:confirm',(e)=>{ const detail=e && e.detail ? e.detail : {}; upsertRule(detail.key, detail.values); });
+    window.addEventListener('filter:set-logic',(e)=>{
+      const mode=e && e.detail ? e.detail.mode : undefined;
+      setLogic(mode);
+      const next=applyFilters(mapped,getState());
+      dataset.clear(); dataset.add(next);
+      reapplyStyles();
+    });
+    window.addEventListener('filter:reset',()=>{
+      clearRules(); dataset.clear(); dataset.add(mapped);
+      reapplyStyles();
+    });
+    window.addEventListener('filter:remove-rule',(e)=>{ const key=e && e.detail ? e.detail.key : undefined; if(key) removeRule(key); });
 
-    return { timeline, items: dataset, destroy(){ try{ timeline.destroy(); }catch{} } };
+    // resize 后 redraw + reapply
+    window.addEventListener('resize',()=>{ try{ timeline.redraw(); }catch(e){} reapplyStyles(); hidePopover(); });
+
+    return { timeline, items: dataset, destroy(){ try{ timeline.destroy(); }catch(e){} } };
   } catch(err){
     console.error(err);
-    container.innerHTML=`<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${toPlain(err?.message||err)}</div>`;
+    container.innerHTML=`<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${toPlain(err && err.message ? err.message : err)}</div>`;
     return { timeline:null, items:null, destroy(){} };
   } finally {
-    try{ container.contains(loading)&&loading.remove(); }catch{}
+    try{ if (container.contains(loading)) loading.remove(); }catch(e){}
   }
 }
 
