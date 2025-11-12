@@ -3,18 +3,10 @@
 // - 打开/关闭面板
 // - 将 stateMem 中的“编辑中内存态” ↔ 持久化 styleState（localStorage）进行同步
 // - 保存后触发样式引擎编译 + 注入（远程优先/本地兜底，见 engine.js）
-//
-// 依赖：
-//   - 状态：stateMem（运行时内存） + styleState（持久化）
-//   - 引擎：buildEngineStyleState（构造引擎态）+ applyStyleState（应用）
-//   - UI：style-table（表格渲染与行渲染）
-//   - 工具：genId（生成行 id）
-//
-// 说明：本模块不实现“属性选择弹窗”等复杂 UI，保留钩子，第二轮再接。
 
 import { getStyleState, setStyleState } from '../state/styleState.js';
 import { applyStyleState } from '../style/engine.js';
-import { stateMem } from '../style/stateMem.js';
+import { stateMem, resetStateMem } from '../style/stateMem.js'; // ✅ 使用 resetStateMem
 import {
   uiTypeToInternal,
   ENGINE_KEY_MAP,
@@ -76,34 +68,46 @@ function onSaveFromPanel() {
     ENGINE_KEY_MAP,
   );
 
+  // ✅ 记录最近一次应用的引擎态（调试/导出参考）
+  stateMem.lastAppliedEngineState = engineState;
+
   const saved = setStyleState(engineState);
   applyStyleState(saved, _opts); // 立即生效（编译 CSS + 注入）
 }
 
 function onResetFromPanel() {
-  // 清空运行时内存
-  stateMem.currentStyleAttr = null;
-  stateMem.boundStyleType = {};
-  stateMem.styleTypeOwner = {};
-  stateMem.styleRules = {};
-  stateMem.styleRowSelections = {};
+  // ✅ 使用统一的内存重置函数，避免字段遗漏
+  resetStateMem();
 
   const empty = { version: 1, boundTypes: {}, rules: {} };
   const saved = setStyleState(empty);
   applyStyleState(saved, _opts);
+
   // UI 清空
   const tbody = document.getElementById('styleTableBody');
   if (tbody) tbody.innerHTML = '';
+
+  // 恢复面板按钮与提示（若存在面板）
+  const root = document.getElementById('style-window');
+  if (root) {
+    const typeSelEl   = root.querySelector('#style-type-select');
+    const confirmBtn  = root.querySelector('#style-type-confirm');
+    const resetBtn    = root.querySelector('#style-type-reset');
+    const addBtn      = root.querySelector('#style-add-row');
+    const hintEl      = root.querySelector('#bound-type-hint');
+
+    if (typeSelEl) typeSelEl.value = 'none';
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
+    if (resetBtn)   resetBtn.style.display = 'none';
+    if (addBtn)     addBtn.disabled = true;
+    if (hintEl)     hintEl.textContent = '当前样式：无';
+  }
 }
 
 /** ========== 状态注入：持久态 → stateMem + UI重建 ========== */
 function injectStateIntoPanel(state) {
   // 1) 清空 stateMem
-  stateMem.currentStyleAttr = null;
-  stateMem.boundStyleType = {};
-  stateMem.styleTypeOwner = {};
-  stateMem.styleRules = {};
-  stateMem.styleRowSelections = {};
+  resetStateMem(); // ✅ 统一重置
 
   // 2) 引擎键 → UI 键的映射
   const fromEngineKey = (t) =>
@@ -122,27 +126,25 @@ function injectStateIntoPanel(state) {
     const uiKey = fromEngineKey(engKey || 'none');
     stateMem.boundStyleType[attr] = uiKey;
     if (uiKey && uiKey !== 'none') {
-      // 占用表
       const internal = uiTypeToInternal(uiKey);
-      stateMem.styleTypeOwner[internal] = attr;
+      stateMem.styleTypeOwner[internal] = attr; // ✅ 标记占用者
     }
   }
 
-  // 4) 写回规则（rules）→ 生成行
+  // 4) 写回规则（rules）→ 生成行（按相同样式合并多值）
   const rules = state?.rules || {};
   for (const [attr, valMap] of Object.entries(rules)) {
     const uiType = stateMem.boundStyleType[attr] || 'none';
     if (uiType === 'none') continue;
 
-    // 将相同 style 的值合并为一行
     const groups = new Map(); // key(JSON) -> { style, values:[] }
     for (const [val, conf] of Object.entries(valMap || {})) {
       const st = {};
-      if (uiType === 'fontColor' && conf.textColor) st.fontColor = conf.textColor;
-      if (uiType === 'backgroundColor' && conf.bgColor) st.backgroundColor = conf.bgColor;
-      if (uiType === 'borderColor' && conf.borderColor) st.borderColor = conf.borderColor;
-      if (uiType === 'fontFamily' && conf.fontFamily) st.fontFamily = conf.fontFamily;
-      if (uiType === 'haloColor' && conf.haloColor) st.haloColor = conf.haloColor;
+      if (uiType === 'fontColor'      && conf.textColor)   st.fontColor      = conf.textColor;
+      if (uiType === 'backgroundColor'&& conf.bgColor)     st.backgroundColor= conf.bgColor;
+      if (uiType === 'borderColor'    && conf.borderColor) st.borderColor    = conf.borderColor;
+      if (uiType === 'fontFamily'     && conf.fontFamily)  st.fontFamily     = conf.fontFamily;
+      if (uiType === 'haloColor'      && conf.haloColor)   st.haloColor      = conf.haloColor;
 
       const key = JSON.stringify(st);
       if (!groups.has(key)) groups.set(key, { style: st, values: [] });
@@ -160,7 +162,7 @@ function injectStateIntoPanel(state) {
     }
   }
 
-  // 5) 如已有当前属性，重绘表格（否则由用户选择时再绘）
+  // 5) 如果当前已有属性被外层设定，重绘表格；否则等待用户点击属性按钮后再绘制
   if (stateMem.currentStyleAttr) {
     renderStyleTable(stateMem.currentStyleAttr);
   }
@@ -431,6 +433,7 @@ function quickApplyCurrentStyles({ persist = false } = {}) {
     stateMem.styleRules,
     ENGINE_KEY_MAP,
   );
+  stateMem.lastAppliedEngineState = engineState; // ✅ 记录最近一次应用
   const next = persist ? setStyleState(engineState) : engineState;
   applyStyleState(next, _opts);
 }
@@ -460,11 +463,7 @@ function openFallbackJsonPanel() {
     document.body.appendChild(host);
     host.querySelector('#sp-close').onclick = () => host.remove();
     host.querySelector('#sp-reset').onclick = () => {
-      stateMem.currentStyleAttr = null;
-      stateMem.boundStyleType = {};
-      stateMem.styleTypeOwner = {};
-      stateMem.styleRules = {};
-      stateMem.styleRowSelections = {};
+      resetStateMem(); // ✅ 统一重置
       const empty = { version: 1, boundTypes: {}, rules: {} };
       const saved = setStyleState(empty);
       applyStyleState(saved, _opts);
