@@ -8,7 +8,7 @@ export const ATTR_KEYS = ['EventType','Company','Tag','Platform','ConsolePlatfor
 
 /**
  * 给事件外层元素打 data-* 标，供 CSS 规则匹配。
- * - Tag 使用空格分隔 token，便于用 [data-Tag~="xxx"] 选择器匹配。
+ * - Tag 使用空格分隔 token，便于用 [data-Tag~="xxx"] 选择器匹配（注意大小写）。
  */
 export function attachEventDataAttrs(el, item) {
   if (!el || !item) return;
@@ -78,7 +78,7 @@ function hexToRGBA(hex, aOverride) {
  *  - selectorBase: 事件元素选择器基（默认 '.vis-item.event'）
  *  - titleSelector: 事件标题选择器（默认 '.event-title'）
  *  - attrPriority: 属性优先级数组（默认与 ATTR_KEYS 一致）
- *  - borderWidthPx: 边框宽度（默认 2 或外部 DEFAULTS.BORDER_WIDTH_PX）
+ *  - borderWidthPx: 边框宽度（默认 2 或 globalThis.DEFAULTS.BORDER_WIDTH_PX）
  * @returns {string} CSS
  */
 export function compileStyleRules(styleState, opts = {}) {
@@ -104,50 +104,31 @@ export function compileStyleRules(styleState, opts = {}) {
         ? `${selectorBase}[data-Tag~=${v}]`
         : `${selectorBase}[data-${attr}=${v}]`;
 
-      // 文本色 / 背景色 / 字体家族 / 字重
-      if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor};}\n`;
-      if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor};}\n`;
-      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily};}\n`;
-      if (type === 'fontWeight'  && conf.fontWeight)  css += `${baseSel} ${titleSel}{font-weight:${conf.fontWeight};}\n`;
+      // 文本色 / 字体家族 —— 作用于标题元素
+      if (type === 'textColor'   && conf.textColor)   css += `${baseSel} ${titleSel}{color:${conf.textColor} !important;}\n`;
+      if (type === 'fontFamily'  && conf.fontFamily)  css += `${baseSel} ${titleSel}{font-family:${conf.fontFamily} !important;}\n`;
 
-      // 边框（统一使用相同宽度）
+      // 背景色 —— 作用于卡片容器
+      if (type === 'bgColor'     && conf.bgColor)     css += `${baseSel}{background-color:${conf.bgColor} !important;}\n`;
+
+      // 边框（统一宽度；尽量不与 vis 自身样式打架）
       if (type === 'borderColor') {
         const parts = [];
-        if (conf.borderColor) parts.push(`border-color:${conf.borderColor};`);
-        parts.push('border-style:solid;');
-        parts.push(`border-width:${globalBorderPx}px;`);
-        parts.push('box-sizing:border-box;');
-        css += `${baseSel}{${parts.join('')}}\n`;
+        if (conf.borderColor) parts.push(`border-color:${conf.borderColor} !important`);
+        parts.push('border-style:solid');
+        parts.push(`border-width:${globalBorderPx}px`);
+        parts.push('box-sizing:border-box');
+        css += `${baseSel}{${parts.join(';')};}\n`;
       }
 
-      // 光晕（halo）
+      // 光晕（halo）—— 多层阴影，提升显著度
       if (type === 'haloColor' && conf.haloColor) {
-        // 内圈/外圈透明度可按需调整
-        const rgbaStrong = hexToRGBA(conf.haloColor, 0.35); // 内圈（更实）
-        const rgbaSoft   = hexToRGBA(conf.haloColor, 0.2);  // 外圈（更柔）
-
-        // 某些主题会裁剪阴影，放开
+        const rgbaStrong = hexToRGBA(conf.haloColor, 0.35); // 贴边
+        const rgbaSoft   = hexToRGBA(conf.haloColor, 0.20); // 柔光
+        // 放开裁剪，避免阴影被截断
         css += `${baseSel}{overflow:visible !important;}\n`;
-
-        // 普通态三层
-        css +=
-          `${baseSel}{` +
-            `box-shadow:` +
-              `0 0 0 0px ${rgbaStrong}, ` +   // 贴边描边层
-              `0 0 0 6px ${rgbaSoft}, ` +     // 近光环
-              `0 0 18px 10px ${rgbaSoft}` +   // 外扩柔光
-            ` !important;` +
-          `}\n`;
-
-        // 选中态稍增强
-        css +=
-          `${baseSel}.vis-selected{` +
-            `box-shadow:` +
-              `0 0 0 0px ${rgbaStrong}, ` +
-              `0 0 0 8px ${rgbaSoft}, ` +
-              `0 0 26px 14px ${rgbaSoft}` +
-            ` !important;` +
-          `}\n`;
+        css += `${baseSel}{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 6px ${rgbaSoft}, 0 0 18px 10px ${rgbaSoft} !important;}\n`;
+        css += `${baseSel}.vis-selected{box-shadow:0 0 0 0px ${rgbaStrong}, 0 0 0 8px ${rgbaSoft}, 0 0 26px 14px ${rgbaSoft} !important;}\n`;
       }
     }
   }
