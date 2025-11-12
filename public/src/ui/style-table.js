@@ -25,7 +25,7 @@ function normalizeHexUpper(v) {
   if (s.length === 4) {
     s = `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`;
   }
-  // 非法长度直接返回原值（后续由 input[type=color] 兜底）
+  // 非法长度交给 <input type="color"> 兜底
   return s;
 }
 
@@ -50,8 +50,12 @@ export function renderStyleTable(attrKey) {
   const tbody = document.getElementById('styleTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  const rules = (window.stateMem && window.stateMem.styleRules && window.stateMem.styleRules[attrKey]) || [];
-  (rules || []).forEach(rule => renderRuleRow(attrKey, rule));
+  const rules =
+    (window.stateMem &&
+      window.stateMem.styleRules &&
+      window.stateMem.styleRules[attrKey]) ||
+    [];
+  (rules || []).forEach((rule) => renderRuleRow(attrKey, rule));
 }
 
 /** ---------- 渲染 chips（封装：使用全局 tbody） ---------- */
@@ -71,7 +75,9 @@ export function setRowSelections(selMap, rowId, values) {
 export function renderStyleTableBody(tbody, rules, attrKey, rowRender) {
   if (!tbody) return;
   tbody.innerHTML = '';
-  (Array.isArray(rules) ? rules : []).forEach(rule => rowRender && rowRender(attrKey, rule));
+  (Array.isArray(rules) ? rules : []).forEach(
+    (rule) => rowRender && rowRender(attrKey, rule),
+  );
 }
 
 /** ---------- 控件 wiring：字体族 ---------- */
@@ -90,22 +96,23 @@ export function wireFontFamilyControl(containerEl, rule) {
 export function wireColorHexSync(containerEl, rule) {
   if (!containerEl || !rule) return;
   const color = containerEl.querySelector('input[type="color"]');
-  const hex   = containerEl.querySelector('input[type="text"]');
+  const hex = containerEl.querySelector('input[type="text"]');
 
-  const current = normalizeHexUpper(rule.style?.[rule.type] || '#000000');
+  const key = rule.type; // 'fontColor' | 'borderColor' | 'backgroundColor' | 'haloColor'
+  const current = normalizeHexUpper(rule.style?.[key] || '#000000');
 
   if (color) color.value = current;
-  if (hex)   hex.value   = current;
+  if (hex) hex.value = current;
 
   if (color && hex) {
     color.addEventListener('input', () => {
       const v = normalizeHexUpper(color.value || '#000000');
       hex.value = v;
-      (rule.style ||= {})[rule.type] = v;
+      (rule.style ||= {})[key] = v;
     });
     hex.addEventListener('change', () => {
       const v = normalizeHexUpper(hex.value || '#000000');
-      (rule.style ||= {})[rule.type] = v;
+      (rule.style ||= {})[key] = v;
       if (normalizeHexUpper(color.value || '') !== v) color.value = v;
     });
   }
@@ -134,14 +141,20 @@ export function renderRuleRowFragment(attrKey, rule, deps = {}) {
   // 左：样式控件
   const tdContent = document.createElement('td');
   tdContent.dataset.styleType = rule.type;
-  const ctrl = buildStyleControl ? buildStyleControl(rule.type) : document.createTextNode(rule.type);
+  const ctrl = buildStyleControl
+    ? buildStyleControl(rule.type)
+    : document.createTextNode(rule.type);
   tdContent.appendChild(ctrl);
   tr.appendChild(tdContent);
 
   // 控件 wiring
   if (rule.type === 'fontFamily') {
     wireFontFamilyControl(tdContent, rule);
-  } else if (['fontColor', 'borderColor', 'backgroundColor', 'haloColor'].includes(rule.type)) {
+  } else if (
+    ['fontColor', 'borderColor', 'backgroundColor', 'haloColor'].includes(
+      rule.type,
+    )
+  ) {
     wireColorHexSync(tdContent, rule);
   }
 
@@ -174,8 +187,14 @@ export function renderRuleRowFragment(attrKey, rule, deps = {}) {
   delBtn.textContent = '×';
   delBtn.addEventListener('click', () => {
     const bucket = (styleRulesRef && styleRulesRef[attrKey]) || [];
-    const idx = bucket.findIndex(r => r.id === rule.id);
+    const idx = bucket.findIndex((r) => r.id === rule.id);
     if (idx >= 0) bucket.splice(idx, 1);
+    // 清理选择缓存，防止“幽灵选择”
+    try {
+      if (window.stateMem && window.stateMem.styleRowSelections) {
+        delete window.stateMem.styleRowSelections[rule.id];
+      }
+    } catch {}
     tr.remove();
   });
   tdAction.appendChild(delBtn);
@@ -194,8 +213,11 @@ export function buildAttrMultiSelectFor(attrKey, deps = {}) {
   const {
     options = null, // = allOptions
     getOptions = null,
-    useChoices = typeof globalThis !== 'undefined' && typeof globalThis.Choices === 'function',
-    choicesCtor = typeof globalThis !== 'undefined' ? globalThis.Choices : undefined,
+    useChoices =
+      typeof globalThis !== 'undefined' &&
+      typeof globalThis.Choices === 'function',
+    choicesCtor =
+      typeof globalThis !== 'undefined' ? globalThis.Choices : undefined,
     choicesConfig = {
       removeItemButton: true,
       shouldSort: false,
@@ -208,16 +230,19 @@ export function buildAttrMultiSelectFor(attrKey, deps = {}) {
   sel.multiple = true;
   sel.className = 'style-attr-select';
 
-  const opts = (typeof getOptions === 'function')
-    ? (getOptions(attrKey) || [])
-    : (options ? getFilterOptionsForKeyFrom(options, attrKey) : []);
+  const opts =
+    typeof getOptions === 'function'
+      ? getOptions(attrKey) || []
+      : options
+      ? getFilterOptionsForKeyFrom(options, attrKey)
+      : [];
 
   if (!opts || opts.length === 0) {
     const o = new Option('（暂无可选项 / 仍在加载）', '');
     o.disabled = true;
     sel.appendChild(o);
   } else {
-    opts.forEach(v => sel.appendChild(new Option(v, v)));
+    opts.forEach((v) => sel.appendChild(new Option(v, v)));
   }
 
   if (useChoices && typeof choicesCtor === 'function') {
@@ -268,10 +293,11 @@ export function renderChipsInto(containerEl, values) {
     containerEl.innerHTML = '<span style="color:#999;">（未选择）</span>';
     return;
   }
-  list.forEach(v => {
+  list.forEach((v) => {
     const tag = document.createElement('span');
     tag.textContent = v;
-    tag.style.cssText = 'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
+    tag.style.cssText =
+      'display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px;';
     containerEl.appendChild(tag);
   });
 }
@@ -297,12 +323,15 @@ function buildStyleControl(type) {
   if (type === 'fontFamily') {
     const wrap = document.createElement('div');
     const sel = document.createElement('select');
+    // ✅ 增加“隶书 / 幼圆”，保留常见回退
     sel.innerHTML = `
       <option value="">（默认字体）</option>
       <option value="Inter, system-ui, Arial">Inter</option>
       <option value="Noto Sans SC, system-ui, Arial">思源黑体</option>
-      <option value="SimHei, Arial">黑体</option>
-      <option value="SimSun, serif">宋体</option>
+      <option value="SimHei, Arial">黑体 (SimHei)</option>
+      <option value="SimSun, serif">宋体 (SimSun)</option>
+      <option value="'LiSu', 'STLiti', 'KaiTi', serif">隶书 (LiSu)</option>
+      <option value="'YouYuan', 'Microsoft YaHei', 'PingFang SC', sans-serif">幼圆 (YouYuan)</option>
     `;
     wrap.appendChild(sel);
     return wrap;
