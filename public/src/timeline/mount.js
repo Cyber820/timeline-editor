@@ -5,6 +5,7 @@
 // - 过滤逻辑：确定=只更新规则；AND/OR 按钮才实际过滤
 // - 样式系统：自包含面板（自动注入），5 个入口按钮 + 绑定/行编辑/保存&应用
 // - 单属性只能绑定一种样式类型（字体颜色/背景颜色/边框颜色/字体/光晕颜色，绑定后禁用下拉；需“重置”解锁）
+// - ✅ 新增：在 template 中对 .vis-item 注入 data-*（attachEventDataAttrs），确保样式引擎可命中
 
 import { fetchAndNormalize } from './fetch.js';
 import { initFilterUI } from '../filter/filter-ui.js';
@@ -17,7 +18,7 @@ import {
 } from '../filter/filter-state.js';
 import { applyFilters } from '../filter/filter-engine.js';
 
-// —— 样式引擎关键引用（仅这些）
+// —— 样式引擎关键引用
 import { stateMem } from '../style/stateMem.js';
 import {
   buildEngineStyleState,
@@ -26,7 +27,7 @@ import {
   ensureBucketIn,
 } from '../_staging/constants.js';
 import { setStyleState } from '../state/styleState.js';
-import { applyStyleState } from '../style/engine.js';
+import { applyStyleState, attachEventDataAttrs } from '../style/engine.js'; // ✅ 加上 attachEventDataAttrs
 
 /* ----------------------------------------------------------------
  * 显示参数
@@ -119,7 +120,7 @@ function normalizeEvent(event,i){
   const Desc=event.Description??parsed['描述']??''; const Contrib=event.Contributor??event.Submitter??parsed['贡献者']??'';
   const TagRaw=event.Tag??parsed['标签']??''; const Tag=normalizeTags(TagRaw);
   const detailHtml=buildKvHTML({title,start,end,EventType,Region,Platform,Company,ConsolePlatform,Tag,Description:Desc,Contributor:Contrib,Status});
-  return { id:event.id||`auto-${i+1}`, content:title, start:start||undefined, end:end||undefined, detailHtml, titleText:title,
+  return { id:event.id||`auto-${i+1}`, content:title, start:start||undefined, end=end||undefined, detailHtml, titleText:title,
     EventType, Region, Platform, Company, Status, ConsolePlatform, Tag };
 }
 
@@ -257,12 +258,11 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr){
     });
     panel.appendChild(grid);
     const footer=document.createElement('div'); footer.style.cssText='display:flex;justify-content:flex-end;gap:8px;margin-top:10px;';
-    // ✅ 调整按钮顺序：左“确定” 右“取消”
+    // ✅ 左“确定” 右“取消”
     const ok=document.createElement('button'); ok.textContent='确定';
     const cancel=document.createElement('button'); cancel.textContent='取消';
     ok.addEventListener('click',()=>{ rule.values = Array.from(current); renderChips(chips, rule.values); document.body.removeChild(box); });
     cancel.addEventListener('click',()=>document.body.removeChild(box));
-    // 左确定右取消：先添加“确定”，后添加“取消”
     footer.appendChild(ok);
     footer.appendChild(cancel);
     panel.appendChild(footer);
@@ -296,20 +296,6 @@ function collectOptionsForAttr(mapped, attrKey){
   return uniqueSorted(vals.filter(Boolean));
 }
 
-// 刷新类型下拉（全局唯一占用提示 + 本属性已绑定则禁用）
-function refreshTypeOptions(selectEl){
-  if (!selectEl) return;
-  Array.from(selectEl.options).forEach(opt=>{
-    if(!opt.dataset.baseText) opt.dataset.baseText = opt.textContent;
-    const type = opt.value;
-    if (type==='none') { opt.disabled=false; opt.textContent=opt.dataset.baseText; return; }
-    const owner = stateMem.styleTypeOwner?.[type];
-    const isMine = owner === stateMem.currentStyleAttr;
-    opt.disabled = !!(owner && !isMine);
-    opt.textContent = opt.dataset.baseText + (owner && !isMine ? `（已绑定：${owner}）` : '');
-  });
-}
-
 // 把 UI 态保存 → 引擎态 → 持久化 → 应用
 function persistAndApply(selectorBase, titleSelector){
   const engineState = buildEngineStyleState(stateMem.boundStyleType, stateMem.styleRules, ENGINE_KEY_MAP);
@@ -318,7 +304,7 @@ function persistAndApply(selectorBase, titleSelector){
 }
 
 /* ----------------------------------------------------------------
- * 样式按钮栏：插在“筛选/过滤”右侧
+ * 样式按钮栏：插在“筛选/过滤”右侧（不动你现有过滤 UI）
  * ---------------------------------------------------------------- */
 function mountStyleButtonsRightOfFilter(container, mapped){
   const findFilterBtn = ()=>{
@@ -375,28 +361,24 @@ function openStyleEditorFor(attrKey, mapped){
   tbody.innerHTML='';
   (stateMem.styleRules[attrKey]||[]).forEach(rule=> renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey)));
 
-  // 读取“实时”已绑定类型（🚫 修复：避免使用初次打开时的闭包常量）
+  // 读取“实时”已绑定类型
   const boundNow = () => stateMem.boundStyleType[attrKey] || 'none';
 
   // 状态初始化
-  refreshTypeOptions(typeSel);
+  typeSel.disabled = (boundNow() !== 'none');  // ✅ 已绑定则禁选
   typeSel.value = 'none';
   btnConfirm.disabled = true;
-
   const currentBound = boundNow();
   hintEl.textContent = currentBound==='none' ? '当前样式：无' : `当前样式：${currentBound}`;
   btnAdd.disabled = (currentBound==='none');
   btnReset.style.display = (currentBound==='none') ? 'none' : 'inline-block';
-  // 🔒 若已绑定，禁用下拉，必须“重置”后才能换
-  typeSel.disabled = currentBound !== 'none';
 
-  // 交互：选择类型（实时读取 boundNow()）
+  // 交互：选择类型
   let stagedType='none';
   typeSel.onchange = ()=>{
     const current = boundNow();
     const val = typeSel.value || 'none';
-    if (current !== 'none') {
-      // 已绑定的属性，禁止切换
+    if (current !== 'none') { // 安全栅栏
       typeSel.value = 'none';
       btnConfirm.disabled = true;
       hintEl.textContent = `当前绑定：${current}（如需更改，请先“重置”）`;
@@ -413,7 +395,7 @@ function openStyleEditorFor(attrKey, mapped){
   // 确认绑定
   btnConfirm.onclick = ()=>{
     const curr = boundNow();
-    if (curr !== 'none') return;      // 二次校验
+    if (curr !== 'none') return;
     if (stagedType==='none') return;
 
     // 写入占用与绑定
@@ -525,25 +507,33 @@ export async function mountTimeline(container, overrides = {}) {
       minHeight:UI.canvas.height, maxHeight:UI.canvas.height,
       orientation:{ item:UI.layout.itemPosition, axis:UI.layout.axisPosition },
       margin:{ item:UI.layout.verticalItemGap, axis:50 },
-      locale:'en', editable:false, stack:UI.layout.stack,
+      locale:'en', // ✅ 英文月份
+      editable:false, stack:UI.layout.stack,
       verticalScroll:UI.zoom.verticalScroll, zoomKey:UI.zoom.key,
       template:(item,element)=>{
-        const host=element?.closest?.('.vis-item')||element; if (host) host.classList.add('event');
-        const root=document.createElement('div'); const h4=document.createElement('h4'); h4.className='event-title';
-        h4.textContent=item.titleText||item.content||'(无标题)'; root.appendChild(h4); return root;
+        const host=element?.closest?.('.vis-item')||element;
+        if (host) {
+          host.classList.add('event');
+          attachEventDataAttrs(host, item); // ✅ 注入 data-* 供样式命中
+        }
+        const root=document.createElement('div');
+        const h4=document.createElement('h4'); h4.className='event-title';
+        h4.textContent=item.titleText||item.content||'(无标题)'; // ✅ 只显示标题
+        root.appendChild(h4);
+        return root;
       },
     };
     const options={...baseOptions,...overrides}; if(startDate) options.start=startDate; if(endDate) options.end=endDate;
 
     const vis=window.vis; timeline=new vis.Timeline(container,dataset,options);
 
-    // 过滤 UI
+    // 过滤 UI（保持你的现有位置/行为）
     initFilterUI({ beforeElSelector: beforeSelector, getItems: ()=>mapped, getCurrentRules: ()=>getState().rules });
 
-    // 样式按钮
+    // 样式按钮（挂在过滤按钮右侧）
     mountStyleButtonsRightOfFilter(container, mapped);
 
-    // 点击弹窗
+    // 点击弹窗（分栏显示）
     function ensurePopover(){ let pop=container.querySelector('#event-popover');
       if(!pop){ pop=document.createElement('div'); pop.id='event-popover'; container.appendChild(pop); } return pop; }
     const pop=ensurePopover(); let currentAnchor=null;
