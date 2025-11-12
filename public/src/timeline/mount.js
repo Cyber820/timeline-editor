@@ -96,27 +96,18 @@ function createLoadingOverlay(){
 
 /* 数据映射 */
 function normalizeEvent(event,i){
-  const Start=event.Start??event.start??''; const End=event.End??event.end??'';
-  const blob=(event.title||event.content||'').toString();
+  const Start=event.Start??event.start??''; const End=event.End??event.end??''; const blob=(event.title||event.content||'').toString();
   const parsed=parseBlobFields(blob);
-
   const title=toPlain(event.Title)||parsed['事件名称']||toPlain(event.title)||toPlain(event.content)||'(无标题)';
   const start=Start||parsed.__start||''; const end=End||parsed.__end||'';
-  const EventType=event.EventType??parsed['事件类型']||''; const Region=event.Region??parsed['地区']||'';
-  const Platform=event.Platform??parsed['平台类型']||''; const Company=event.Company??parsed['公司']||'';
-  const Status=event.Status??parsed['状态']||''; const ConsolePlatform=event.ConsolePlatform??parsed['主机类型']||'';
-  const Desc=event.Description??parsed['描述']||''; const Contrib=event.Contributor??event.Submitter??parsed['贡献者']||'';
-  const Tag=normalizeTags(event.Tag??parsed['标签']||'');
-
-  const detailHtml=buildKvHTML({ title, start, end, EventType, Region, Platform, Company, ConsolePlatform, Tag, Description:Desc, Contributor:Contrib, Status });
-
-  return {
-    id: event.id || `auto-${i+1}`,
-    content: title, titleText: title,
-    start: start || undefined, end: end || undefined,
-    detailHtml,
-    EventType, Region, Platform, Company, Status, ConsolePlatform, Tag
-  };
+  const EventType=event.EventType??parsed['事件类型']??''; const Region=event.Region??parsed['地区']??'';
+  const Platform=event.Platform??parsed['平台类型']??''; const Company=event.Company??parsed['公司']??'';
+  const Status=event.Status??parsed['状态']??''; const ConsolePlatform=event.ConsolePlatform??parsed['主机类型']??'';
+  const Desc=event.Description??parsed['描述']??''; const Contrib=event.Contributor??event.Submitter??parsed['贡献者']??'';
+  const TagRaw=event.Tag??parsed['标签']??''; const Tag=normalizeTags(TagRaw);
+  const detailHtml=buildKvHTML({title,start,end,EventType,Region,Platform,Company,ConsolePlatform,Tag,Description:Desc,Contributor:Contrib,Status});
+  return { id:event.id||`auto-${i+1}`, content:title, start:start||undefined, end:end||undefined, detailHtml, titleText:title,
+    EventType, Region, Platform, Company, Status, ConsolePlatform, Tag };
 }
 
 /* ============== 样式面板（简化自包含版本） ============== */
