@@ -59,4 +59,24 @@ export const stateMem = {
    * @type {Record<string, string[]>}
    */
   styleRowSelections: {},
+
+  /**
+   * 缓存上一次应用到时间轴的引擎状态（便于 compare / diff / debug）
+   * 不参与保存，仅供调试。
+   * @type {Object|null}
+   */
+  lastAppliedEngineState: null,
 };
+
+/**
+ * 重置 stateMem（不清空全局引用）。
+ * 用于点击“重置样式”时。
+ */
+export function resetStateMem() {
+  stateMem.currentStyleAttr = null;
+  stateMem.boundStyleType = {};
+  stateMem.styleTypeOwner = {};
+  stateMem.styleRules = {};
+  stateMem.styleRowSelections = {};
+  stateMem.lastAppliedEngineState = null;
+}
