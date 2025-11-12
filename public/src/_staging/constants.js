@@ -6,7 +6,7 @@
 /* =========================================================
  * 0) 版本标识（便于排查与灰度）
  * ======================================================= */
-export const CONSTS_VERSION = 'constants@1.1.1';
+export const CONSTS_VERSION = 'constants@1.2.0';
 
 /* =========================================================
  * 0.5) 外部依赖：统一 ID 生成工具
@@ -73,11 +73,20 @@ export const PRESET_COLORS = Object.freeze([
   { name: '洋红', hex: '#D946EF' },
 ]);
 
+/** 五种样式类型（UI 层可直接引用） */
+export const UI_STYLE_TYPES = Object.freeze([
+  'fontColor',
+  'backgroundColor',
+  'borderColor',
+  'fontFamily',
+  'haloColor',
+]);
+
 export const STYLE_LABELS = Object.freeze({
   fontFamily: '字体',
   fontColor: '字体颜色',
-  borderColor: '事件框颜色',
-  backgroundColor: '事件框填充色',
+  borderColor: '边框颜色',
+  backgroundColor: '背景颜色',
   haloColor: '光晕颜色',
   none: '无',
 });
@@ -122,10 +131,13 @@ export function normalizeToStringArray(raw) {
  * ======================================================= */
 export function getFilterOptionsForKeyFrom(options, key) {
   if (!options) return [];
-  if (key === 'ConsolePlatform') {
-    return normalizeToArray(options.ConsolePlatform);
-  }
-  return normalizeToArray(options[key]);
+  const arr = key === 'ConsolePlatform'
+    ? normalizeToArray(options.ConsolePlatform)
+    : normalizeToArray(options[key]);
+
+  // 去重 + 排序（稳定）
+  return Array.from(new Set(arr.filter(Boolean)))
+    .sort((a, b) => String(a).localeCompare(String(b)));
 }
 
 export function valueInSelected(val, selectedArr) {
@@ -315,6 +327,7 @@ export function findRuleIn(rulesMap, attrKey, rowId) {
   return bucket.find((r) => r.id === rowId) || null;
 }
 
+/** NOTE: UI → 内部键；兼容旧写法 'font' */
 export function uiTypeToInternal(t) {
   return t === 'font' ? 'fontFamily' : t;
 }
@@ -323,8 +336,14 @@ export function createEmptyRuleForType(type, idFactory = () => genId('rule_')) {
   const rule = { id: idFactory(), type, style: {}, values: [] };
   if (type === 'fontFamily') {
     rule.style.fontFamily = '';
-  } else {
-    rule.style[type] = '#000000';
+  } else if (type === 'fontColor') {
+    rule.style.fontColor = '#000000';
+  } else if (type === 'backgroundColor') {
+    rule.style.backgroundColor = '#FFFFFF';
+  } else if (type === 'borderColor') {
+    rule.style.borderColor = '#000000';
+  } else if (type === 'haloColor') {
+    rule.style.haloColor = '#000000';
   }
   return rule;
 }
@@ -346,17 +365,29 @@ export function toEngineKey(t, map = ENGINE_KEY_MAP) {
   return map[t] || t;
 }
 
+/**
+ * 把 UI 态（boundStyleType/styleRules）转换为引擎态：
+ * {
+ *   version: 1,
+ *   boundTypes: { [attrKey]: 'textColor' | 'bgColor' | 'borderColor' | 'fontFamily' | 'haloColor' },
+ *   rules: { [attrKey]: { [value]: { textColor?, bgColor?, borderColor?, haloColor?, fontFamily? } } }
+ * }
+ */
 export function buildEngineStyleState(
   boundStyleType = {},
   styleRules = {},
   keyMap = ENGINE_KEY_MAP,
 ) {
   const map = (k) => toEngineKey(k, keyMap);
+
+  // 绑定映射
   const boundTypes = {};
   for (const [attr, t] of Object.entries(boundStyleType || {})) {
-    boundTypes[attr] = map(t || 'none');
+    const eng = map(t || 'none');
+    if (eng && eng !== 'none') boundTypes[attr] = eng;
   }
 
+  // 规则映射
   const rules = {};
   for (const [attr, rows] of Object.entries(styleRules || {})) {
     if (!Array.isArray(rows) || rows.length === 0) continue;
@@ -372,12 +403,11 @@ export function buildEngineStyleState(
         if (!val) return;
         (rules[attr] ||= {});
         const slot = (rules[attr][val] ||= {});
-
-        if (k === 'textColor' && st.fontColor) slot.textColor = st.fontColor;
-        if (k === 'bgColor' && st.backgroundColor) slot.bgColor = st.backgroundColor;
-        if (k === 'borderColor' && st.borderColor) slot.borderColor = st.borderColor;
-        if (k === 'haloColor' && st.haloColor) slot.haloColor = st.haloColor;
-        if (k === 'fontFamily' && st.fontFamily) slot.fontFamily = st.fontFamily;
+        if (k === 'textColor'   && st.fontColor)      slot.textColor  = st.fontColor;
+        if (k === 'bgColor'     && st.backgroundColor)slot.bgColor    = st.backgroundColor;
+        if (k === 'borderColor' && st.borderColor)    slot.borderColor= st.borderColor;
+        if (k === 'haloColor'   && st.haloColor)      slot.haloColor  = st.haloColor;
+        if (k === 'fontFamily'  && st.fontFamily)     slot.fontFamily = st.fontFamily;
       });
     }
   }
