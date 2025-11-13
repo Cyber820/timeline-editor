@@ -993,6 +993,10 @@ export async function mountTimeline(container, overrides = {}) {
       endDate = new Date(maxT + pad);
     }
 
+    // 👉 手动指定默认窗口（例如集中看 1980–1990）
+startDate = new Date('1980-01-01');
+endDate   = new Date('1990-12-31');
+    
     /**
      * baseOptions
      * 👉 这里与“画布外观 / 布局”最相关：
