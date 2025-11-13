@@ -33,7 +33,7 @@ import { applyStyleState, attachEventDataAttrs } from '../style/engine.js';
 
 // ---------------- UI 预设 ----------------
 const UI = {
-  canvas: { height: 1000 },
+  canvas: { height: 800 },
   item: { fontSize: 10, paddingX: 10, paddingY: 6, borderRadius: 10, maxWidth: 320 },
   layout: { itemPosition: 'bottom', axisPosition: 'bottom', verticalItemGap: 5, stack: true },
   zoom: { key: 'ctrlKey', verticalScroll: true },
