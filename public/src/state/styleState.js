@@ -1,8 +1,8 @@
 // src/state/styleState.js
-// ✅ 模块职责：管理“样式状态”的持久化与事件通知。
+// ✅ 模块职责：管理“样式状态”的内存态与事件通知。
 // ---------------------------------------------------------
-// 存储键：localStorage['timelineStyle.v1']
-// 存储内容结构：
+// ❌ 不再使用 localStorage，页面刷新后样式自动恢复为默认。
+// 状态结构：
 //   {
 //     version: 1,
 //     boundTypes: { EventType: 'textColor', ... },
@@ -12,60 +12,49 @@
 //     }
 //   }
 
-const KEY = 'timelineStyle.v1';
-
 const DEFAULT_STATE = Object.freeze({
   version: 1,
   boundTypes: {}, // 例：{ EventType: 'textColor' }
   rules: {},      // 例：{ EventType: { '主机游戏': { textColor:'#eab308' } } }
 });
 
+// 当前会话内存中的样式状态（页面刷新后会自然丢失）
+let CURRENT_STATE = { ...DEFAULT_STATE };
+
 /**
- * 从 localStorage 读取当前样式状态。
- *  - 若存储损坏或不存在，返回默认状态。
- *  - 自动合并 DEFAULT_STATE（保证缺省字段存在）。
+ * 获取当前样式状态（内存态）。
+ *  - 不再从 localStorage 读取。
+ *  - 返回一个浅拷贝，避免外部直接修改内部引用。
  * @returns {{version:number,boundTypes:Object,rules:Object}}
  */
 export function getStyleState() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_STATE };
-
-    const obj = JSON.parse(raw);
-
-    // 防御：防止被污染的 localStorage 结构
-    if (typeof obj !== 'object' || obj === null) {
-      console.warn('[styleState] invalid JSON, reset to default');
-      return { ...DEFAULT_STATE };
-    }
-
-    return { ...DEFAULT_STATE, ...obj };
-  } catch (err) {
-    console.error('[styleState] load error:', err);
-    return { ...DEFAULT_STATE };
-  }
+  return {
+    ...CURRENT_STATE,
+    boundTypes: { ...CURRENT_STATE.boundTypes },
+    rules: { ...CURRENT_STATE.rules },
+  };
 }
 
 /**
- * 将最新样式状态写入 localStorage，并派发自定义事件通知其他模块。
+ * 更新当前样式状态，并派发自定义事件通知其他模块。
+ *  - 不再写入 localStorage。
  * @param {Object} next - 新状态（部分或完整）
  * @returns {Object} 保存后的安全副本
  */
 export function setStyleState(next) {
-  const safe = { ...DEFAULT_STATE, ...next };
-
-  try {
-    localStorage.setItem(KEY, JSON.stringify(safe));
-  } catch (err) {
-    console.error('[styleState] save error:', err);
-  }
+  CURRENT_STATE = {
+    ...DEFAULT_STATE,
+    ...next,
+    boundTypes: { ...(next?.boundTypes || {}) },
+    rules: { ...(next?.rules || {}) },
+  };
 
   // 广播事件（用于其他模块联动更新，如 UI 面板）
   window.dispatchEvent(
-    new CustomEvent('timeline:styleState', { detail: safe }),
+    new CustomEvent('timeline:styleState', { detail: getStyleState() }),
   );
 
-  return safe;
+  return getStyleState();
 }
 
 /**
@@ -82,16 +71,12 @@ export function onStyleStateChange(handler) {
 }
 
 /**
- * 清除本地样式状态（可选辅助）。
- * 用于调试或重置功能。
+ * 重置为默认样式状态（内存态）。
+ *  - 不再操作 localStorage。
  */
 export function resetStyleState() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch (err) {
-    console.error('[styleState] reset error:', err);
-  }
-  const fresh = { ...DEFAULT_STATE };
+  CURRENT_STATE = { ...DEFAULT_STATE };
+  const fresh = getStyleState();
   window.dispatchEvent(
     new CustomEvent('timeline:styleState', { detail: fresh }),
   );
