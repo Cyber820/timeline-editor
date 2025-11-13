@@ -2,128 +2,75 @@
 <html lang="zh-cn">
 <head>
   <meta charset="utf-8" />
-  <title>beta | Timeline Debug Shell</title>
+  <title>电子游戏时间轴Beta版本</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- vis-timeline（如你已有本地版本，可替换为本地引入） -->
+  <!-- vis-timeline -->
   <link rel="stylesheet" href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css">
   <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
 
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
-    .topbar { display:flex; gap:8px; align-items:center; padding:8px 12px; background:#f8fafc; border-bottom:1px solid #e5e7eb; }
-    #timeline { height: 720px; border: 1px solid #e5e7eb; border-radius: 10px; margin:12px; }
-    .pill { padding:2px 8px; background:#eef2ff; color:#3730a3; border-radius:999px; font-size:12px; }
-    .hint { color:#64748b; font-size:12px; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, 
+        "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 18px;
+      font-weight: bold;
+      color: #111827;
+    }
+    #timeline {
+      height: 720px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin: 12px;
+    }
   </style>
 </head>
+
 <body>
+  <!-- 顶部标题（已去除所有 Debug 信息） -->
   <div class="topbar">
-    <strong>Beta Debug</strong>
-    <span id="ep" class="pill">endpoint: (loading)</span>
-    <span class="hint">点击任意事件卡片后，查看控制台输出（ARRAY_FOR_DEBUG / ITEM_OBJECT / RAW_OBJECT）。</span>
+    电子游戏时间轴Beta版本
   </div>
 
   <div id="timeline"></div>
 
-  <!-- 你的模块入口 -->
+  <!-- 入口脚本 -->
   <script type="module">
+
     /**********************
-     * 可选：在这里覆写 ENDPOINT（不写就用 constants.js 里的默认）
+     * （可选）覆盖 ENDPOINT
      **********************/
     // globalThis.TIMELINE_ENDPOINT = 'https://你的接口地址/exec';
 
-    // 显示一下当前 ENDPOINT（便于你确认用的哪个）
-    (function showEP(){
-      const el = document.getElementById('ep');
-      const ep = globalThis.TIMELINE_ENDPOINT ?? '(constants.js 默认值)';
-      el.textContent = 'endpoint: ' + ep;
-    })();
-
     /**********************
-     * 引入你已有的 mount.js
-     * 路径请与你项目实际一致（下列为你给的路径风格）
+     * 引入你的 mount.js
      **********************/
     import { mountTimeline } from './src/timeline/mount.js';
 
-    // 1) 让样式系统/旧逻辑“就绪”
-    //    如果你的工程里会在别处派发，则可以删掉这一行。
+    // 样式系统 ready（按你当前项目需求保留）
     window.dispatchEvent(new Event('style:ready'));
 
-    // 2) 挂载时间轴（按你的 mount.js 实现）
+    // 挂载时间轴
     await mountTimeline(
       document.getElementById('timeline'),
       {
-        // 这里可以加你需要覆盖的 vis 选项；留空则用 mount.js 内默认
+        // 需要覆盖 vis 配置可在此加入
       }
     );
 
     /**********************
-     * 调试钩子（超稳）：捕获点击的 .vis-item 并打印真实数据
-     * —— 解决“点了没有输出”的问题；用于定位“空值串行”
+     * ⚠ Debug 点击事件输出功能（已被移除）
+     * 原本包含 ARRAY_FOR_DEBUG / RAW_OBJECT 输出
+     * 根据你的要求完全删掉
      **********************/
-    (function attachItemClickLogger() {
-      // 尝试从多个位置拿 DataSet（不同版本 vis 或不同实现）
-      function getItemById(id) {
-        // 你之前在 mount.js 里导出的全局句柄（如果有）
-        try {
-          if (window.__timelineItems?.get) {
-            const it = window.__timelineItems.get(id);
-            if (it) return it;
-          }
-        } catch(e){}
-        try {
-          const tl = window.__timeline;
-          if (tl?.itemsData?.get) return tl.itemsData.get(id) || null;
-          if (tl?.itemsData?._data?.get) return tl.itemsData._data.get(id) || null;
-        } catch(e){}
-        return null;
-      }
 
-      function toTags(v){
-        return Array.isArray(v) ? v : String(v ?? '').split(',').map(s=>s.trim()).filter(Boolean);
-      }
-
-      // 捕获阶段监听，确保最早拿到事件
-      document.addEventListener('click', (e) => {
-        // 优先用 composedPath 提升命中率
-        const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-        const chain = path.length ? path : (function climb(n){ const arr=[]; for(let el=n; el; el=el.parentElement) arr.push(el); return arr; })(e.target);
-
-        let hit = null;
-        for (const el of chain) {
-          if (!el || !el.classList) continue;
-          if (el.classList.contains('vis-item') || (el.matches && el.matches('[class*="vis-item"]'))) {
-            hit = el; break;
-          }
-        }
-        if (!hit) return; // 没点到事件卡片
-
-        const id = hit.getAttribute('data-id') || hit.id || hit.getAttribute('aria-label') || '';
-        let it = id ? getItemById(id) : null;
-
-        const arr = [
-          ['事件名称', it?.Title ?? it?.title ?? it?.content ?? it?.label ?? ''],
-          ['开始时间', it?.start ?? ''],
-          ['结束时间', it?.end ?? ''],
-          ['事件类型', it?.EventType ?? ''],
-          ['地区', it?.Region ?? ''],
-          ['平台类型', it?.Platform ?? ''],
-          ['主机类型', it?.ConsolePlatform ?? ''],
-          ['公司', it?.Company ?? ''],
-          ['标签', toTags(it?.Tags ?? it?.Tag).join('，')],
-          ['描述', it?.Description ?? it?.Desc ?? ''],
-          ['贡献者', it?.Contributor ?? it?.Submitter ?? ''],
-        ];
-
-        console.group('%c[DEBUG] 点击事件数据', 'color:#2563eb');
-        console.log('CLICKED_ID:', id);
-        console.log('ARRAY_FOR_DEBUG:', arr);
-        console.log('ITEM_OBJECT:', it);
-        console.log('RAW_OBJECT:', it && (it.__raw || it._raw || null));
-        console.groupEnd();
-      }, true);
-    })();
   </script>
 </body>
 </html>
