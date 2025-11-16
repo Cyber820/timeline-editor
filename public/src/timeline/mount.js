@@ -51,7 +51,7 @@ import { applyStyleState, attachEventDataAttrs } from '../style/engine.js';
  *  - UI.zoom.key             鼠标缩放需要按下的按键（如 'ctrlKey'）
  */
 const UI = {
-  canvas: { height: 720 },
+  canvas: { height: 600 },
   item: { fontSize: 10, paddingX: 10, paddingY: 6, borderRadius: 10, maxWidth: 320 },
   layout: { itemPosition: 'bottom', axisPosition: 'bottom', verticalItemGap: 5, stack: true },
   zoom: { key: 'ctrlKey', verticalScroll: true },
