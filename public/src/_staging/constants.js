@@ -28,7 +28,7 @@ export const DEFAULTS = Object.freeze({
  * ======================================================= */
 export const ENDPOINT =
   globalThis?.TIMELINE_ENDPOINT ||
-  'https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec';
+  'https://script.google.com/macros/s/AKfycbzap5kVZa7uqJRE47b-Bt5C4OmjnMhX-vIaOtRiSQko2eLcDe9zl3oc4U_Q66Uwkjex/exec';
 
 /* =========================================================
  * 3) 字段映射（统一规范后端字段名 → 前端键）
