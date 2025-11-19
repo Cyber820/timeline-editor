@@ -67,7 +67,20 @@ function asDisplay(v) {
 }
 
 // “长描述字段”里要解析出来的标签名称
-const FIELD_LABELS = ['事件名称', '事件类型', '时间', '状态', '地区', '平台类型', '主机类型', '公司', '标签', '描述', '贡献者'];
+const FIELD_LABELS = [
+  '事件名称',
+  '事件类型',
+  '时间',
+  '状态',
+  '地区',
+  '平台类型',
+  '主机类型',
+  '公司',
+  '标签',
+  '重要性', // ⭐ 新增：支持从 blob 中解析“重要性：xxx”
+  '描述',
+  '贡献者',
+];
 
 /**
  * parseBlobFields
@@ -122,7 +135,7 @@ function toMs(ts) {
 /**
  * buildKvHTML
  * 生成弹窗中“详情信息”的 HTML（键值对展示）。
- * 显示字段包括：事件名称 / 时间 / 类型 / 地区 / 平台 / 主机 / 公司 / 标签 / 描述 / 贡献者。
+ * 显示字段包括：事件名称 / 时间 / 类型 / 地区 / 平台 / 主机 / 公司 / 标签 / 描述 / 贡献者 / 重要性。
  */
 function buildKvHTML(obj) {
   const kv = [
@@ -134,6 +147,7 @@ function buildKvHTML(obj) {
     ['平台类型', obj.Platform],
     ['主机类型', obj.ConsolePlatform],
     ['公司', obj.Company],
+    ['重要性', obj.Importance], // ⭐ 新增：在详情中显示“重要性”
     ['标签', Array.isArray(obj.Tag) ? obj.Tag.join('，') : obj.Tag || ''],
     ['描述', obj.Description],
     ['贡献者', obj.Contributor || obj.Submitter],
@@ -248,7 +262,7 @@ function createLoadingOverlay() {
  *     start, end,        // 起止时间
  *     titleText,         // 纯文本标题
  *     detailHtml,        // 弹窗 HTML
- *     EventType, Region, Platform, Company, Status, ConsolePlatform, Tag
+ *     EventType, Region, Platform, Company, Status, ConsolePlatform, Tag, Importance
  *   }
  */
 function normalizeEvent(event, i) {
@@ -278,6 +292,9 @@ function normalizeEvent(event, i) {
   const TagRaw = event.Tag ?? parsed['标签'] ?? '';
   const Tag = normalizeTags(TagRaw);
 
+  // ⭐ 新增：从后端字段或 blob 中解析“重要性”
+  const Importance = event.Importance ?? parsed['重要性'] ?? '';
+
   const detailHtml = buildKvHTML({
     title,
     start,
@@ -288,6 +305,7 @@ function normalizeEvent(event, i) {
     Company,
     ConsolePlatform,
     Tag,
+    Importance,       // ⭐ 传给详情 HTML 生成器
     Description: Desc,
     Contributor: Contrib,
     Status,
@@ -307,6 +325,7 @@ function normalizeEvent(event, i) {
     Status,
     ConsolePlatform,
     Tag,
+    Importance,        // ⭐ 为接下来过滤/样式/预设显示做准备
   };
 }
 
@@ -994,9 +1013,9 @@ export async function mountTimeline(container, overrides = {}) {
     }
 
     // 👉 手动指定默认窗口（例如集中看 1980–1990）
-startDate = new Date('1980-01-01');
-endDate   = new Date('1990-12-31');
-    
+    startDate = new Date('1980-01-01');
+    endDate = new Date('1990-12-31');
+
     /**
      * baseOptions
      * 👉 这里与“画布外观 / 布局”最相关：
