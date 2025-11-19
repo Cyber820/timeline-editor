@@ -1,7 +1,7 @@
 // src/timeline/fetch.js
 export async function fetchAndNormalize() {
   const ENDPOINT =
-    'https://script.google.com/macros/s/AKfycbxe-P-iT8Jv8xSNTqdYB7SMi4sy2pPl8lLZ2EWqaXsP-jz6nfsxdJ1a0lzNSGB-e_1U/exec';
+    'https://script.google.com/macros/s/AKfycbzap5kVZa7uqJRE47b-Bt5C4OmjnMhX-vIaOtRiSQko2eLcDe9zl3oc4U_Q66Uwkjex/exec';
   const res = await fetch(ENDPOINT);
   const data = await res.json();
 
