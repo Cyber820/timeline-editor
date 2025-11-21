@@ -59,6 +59,7 @@ export const attributeLabels = Object.freeze({
   ConsolePlatform: '主机类型',
   Tag: '标签',
   Status: '状态',
+  Importance: '重要性',          // ⭐ 新增：重要性
 });
 
 export const PRESET_COLORS = Object.freeze([
