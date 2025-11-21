@@ -10,6 +10,29 @@
 // - 文本使用 textContent，避免 XSS；不引入 escapeHtml。
 
 /**
+ * ⭐ 当前允许出现在「过滤属性」下拉框中的字段：
+ *   - EventType        事件类型
+ *   - Region          地区
+ *   - Platform        平台类型
+ *   - Company         公司
+ *   - ConsolePlatform 主机类型
+ *   - Importance      重要性
+ *
+ * 说明：
+ * - 即使 attributeLabels 中仍然有 Tag / Status 等，这里也会自动忽略它们；
+ * - 确保不会再出现「标签」；
+ * - Importance 只要在 attributeLabels 中有条目，就会出现在属性列表里。
+ */
+const FILTERABLE_KEYS = [
+  'EventType',
+  'Region',
+  'Platform',
+  'Company',
+  'ConsolePlatform',
+  'Importance',
+];
+
+/**
  * 渲染“已激活过滤条件”列表。
  * @param {HTMLElement} container
  * @param {Record<string,string[]>} activeFilters 例：{ Region:['日本','北美'] }
@@ -100,6 +123,12 @@ export function renderFilterList(
  * @param {Record<string,string>} attributeLabels
  * @param {{ includePlaceholder?: boolean, placeholderText?: string, orderKeys?: string[] }} [opts]
  *        - orderKeys 指定顺序；未提供则按 label 升序
+ *
+ * ⭐ 变更点：
+ *   - 使用 FILTERABLE_KEYS 白名单，只展示 EventType / Region / Platform /
+ *     Company / ConsolePlatform / Importance；
+ *   - 即便 attributeLabels 里有 Tag，也不会出现在下拉里；
+ *   - Importance 只要存在于 attributeLabels，即可正常展示。
  */
 export function renderAttributeSelect(selectEl, attributeLabels, opts = {}) {
   if (!selectEl) return;
@@ -107,11 +136,17 @@ export function renderAttributeSelect(selectEl, attributeLabels, opts = {}) {
 
   selectEl.innerHTML = '';
 
-  const keys = orderKeys && orderKeys.length
-    ? orderKeys.slice()
-    : Object.keys(attributeLabels || {}).sort((a, b) =>
-        String(attributeLabels[a]).localeCompare(String(attributeLabels[b]))
-      );
+  // 先从 attributeLabels 中取出“存在的键”，再与 FILTERABLE_KEYS 求交集
+  const allKeys = Object.keys(attributeLabels || {});
+  const allowedExistingKeys = FILTERABLE_KEYS.filter((k) => allKeys.includes(k));
+
+  // 如果调用方提供了 orderKeys，则在这个基础上再次过滤
+  const keys =
+    orderKeys && orderKeys.length
+      ? orderKeys.filter((k) => allowedExistingKeys.includes(k))
+      : allowedExistingKeys.sort((a, b) =>
+          String(attributeLabels[a]).localeCompare(String(attributeLabels[b]))
+        );
 
   if (includePlaceholder) {
     const ph = document.createElement('option');
