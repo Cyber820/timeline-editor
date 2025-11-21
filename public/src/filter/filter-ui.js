@@ -40,7 +40,7 @@ export function initFilterUI({
     toolbar.appendChild(triggerBtn);
   }
 
-  // 主面板
+  // 主面板构建
   function ensurePanel() {
     let panel = document.querySelector('#tl-filter-panel');
     if (panel) return panel;
@@ -57,7 +57,7 @@ export function initFilterUI({
         <button type="button" class="tl-btn" data-action="reset">复原过滤/筛选标准</button>
       </div>
       <div class="tl-filter-panel__row">
-        <button type="button" class="tl-btn" data-action="and">用和“逻”辑过滤/筛选</button>
+        <button type="button" class="tl-btn" data-action="and">用“和”逻辑过滤/筛选</button>
         <button type="button" class="tl-btn" data-action="or">用“或”逻辑过滤/筛选</button>
       </div>
 
@@ -89,25 +89,32 @@ export function initFilterUI({
     `;
     document.body.appendChild(panel);
 
-    // 主按钮事件
+    // 主按钮区域的事件委托
     panel.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
+
       if (action === 'add') {
         openBuilder();
       } else if (action === 'reset') {
         hideBuilder();
         window.dispatchEvent(new CustomEvent('filter:reset'));
       } else if (action === 'and') {
-        window.dispatchEvent(new CustomEvent('filter:set-logic', { detail: { mode: 'AND' } }));
+        window.dispatchEvent(
+          new CustomEvent('filter:set-logic', { detail: { mode: 'AND' } }),
+        );
       } else if (action === 'or') {
-        window.dispatchEvent(new CustomEvent('filter:set-logic', { detail: { mode: 'OR' } }));
+        window.dispatchEvent(
+          new CustomEvent('filter:set-logic', { detail: { mode: 'OR' } }),
+        );
       } else if (action === 'confirm') {
         // ✅ 仅更新规则，不立刻应用
         const { key, values } = readBuilder();
         if (key && values.length) {
-          window.dispatchEvent(new CustomEvent('filter:add-rule:confirm', { detail: { key, values } }));
+          window.dispatchEvent(
+            new CustomEvent('filter:add-rule:confirm', { detail: { key, values } }),
+          );
           hideBuilder();
           renderRuleSummary(); // 立刻刷新右侧规则清单
         }
@@ -135,7 +142,9 @@ export function initFilterUI({
     window.addEventListener('filter:state:updated', () => renderRuleSummary());
 
     // 搜索与属性切换
-    panel.querySelector('#tl-search').addEventListener('input', () => refreshOptions());
+    panel
+      .querySelector('#tl-search')
+      .addEventListener('input', () => refreshOptions());
     panel.querySelector('#tl-attr-select').addEventListener('change', () => {
       refreshOptions(true);
       restoreCheckedFromExistingRule();
@@ -184,44 +193,70 @@ export function initFilterUI({
     restoreCheckedFromExistingRule();
     panel.querySelector('#tl-filter-builder').hidden = false;
   }
+
   function hideBuilder() {
     const panel = ensurePanel();
     panel.querySelector('#tl-filter-builder').hidden = true;
   }
 
+  /**
+   * 准备“过滤属性”下拉选项：
+   * - 基于 getOptionKeys()
+   * - UI 层强制：移除 Tag；确保包含 Importance
+   */
   function prepareAttrOptions() {
     const sel = ensurePanel().querySelector('#tl-attr-select');
-    const keys = getOptionKeys();
+    let keys = getOptionKeys() || [];
     const current = sel.value;
+
+    // ❌ 从属性列表中移除“标签”
+    keys = keys.filter((k) => k !== 'Tag');
+
+    // ✅ 确保“重要性”出现在属性列表中
+    if (!keys.includes('Importance')) {
+      keys.push('Importance');
+    }
+
     // 用中文文案展示
-    sel.innerHTML = keys.map(k => `<option value="${k}">${keyToLabel(k)}</option>`).join('');
+    sel.innerHTML = keys
+      .map((k) => `<option value="${k}">${keyToLabel(k)}</option>`)
+      .join('');
+
     if (keys.includes(current)) sel.value = current;
     if (!sel.value && keys.length) sel.value = keys[0];
+
     refreshOptions(true);
   }
 
+  // 根据现有规则，恢复勾选状态
   function restoreCheckedFromExistingRule() {
     const rules = getCurrentRules() || [];
     const key = ensurePanel().querySelector('#tl-attr-select').value;
-    const exists = rules.find(r => r.key === key);
+    const exists = rules.find((r) => r.key === key);
     if (!exists) return;
+
     const boxWrap = ensurePanel().querySelector('#tl-options');
     const checks = boxWrap.querySelectorAll('input[type="checkbox"][data-val]');
-    const set = new Set((exists.values || []).map(v => String(v)));
-    checks.forEach(ch => {
+    const set = new Set((exists.values || []).map((v) => String(v)));
+
+    checks.forEach((ch) => {
       const v = ch.getAttribute('data-val');
       ch.checked = set.has(v);
     });
   }
 
+  // 从子面板读取当前选择
   function readBuilder() {
     const panel = ensurePanel();
     const key = panel.querySelector('#tl-attr-select').value;
-    const nodeList = panel.querySelectorAll('#tl-options input[type="checkbox"]:checked');
-    const values = Array.from(nodeList).map(ch => ch.getAttribute('data-val'));
+    const nodeList = panel.querySelectorAll(
+      '#tl-options input[type="checkbox"]:checked',
+    );
+    const values = Array.from(nodeList).map((ch) => ch.getAttribute('data-val'));
     return { key, values };
   }
 
+  // 刷新“过滤选项”列表（支持搜索）
   function refreshOptions(resetScroll = false) {
     const panel = ensurePanel();
     const key = panel.querySelector('#tl-attr-select').value;
@@ -234,9 +269,11 @@ export function initFilterUI({
     const frag = document.createDocumentFragment();
 
     options
-      .filter(o => !search || String(o).toLowerCase().includes(search))
-      .forEach(val => {
-        const id = `opt-${key}-${btoa(unescape(encodeURIComponent(String(val)))).replace(/=/g,'')}`;
+      .filter((o) => !search || String(o).toLowerCase().includes(search))
+      .forEach((val) => {
+        const id = `opt-${key}-${btoa(
+          unescape(encodeURIComponent(String(val))),
+        ).replace(/=/g, '')}`;
         const wrap = document.createElement('label');
         wrap.className = 'tl-opt';
         wrap.innerHTML = `
@@ -258,20 +295,30 @@ export function initFilterUI({
       host.innerHTML = `<div class="tl-hint">（尚未添加任何过滤/筛选标准）</div>`;
       return;
     }
-    const html = rules.map(r => {
-      const chips = (r.values || []).map(v => `<span class="chip">${String(v)}</span>`).join('');
-      return `
+
+    const html = rules
+      .map((r) => {
+        const chips = (r.values || [])
+          .map((v) => `<span class="chip">${String(v)}</span>`)
+          .join('');
+        return `
         <div class="rule-row">
           <div class="rule-left">
             <span class="rule-key">${keyToLabel(r.key)}</span>
-            <div class="rule-values">${chips || '<span class="chip chip--empty">（空）</span>'}</div>
+            <div class="rule-values">
+              ${chips || '<span class="chip chip--empty">（空）</span>'}
+            </div>
           </div>
           <div class="rule-right">
-            <button type="button" class="tl-x" title="清空该属性" data-clear-key="${r.key}">×</button>
+            <button type="button" class="tl-x" title="清空该属性" data-clear-key="${
+              r.key
+            }">×</button>
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join('');
+
     host.innerHTML = `<div class="rule-list">${html}</div>`;
   }
 }
@@ -313,6 +360,7 @@ function ensureStylesInjected() {
     .tl-multi { display:flex; flex-direction:column; gap:6px; width:100%; max-width:480px; }
     .tl-options { border:1px solid #e5e7eb; border-radius:8px; max-height:220px; overflow:auto; padding:6px; display:grid; gap:4px; grid-template-columns: 1fr 1fr; }
     .tl-opt { display:flex; gap:6px; align-items:center; font-size:13px; }
+    .tl-hint { font-size:12px; color:#6b7280; }
   `;
   document.head.appendChild(style);
 }
