@@ -1,14 +1,20 @@
 // public/src/ui/info-dialog.js
 // 作用：创建“使用方法 / 开发计划 / 反馈与建议”三个信息弹窗按钮。
-// - 使用方法 / 开发计划：继续使用 _staging/info-content.js 里的纯文本
-// - 反馈与建议：在前端显示表单（个人 ID / 联系方式 / 反馈内容），当前只写入 console.log
+// - 使用方法 / 开发计划：使用 _staging/info-content.js 里的纯文本
+// - 反馈与建议：前端表单（个人 ID / 联系方式 / 反馈内容），通过 Apps Script Web App 写入 Google Doc
 
 import { HOW_TO_USE_TEXT, ROADMAP_TEXT } from '../_staging/info-content.js';
+
+// ✅ 你的反馈 Web App 地址（请保持为 exec 结尾）
+const FEEDBACK_ENDPOINT =
+  'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec';
 
 let dialogRoot = null;      // 纯文本信息弹窗（使用方法 / 开发计划）
 let feedbackRoot = null;    // 反馈与建议弹窗
 
-/** 创建 / 获取通用“纯文本弹窗” DOM 结构（使用方法 / 开发计划） */
+/* ---------------- 纯文本信息弹窗（使用方法 / 开发计划） ---------------- */
+
+/** 创建 / 获取通用“纯文本弹窗” DOM 结构 */
 function ensureDialogRoot() {
   if (dialogRoot) return dialogRoot;
 
@@ -93,7 +99,7 @@ function openInfoDialog(title, text) {
   root.style.display = 'flex';
 }
 
-/* ---------------- 反馈与建议弹窗相关 ---------------- */
+/* ---------------- 反馈与建议弹窗 ---------------- */
 
 /** 创建 / 获取“反馈与建议”弹窗 DOM 结构 */
 function ensureFeedbackRoot() {
@@ -137,7 +143,7 @@ function ensureFeedbackRoot() {
       </div>
       <div style="font-size:13px;color:#4b5563;margin-bottom:4px;line-height:1.6;">
         如果你在时间轴中发现了错误、遗漏，或者有补充的资料与建议，欢迎在这里填写。<br>
-        “个人 ID” 可以是你在本项目中惯用的昵称或代号，便于后续在开发日志或感谢名单中标注。
+        个人 ID 可以是你的昵称、常用 ID，方便后续在版本日志中致谢。
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
         <div class="fb-field">
@@ -146,7 +152,7 @@ function ensureFeedbackRoot() {
             width:100%;box-sizing:border-box;
             border:1px solid #e5e7eb;border-radius:8px;
             padding:6px 8px;font-size:13px;
-          " placeholder="例如：你在本项目中使用的昵称或代号">
+          ">
         </div>
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">联系方式（选填）</label>
@@ -201,13 +207,13 @@ function ensureFeedbackRoot() {
   const contactInput = root.querySelector('#fb-contact');
   const contentInput = root.querySelector('#fb-content');
 
-  btnSubmit.addEventListener('click', () => {
+  btnSubmit.addEventListener('click', async () => {
     const id = (idInput?.value || '').trim();
     const contact = (contactInput?.value || '').trim();
     const content = (contentInput?.value || '').trim();
 
     if (!id) {
-      alert('请填写“个人 ID”（可以是你在本项目中使用的昵称或代号）。');
+      alert('请填写“个人 ID”（可以是昵称、编号等）。');
       idInput && idInput.focus();
       return;
     }
@@ -217,21 +223,36 @@ function ensureFeedbackRoot() {
       return;
     }
 
-    // 当前阶段：仅打印到控制台，后续可接入 Apps Script / Drive 写入文本文件
-    console.log('[timeline-feedback]', {
-      personalId: id,
+    // 用 x-www-form-urlencoded 提交给 Apps Script
+    const payload = new URLSearchParams({
+      id,
       contact,
       content,
-      ts: new Date().toISOString(),
     });
 
-    alert('感谢你的反馈！当前版本尚未接入后台存储，只在浏览器控制台记录了一份。');
+    try {
+      // 使用 no-cors：浏览器不检查 CORS，但也拿不到响应内容；
+      // 对当前需求来说，只要请求送达并写进 Doc 就足够。
+      await fetch(FEEDBACK_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        body: payload.toString(),
+      });
 
-    if (idInput) idInput.value = '';
-    if (contactInput) contactInput.value = '';
-    if (contentInput) contentInput.value = '';
+      alert('感谢你的反馈！信息已经发送到维护者的反馈文档。');
 
-    hide();
+      if (idInput) idInput.value = '';
+      if (contactInput) contactInput.value = '';
+      if (contentInput) contentInput.value = '';
+
+      hide();
+    } catch (err) {
+      console.error('反馈提交失败：', err);
+      alert('提交时出现了一些问题，可以稍后再试，或通过其他方式联系维护者。');
+    }
   });
 
   feedbackRoot = root;
@@ -249,7 +270,8 @@ function openFeedbackDialog() {
   }
 }
 
-/** 对外接口：初始化右上角按钮 + 绑定三个弹窗 */
+/* ---------------- 对外接口：初始化三个按钮 ---------------- */
+
 export function initInfoDialogs() {
   // 按钮 id：btn-help / btn-roadmap / btn-feedback
   const btnHelp = document.getElementById('btn-help');
