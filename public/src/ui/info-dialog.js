@@ -140,7 +140,7 @@ function ensureFeedbackRoot() {
               </div>
       <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
         <div class="fb-field">
-          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">事件 ID（必填）</label>
+          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">个人 ID（必填）</label>
           <input id="fb-id" type="text" style="
             width:100%;box-sizing:border-box;
             border:1px solid #e5e7eb;border-radius:8px;
