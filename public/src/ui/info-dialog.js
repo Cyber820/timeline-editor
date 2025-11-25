@@ -1,7 +1,7 @@
 // public/src/ui/info-dialog.js
 // 作用：创建“使用方法 / 开发计划 / 反馈与建议”三个信息弹窗按钮。
 // - 使用方法 / 开发计划：继续使用 _staging/info-content.js 里的纯文本
-// - 反馈与建议：在前端显示表单（ID / 联系方式 / 反馈内容），当前只写入 console.log
+// - 反馈与建议：在前端显示表单（个人 ID / 联系方式 / 反馈内容），当前只写入 console.log
 
 import { HOW_TO_USE_TEXT, ROADMAP_TEXT } from '../_staging/info-content.js';
 
@@ -137,7 +137,8 @@ function ensureFeedbackRoot() {
       </div>
       <div style="font-size:13px;color:#4b5563;margin-bottom:4px;line-height:1.6;">
         如果你在时间轴中发现了错误、遗漏，或者有补充的资料与建议，欢迎在这里填写。<br>
-              </div>
+        “个人 ID” 可以是你在本项目中惯用的昵称或代号，便于后续在开发日志或感谢名单中标注。
+      </div>
       <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">个人 ID（必填）</label>
@@ -145,7 +146,7 @@ function ensureFeedbackRoot() {
             width:100%;box-sizing:border-box;
             border:1px solid #e5e7eb;border-radius:8px;
             padding:6px 8px;font-size:13px;
-          >
+          " placeholder="例如：你在本项目中使用的昵称或代号">
         </div>
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">联系方式（选填）</label>
@@ -206,7 +207,7 @@ function ensureFeedbackRoot() {
     const content = (contentInput?.value || '').trim();
 
     if (!id) {
-      alert('请填写“事件 ID”（可以是编号、名称或大致时间描述）。');
+      alert('请填写“个人 ID”（可以是你在本项目中使用的昵称或代号）。');
       idInput && idInput.focus();
       return;
     }
@@ -218,7 +219,7 @@ function ensureFeedbackRoot() {
 
     // 当前阶段：仅打印到控制台，后续可接入 Apps Script / Drive 写入文本文件
     console.log('[timeline-feedback]', {
-      id,
+      personalId: id,
       contact,
       content,
       ts: new Date().toISOString(),
