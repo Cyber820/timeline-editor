@@ -137,8 +137,7 @@ function ensureFeedbackRoot() {
       </div>
       <div style="font-size:13px;color:#4b5563;margin-bottom:4px;line-height:1.6;">
         如果你在时间轴中发现了错误、遗漏，或者有补充的资料与建议，欢迎在这里填写。<br>
-        “事件 ID” 可以是事件的自动编号（如 <code>auto-24</code>），也可以是事件名称或大致时间描述。
-      </div>
+              </div>
       <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">事件 ID（必填）</label>
@@ -146,7 +145,7 @@ function ensureFeedbackRoot() {
             width:100%;box-sizing:border-box;
             border:1px solid #e5e7eb;border-radius:8px;
             padding:6px 8px;font-size:13px;
-          " placeholder="例如：auto-24 / 1980 年某事件 / 事件名称">
+          >
         </div>
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">联系方式（选填）</label>
