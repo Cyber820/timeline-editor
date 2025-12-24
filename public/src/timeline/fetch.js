@@ -3,12 +3,7 @@
 // ✅ endpoint 读取顺序：TIMELINE_ENDPOINT（推荐） > ENDPOINT（兼容旧逻辑） > fallback（仅兜底）
 
 function getEndpoint() {
-  const ep =
-    globalThis.TIMELINE_ENDPOINT ||
-    globalThis.ENDPOINT ||
-    null;
-
-  // ⚠️ 最终兜底：防止“完全没注入 endpoint”时页面直接不可用（开发期友好）
+  const ep = globalThis.TIMELINE_ENDPOINT || globalThis.ENDPOINT || null;
   return (
     ep ||
     'https://script.google.com/macros/s/AKfycbzap5kVZa7uqJRE47b-Bt5C4OmjnMhX-vIaOtRiSQko2eLcDe9zl3oc4U_Q66Uwkjex/exec'
@@ -43,24 +38,32 @@ export async function fetchAndNormalize() {
   const data = await res.json();
   const list = Array.isArray(data) ? data : [];
 
-  // ✅ 注意：这里返回的字段尽量贴近后端原字段名，
-  // 以保证你当前 mount.js 的 normalizeEvent() 逻辑不需要改动。
-  return list.map((ev, i) => ({
-    id: ensureId(ev, i),
+  return list.map((ev, i) => {
+    // ✅ 兼容你当前 Apps Script 返回的字段（content/start/title/Importance）
+    const content = ev.content ?? ev.Title ?? ev.title ?? '';
+    const start = ev.start ?? ev.Start ?? '';
+    const end = ev.end ?? ev.End ?? '';
+    const hover = ev.title ?? ev.Description ?? ev.description ?? '';
 
-    Title: ev.Title ?? ev.title ?? '',
-    Start: ev.Start ?? ev.start ?? '',
-    End: ev.End ?? ev.end ?? '',
-    Description: ev.Description ?? ev.description ?? '',
+    // ✅ 关键：Importance 必须透传，否则 mount.js 默认过滤会把全部过滤掉
+    const importance = ev.Importance ?? ev.importance ?? '';
 
-    EventType: ev.EventType ?? '',
-    Region: ev.Region ?? '',
-    Platform: ev.Platform ?? '',
-    Company: ev.Company ?? '',
-    ConsolePlatform: ev.ConsolePlatform ?? '',
-    Tag: normalizeTags(ev.Tag),
+    return {
+      id: ensureId(ev, i),
 
-    // 可选：保留原始对象，方便排查字段问题
-    __raw: ev,
-  }));
+      // mount.js normalizeEvent() 会优先读这些“标准字段名”
+      Title: content,                // 让事件标题显示为事件名，而不是整段 hover 文本
+      Start: start,
+      End: end || '',
+      Description: hover,
+
+      // 透传过滤/样式可能用到的字段
+      Importance: importance,
+
+      // Tag：若后端给的是字符串/数组都兼容
+      Tag: normalizeTags(ev.Tag),
+
+      __raw: ev,
+    };
+  });
 }
