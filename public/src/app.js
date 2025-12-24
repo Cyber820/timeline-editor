@@ -31,11 +31,9 @@ let originalItems = [];            // 初始 items 的快照（用于过滤回�
 
 // ========== Variant（region/lang → endpoints） ==========
 const variant = getVariant();
+window.__variant = variant; // 便于调试
 
-// 你后续会用到：给其他模块（或调试）提供“当前 variant”
-window.__variant = variant;
-
-// 兼容旧全局 endpoint（你目前代码/测试页可能还在读 window.ENDPOINT）
+// 当前页面的 events endpoint（权威来源）
 const ENDPOINT = variant?.endpoints?.events || null;
 
 // 如果 events endpoint 缺失，尽早报错（比 fetch 时报一堆二次错误更好定位）
@@ -44,10 +42,13 @@ if (!ENDPOINT) {
   throw new Error('[app] TIMELINE events endpoint is not set');
 }
 
-// 可选：为未来迁移保留这些（如果你后续要统一改成 globalThis.TIMELINE_ENDPOINT）
+// ✅ 关键：把 endpoint 写到全局，供 fetch.js 读取（你刚刚已把 fetch.js 改成读这里）
 globalThis.TIMELINE_ENDPOINT = ENDPOINT;
 globalThis.TIMELINE_OPTIONS_ENDPOINT = variant?.endpoints?.options || null;
 globalThis.TIMELINE_FEEDBACK_ENDPOINT = variant?.endpoints?.feedback || null;
+
+// 兼容旧逻辑（test.html/旧模块可能读 window.ENDPOINT）
+window.ENDPOINT = ENDPOINT;
 
 // ========== 兼容旧全局 ==========
 window.attributeLabels = attributeLabels;
@@ -57,8 +58,14 @@ window.styleLabel     = styleLabel;
 window.__styleEngine = { attachEventDataAttrs, applyStyleState };
 window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
 
-window.ENDPOINT = ENDPOINT; // 兼容 test.html
-console.log('app.js loaded (style engine + state ready)', { variantKey: variant.key });
+// 方便你验证四个入口是否切换成功
+console.log('app.js loaded', {
+  variantKey: variant.key,
+  region: variant.region,
+  lang: variant.lang,
+  eventsEndpoint: ENDPOINT,
+});
+
 window.dispatchEvent(new Event('style:ready'));
 
 // 按需加载样式面板（旧按钮示例）
@@ -125,9 +132,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // 挂载时间轴（返回句柄）
-  // ✅ 推荐：mountTimeline 支持第二参或对象参，把 variant 传进去（渐进迁移）
-  const handle = await mountTimeline(el, { variant, endpoint: ENDPOINT });
+  // ⚠️ 当前不改 mount.js：不要把 {variant, endpoint} 作为第二参传入
+  // 因为 mount.js 会把第二参当作 vis options merge，属于隐患（虽然现在可能“看起来没事”）。
+  const handle = await mountTimeline(el);
 
   timeline = handle?.timeline || null;
   itemsDS  = handle?.items || null;
