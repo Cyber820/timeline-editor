@@ -1,7 +1,7 @@
 // public/src/variant/variant.js
-// ✅ 职责：把入口 HTML 注入的 window.TIMELINE_REGION / window.TIMELINE_LANG
-//        统一规范化后，映射到对应的 Apps Script endpoints。
-// ✅ 你已确定：region = world/china；lang = zh/en
+// ✅ 职责：读取入口 HTML 注入的 window.TIMELINE_REGION / window.TIMELINE_LANG，
+//        规范化后映射到对应的 Apps Script endpoints。
+// ✅ 约定：region = world/china；lang = zh/en
 
 const DEFAULT_REGION = 'world';
 const DEFAULT_LANG = 'zh';
@@ -24,8 +24,7 @@ function normLang(v) {
  *   - options：下拉框/字典数据（Region/Platform/EventType/Tags 等）
  *   - feedback：用户反馈/匿名提交等写入入口
  *
- * 当前你只给了“世界-中文（world-zh）”的 App Script 地址，
- * 因此先只填写 world-zh.events，其它先置为 null（后续补齐即可）。
+ * 当前先只接入 events；options/feedback 未来补齐。
  */
 const ENDPOINTS = {
   'world-zh': {
@@ -34,22 +33,20 @@ const ENDPOINTS = {
     options: null,
     feedback: null,
   },
-
-  // 其余 variant 先占位：你后续拿到地址后再补齐
   'world-en': {
-    events: 
+    events:
       'https://script.google.com/macros/s/AKfycbz35orwFbKvmycicLwu2hBkTmSryjHipV4pFR8S8sO3TcoltUYJ5ssfBJmDCgjmry7zZA/exec',
     options: null,
     feedback: null,
   },
   'china-zh': {
-    events: 
+    events:
       'https://script.google.com/macros/s/AKfycbzzQzEJB8V94Kl74kLmIAbIoM4ioA7Ux6fQ13MDDrP7_nu82ScpDr47anI7slJRHDCX/exec',
     options: null,
     feedback: null,
   },
   'china-en': {
-    events: 
+    events:
       'https://script.google.com/macros/s/AKfycbwDJZR9Gx4BhyGYJ9l17BfkSbbEqgFlbVyUigkVoIaZwuuiYM_ShwH8Ckb5JHtlWrcYSg/exec',
     options: null,
     feedback: null,
@@ -64,14 +61,24 @@ export function getVariant() {
   const lang = normLang(langRaw);
   const key = `${region}-${lang}`;
 
-  // 若 key 未配置，兜底到 world-zh（因为你目前只提供了它）
-  const endpoints = ENDPOINTS[key] || ENDPOINTS['world-zh'];
+  // 兜底顺序：key -> 默认组合 -> 最终保底（world-zh）
+  const defaultKey = `${DEFAULT_REGION}-${DEFAULT_LANG}`;
+  const endpoints =
+    ENDPOINTS[key] || ENDPOINTS[defaultKey] || ENDPOINTS['world-zh'];
+
+  // 开发期提示：如果发生兜底，说明入口注入或配置可能有误
+  if (!ENDPOINTS[key]) {
+    console.warn(
+      `[variant] missing key "${key}", fallback to "${defaultKey}"`,
+      { regionRaw, langRaw }
+    );
+  }
 
   return Object.freeze({
     region,
     lang,
     key,
-    endpoints,
+    endpoints: Object.freeze({ ...endpoints }),
     ui: Object.freeze({}),
   });
 }
