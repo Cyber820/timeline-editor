@@ -3,14 +3,16 @@
 
 import { attachEventDataAttrs, applyStyleState } from './style/engine.js';
 import { getStyleState, setStyleState, onStyleStateChange } from './state/styleState.js';
+
 import {
-  ENDPOINT,
   attributeLabels,
   PRESET_COLORS,
   styleLabel,
   // 过滤纯函数
   filterItems,
 } from './_staging/constants.js';
+
+import { getVariant } from './variant/variant.js';
 
 // UI：工具栏占位绑定（attr-picker 已在内部接线）
 import { bindToolbar } from './_staging/style-ui.js';
@@ -27,6 +29,26 @@ let timeline = null;               // vis.Timeline 实例
 let itemsDS = null;                // vis.DataSet（当前展示集）
 let originalItems = [];            // 初始 items 的快照（用于过滤回放）
 
+// ========== Variant（region/lang → endpoints） ==========
+const variant = getVariant();
+
+// 你后续会用到：给其他模块（或调试）提供“当前 variant”
+window.__variant = variant;
+
+// 兼容旧全局 endpoint（你目前代码/测试页可能还在读 window.ENDPOINT）
+const ENDPOINT = variant?.endpoints?.events || null;
+
+// 如果 events endpoint 缺失，尽早报错（比 fetch 时报一堆二次错误更好定位）
+if (!ENDPOINT) {
+  console.error('[app] Missing events endpoint for variant:', variant);
+  throw new Error('[app] TIMELINE events endpoint is not set');
+}
+
+// 可选：为未来迁移保留这些（如果你后续要统一改成 globalThis.TIMELINE_ENDPOINT）
+globalThis.TIMELINE_ENDPOINT = ENDPOINT;
+globalThis.TIMELINE_OPTIONS_ENDPOINT = variant?.endpoints?.options || null;
+globalThis.TIMELINE_FEEDBACK_ENDPOINT = variant?.endpoints?.feedback || null;
+
 // ========== 兼容旧全局 ==========
 window.attributeLabels = attributeLabels;
 window.PRESET_COLORS  = PRESET_COLORS;
@@ -36,7 +58,7 @@ window.__styleEngine = { attachEventDataAttrs, applyStyleState };
 window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
 
 window.ENDPOINT = ENDPOINT; // 兼容 test.html
-console.log('app.js loaded (style engine + state ready)');
+console.log('app.js loaded (style engine + state ready)', { variantKey: variant.key });
 window.dispatchEvent(new Event('style:ready'));
 
 // 按需加载样式面板（旧按钮示例）
@@ -104,7 +126,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 挂载时间轴（返回句柄）
-  const handle = await mountTimeline(el);
+  // ✅ 推荐：mountTimeline 支持第二参或对象参，把 variant 传进去（渐进迁移）
+  const handle = await mountTimeline(el, { variant, endpoint: ENDPOINT });
+
   timeline = handle?.timeline || null;
   itemsDS  = handle?.items || null;
 
