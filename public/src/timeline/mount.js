@@ -913,8 +913,8 @@ export async function mountTimeline(container, overrides = {}) {
     }
 
     // 👉 手动指定默认窗口（示例：集中看 1980–1990）
-    startDate = new Date('1980-01-01');
-    endDate = new Date('1990-12-31');
+    startDate = new Date('1990-01-01');
+    endDate = new Date('2000-12-31');
 
     const baseOptions = {
       minHeight: UI.canvas.height,
