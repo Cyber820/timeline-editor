@@ -14,6 +14,9 @@ import {
 
 import { getVariant } from './variant/variant.js';
 
+// ✅ NEW: 信息弹窗（Usage / Roadmap / Feedback）
+import { initInfoDialogs } from './ui/info-dialog.js';
+
 // UI：工具栏占位绑定（attr-picker 已在内部接线）
 import { bindToolbar } from './_staging/style-ui.js';
 // UI：当前过滤条件列表渲染（chips/整组移除）
@@ -42,7 +45,7 @@ if (!ENDPOINT) {
   throw new Error('[app] TIMELINE events endpoint is not set');
 }
 
-// ✅ 关键：把 endpoint 写到全局，供 fetch.js 读取（你刚刚已把 fetch.js 改成读这里）
+// ✅ 关键：把 endpoint 写到全局，供 fetch.js 读取
 globalThis.TIMELINE_ENDPOINT = ENDPOINT;
 globalThis.TIMELINE_OPTIONS_ENDPOINT = variant?.endpoints?.options || null;
 globalThis.TIMELINE_FEEDBACK_ENDPOINT = variant?.endpoints?.feedback || null;
@@ -64,6 +67,8 @@ console.log('app.js loaded', {
   region: variant.region,
   lang: variant.lang,
   eventsEndpoint: ENDPOINT,
+  optionsEndpoint: globalThis.TIMELINE_OPTIONS_ENDPOINT,
+  feedbackEndpoint: globalThis.TIMELINE_FEEDBACK_ENDPOINT,
 });
 
 window.dispatchEvent(new Event('style:ready'));
@@ -122,10 +127,22 @@ function updateTimelineByFilter() {
 }
 window.updateTimelineByFilter = updateTimelineByFilter;
 
-// ========== 页面就绪：绑定工具栏 & 挂载时间轴 ==========
+// ========== 页面就绪：绑定工具栏 & 信息弹窗 & 挂载时间轴 ==========
 window.addEventListener('DOMContentLoaded', async () => {
+  // 1) 绑定顶部工具栏（如果你后续把筛选按钮/样式入口放在这里，这里仍然是起点）
   bindToolbar();
 
+  // ✅ NEW: 绑定 Usage / Roadmap / Feedback 三个按钮
+  // - 你的 HTML 已提供 btn-help / btn-roadmap / btn-feedback
+  // - 若某些页面没有这些按钮，initInfoDialogs 内部会自动跳过（你那份代码就是这么写的）
+  try {
+    initInfoDialogs();
+    console.log('[app] info dialogs bound');
+  } catch (e) {
+    console.error('[app] initInfoDialogs failed', e);
+  }
+
+  // 2) 挂载时间轴
   const el = document.getElementById('timeline');
   if (!el) {
     console.error('[timeline] 未找到 #timeline 容器');
@@ -133,7 +150,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ⚠️ 当前不改 mount.js：不要把 {variant, endpoint} 作为第二参传入
-  // 因为 mount.js 会把第二参当作 vis options merge，属于隐患（虽然现在可能“看起来没事”）。
+  // 因为 mount.js 会把第二参当作 vis options merge，属于隐患。
   const handle = await mountTimeline(el);
 
   timeline = handle?.timeline || null;
