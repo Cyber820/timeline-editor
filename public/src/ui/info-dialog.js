@@ -2,12 +2,41 @@
 // 作用：创建“使用方法 / 开发计划 / 反馈与建议”三个信息弹窗按钮。
 // - 使用方法 / 开发计划：使用 _staging/info-content.js 里的纯文本
 // - 反馈与建议：前端表单（个人 ID / 联系方式 / 反馈内容），通过 Apps Script Web App 写入 Google Doc
+//
+// ✅ 改动点（为多入口 variant 做准备）
+// 1) feedback endpoint 不再硬编码：优先读 globalThis.TIMELINE_FEEDBACK_ENDPOINT
+// 2) 提交时附带 variantKey/region/lang/pageUrl，便于在同一 Google Doc 中区分来源
+// 3) 个人 ID 默认改为“选填”（可通过 REQUIRE_ID 开关恢复必填）
 
 import { HOW_TO_USE_TEXT, ROADMAP_TEXT } from '../_staging/info-content.js';
 
-// ✅ 你的反馈 Web App 地址（请保持为 exec 结尾）
-const FEEDBACK_ENDPOINT =
+const REQUIRE_ID = false; // 如你坚持“个人ID必填”，改为 true
+
+// 旧地址保留为兜底（避免你一时没把 variant.js 填好 feedback endpoint 就全挂）
+const LEGACY_FALLBACK_ENDPOINT =
   'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec';
+
+function resolveFeedbackEndpoint() {
+  // ✅ 推荐：由 app.js 根据 variant 写入
+  const ep1 = globalThis.TIMELINE_FEEDBACK_ENDPOINT;
+  if (ep1) return ep1;
+
+  // ✅ 次优：如果你有暴露 window.__variant
+  const ep2 = globalThis.__variant?.endpoints?.feedback;
+  if (ep2) return ep2;
+
+  // ✅ 兜底：老地址
+  return LEGACY_FALLBACK_ENDPOINT;
+}
+
+function getVariantMeta() {
+  const v = globalThis.__variant || {};
+  // 兼容你现在的 region/lang 注入方式
+  const region = v.region || globalThis.TIMELINE_REGION || '';
+  const lang = v.lang || globalThis.TIMELINE_LANG || '';
+  const key = v.key || (region && lang ? `${String(region)}-${String(lang)}` : '');
+  return { key, region, lang };
+}
 
 let dialogRoot = null;      // 纯文本信息弹窗（使用方法 / 开发计划）
 let feedbackRoot = null;    // 反馈与建议弹窗
@@ -147,12 +176,14 @@ function ensureFeedbackRoot() {
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
         <div class="fb-field">
-          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">个人 ID（必填）</label>
+          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">
+            个人 ID（${REQUIRE_ID ? '必填' : '选填'}）
+          </label>
           <input id="fb-id" type="text" style="
             width:100%;box-sizing:border-box;
             border:1px solid #e5e7eb;border-radius:8px;
             padding:6px 8px;font-size:13px;
-          ">
+          " placeholder="昵称 / 常用ID（可留空）">
         </div>
         <div class="fb-field">
           <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">联系方式（选填）</label>
@@ -212,7 +243,7 @@ function ensureFeedbackRoot() {
     const contact = (contactInput?.value || '').trim();
     const content = (contentInput?.value || '').trim();
 
-    if (!id) {
+    if (REQUIRE_ID && !id) {
       alert('请填写“个人 ID”（可以是昵称、编号等）。');
       idInput && idInput.focus();
       return;
@@ -223,17 +254,31 @@ function ensureFeedbackRoot() {
       return;
     }
 
+    const endpoint = resolveFeedbackEndpoint();
+    if (!endpoint) {
+      alert('反馈接口未配置（FEEDBACK_ENDPOINT 缺失）。');
+      return;
+    }
+
+    const { key: variantKey, region, lang } = getVariantMeta();
+
     // 用 x-www-form-urlencoded 提交给 Apps Script
+    // ✅ 保持兼容旧后端：仍然发 id/contact/content
+    // ✅ 新增字段：variantKey/region/lang/pageUrl
     const payload = new URLSearchParams({
       id,
       contact,
       content,
+      variantKey,
+      region,
+      lang,
+      pageUrl: location.href,
     });
 
     try {
       // 使用 no-cors：浏览器不检查 CORS，但也拿不到响应内容；
       // 对当前需求来说，只要请求送达并写进 Doc 就足够。
-      await fetch(FEEDBACK_ENDPOINT, {
+      await fetch(endpoint, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
@@ -263,11 +308,9 @@ function openFeedbackDialog() {
   const root = ensureFeedbackRoot();
   root.style.display = 'flex';
 
-  // 默认聚焦到 ID 输入框
-  const idInput = root.querySelector('#fb-id');
-  if (idInput) {
-    setTimeout(() => idInput.focus(), 20);
-  }
+  // 默认聚焦到内容输入框（更符合“反馈”场景）
+  const contentInput = root.querySelector('#fb-content');
+  if (contentInput) setTimeout(() => contentInput.focus(), 20);
 }
 
 /* ---------------- 对外接口：初始化三个按钮 ---------------- */
@@ -285,7 +328,6 @@ export function initInfoDialogs() {
   }
   if (btnRoadmap) {
     btnRoadmap.addEventListener('click', () => {
-      // 保持原来的标题与文案来源
       openInfoDialog('开发计划和反馈', ROADMAP_TEXT);
     });
   }
