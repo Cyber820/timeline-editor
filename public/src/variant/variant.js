@@ -31,25 +31,25 @@ const ENDPOINTS = {
     events:
       'https://script.google.com/macros/s/AKfycbzap5kVZa7uqJRE47b-Bt5C4OmjnMhX-vIaOtRiSQko2eLcDe9zl3oc4U_Q66Uwkjex/exec',
     options: null,
-    feedback: null,
+    feedback: 'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec',
   },
   'world-en': {
     events:
       'https://script.google.com/macros/s/AKfycbz35orwFbKvmycicLwu2hBkTmSryjHipV4pFR8S8sO3TcoltUYJ5ssfBJmDCgjmry7zZA/exec',
     options: null,
-    feedback: null,
+    feedback: 'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec',
   },
   'china-zh': {
     events:
       'https://script.google.com/macros/s/AKfycbzzQzEJB8V94Kl74kLmIAbIoM4ioA7Ux6fQ13MDDrP7_nu82ScpDr47anI7slJRHDCX/exec',
     options: null,
-    feedback: null,
+    feedback: 'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec',
   },
   'china-en': {
     events:
       'https://script.google.com/macros/s/AKfycbwDJZR9Gx4BhyGYJ9l17BfkSbbEqgFlbVyUigkVoIaZwuuiYM_ShwH8Ckb5JHtlWrcYSg/exec',
     options: null,
-    feedback: null,
+    feedback: 'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec',
   },
 };
 
