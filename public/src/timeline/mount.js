@@ -28,12 +28,6 @@ import { setStyleState, getStyleState } from '../state/styleState.js';
 import { applyStyleState, attachEventDataAttrs } from '../style/engine.js';
 
 // 统一页面标题（移除“Beta Debug”等测试字样）
-(function ensurePageTitle() {
-  try {
-    if (document && document.title !== '电子游戏时间轴Beta版本')
-      document.title = '电子游戏时间轴Beta版本';
-  } catch {}
-})();
 
 /**
  * ---------------- UI 预设（可调参数） ----------------
