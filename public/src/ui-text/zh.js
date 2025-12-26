@@ -4,6 +4,22 @@ export default {
     attribute: '属性',
     close: '关闭',
   },
+  
+filter: {
+  list: {
+    empty: '（暂无过滤条件）',
+    removeOneTitle: '移除此项',
+    clearGroupTitle: '清空该组',
+    clearGroup: '清空',
+    removeGroupTitle: '移除该属性的过滤',
+  },
+  attrSelect: {
+    placeholder: '选择属性',
+  },
+  options: {
+    emptyOrLoading: '（暂无可选项 / 仍在加载）',
+  },
+},
 
   // 顶部信息按钮 + 弹窗 + 反馈表单
   info: {
