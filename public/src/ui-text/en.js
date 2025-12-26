@@ -4,6 +4,21 @@ export default {
     attribute: 'Attribute',
     close: 'Close',
   },
+filter: {
+  list: {
+    empty: '(No active filters)',
+    removeOneTitle: 'Remove this value',
+    clearGroupTitle: 'Clear this group',
+    clearGroup: 'Clear',
+    removeGroupTitle: 'Remove this attribute filter',
+  },
+  attrSelect: {
+    placeholder: 'Select an attribute',
+  },
+  options: {
+    emptyOrLoading: '(No options / still loading)',
+  },
+},
 
   info: {
     buttons: {
