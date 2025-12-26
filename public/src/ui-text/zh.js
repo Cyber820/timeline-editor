@@ -2,6 +2,7 @@
 export default {
   common: {
     attribute: '属性',
+    close: '关闭',
   },
 
   // 顶部信息按钮 + 弹窗 + 反馈表单
@@ -55,8 +56,32 @@ export default {
     notReady: '属性选择弹窗未就绪（占位）',
   },
 
-  // 样式窗口 & 控件文本（style-ui.js 里使用）
+  // 样式相关（style-ui.js / style-panel.js 使用）
   style: {
+    // ✅ style-panel.js 用到的 key（新增）
+    hint: {
+      none: '当前样式：无',
+      current: '当前样式：{type}',
+      boundLocked: '当前绑定：{type}（如需更改，请先“重置”）',
+    },
+    select: {
+      occupiedSuffix: '（已绑定：{owner}）',
+    },
+    alert: {
+      occupied: '“{type}” 已绑定到【{owner}】。\n如需转移，请先到该属性中点击“重置”。',
+    },
+    confirm: {
+      switchClears: '切换样式类型将清空该属性下已添加的样式行，是否继续？',
+      resetClears: '重置将清空该属性下所有样式行，是否继续？',
+    },
+    fallback: {
+      title: '样式编辑器（临时 JSON 面板）',
+      apply: '保存并应用',
+      reset: '清空并应用',
+      jsonParseFail: 'JSON 解析失败：{msg}',
+    },
+
+    // ✅ 你原来的结构（保留）
     window: {
       title: '{attr} 样式',
       currentStyleNone: '当前样式：无',
