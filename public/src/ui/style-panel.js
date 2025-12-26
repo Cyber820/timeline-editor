@@ -1,4 +1,4 @@
-// src/ui/style-panel.js
+// public/src/ui/style-panel.js
 // ✅ 职责：样式编辑面板（UI 层）
 // - 打开/关闭面板
 // - 将 stateMem 中的“编辑中内存态” ↔ 持久化 styleState（localStorage）进行同步
@@ -12,12 +12,14 @@ import {
   ENGINE_KEY_MAP,
   buildEngineStyleState,
   ensureBucketIn,
-  createEmptyRuleForType,
   attributeLabels,
   styleLabel as styleLabelText,
 } from '../_staging/constants.js';
 import { genId } from '../utils/id.js';
-import { renderStyleTable, renderRuleRow } from './style-table.js';
+import { renderStyleTable } from './style-table.js';
+
+// ✅ NEW: i18n 文案
+import { t } from '../ui-text/index.js';
 
 // —— 模块内轻量状态（仅面板视图配置）
 let _mounted = false;
@@ -61,22 +63,19 @@ function mountHandlersOnce(root) {
 
 /** ========== 保存/重置：把 stateMem ↔ 持久态/引擎态 对接 ========== */
 function onSaveFromPanel() {
-  // 通过 constants.js 的构造器，把 UI 内存（stateMem）转为引擎态
   const engineState = buildEngineStyleState(
     stateMem.boundStyleType,
     stateMem.styleRules,
     ENGINE_KEY_MAP,
   );
 
-  // ✅ 记录最近一次应用的引擎态（调试/导出参考）
   stateMem.lastAppliedEngineState = engineState;
 
   const saved = setStyleState(engineState);
-  applyStyleState(saved, _opts); // 立即生效（编译 CSS + 注入）
+  applyStyleState(saved, _opts);
 }
 
 function onResetFromPanel() {
-  // ✅ 使用统一的内存重置函数，避免字段遗漏
   resetStateMem();
 
   const empty = { version: 1, boundTypes: {}, rules: {} };
@@ -100,17 +99,15 @@ function onResetFromPanel() {
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.display = 'inline-block'; }
     if (resetBtn)   resetBtn.style.display = 'none';
     if (addBtn)     addBtn.disabled = true;
-    if (hintEl)     hintEl.textContent = '当前样式：无';
+    if (hintEl)     hintEl.textContent = t('style.hint.none');
   }
 }
 
 /** ========== 状态注入：持久态 → stateMem + UI重建 ========== */
 function injectStateIntoPanel(state) {
-  // 1) 清空 stateMem
-  resetStateMem(); // ✅ 统一重置
+  resetStateMem();
 
-  // 2) 引擎键 → UI 键的映射
-  const fromEngineKey = (t) =>
+  const fromEngineKey = (tkey) =>
     ({
       textColor: 'fontColor',
       bgColor: 'backgroundColor',
@@ -118,33 +115,31 @@ function injectStateIntoPanel(state) {
       fontFamily: 'fontFamily',
       haloColor: 'haloColor',
       none: 'none',
-    }[t] || t);
+    }[tkey] || tkey);
 
-  // 3) 写回绑定（boundTypes）
   const boundTypes = state?.boundTypes || {};
   for (const [attr, engKey] of Object.entries(boundTypes)) {
     const uiKey = fromEngineKey(engKey || 'none');
     stateMem.boundStyleType[attr] = uiKey;
     if (uiKey && uiKey !== 'none') {
       const internal = uiTypeToInternal(uiKey);
-      stateMem.styleTypeOwner[internal] = attr; // ✅ 标记占用者
+      stateMem.styleTypeOwner[internal] = attr;
     }
   }
 
-  // 4) 写回规则（rules）→ 生成行（按相同样式合并多值）
   const rules = state?.rules || {};
   for (const [attr, valMap] of Object.entries(rules)) {
     const uiType = stateMem.boundStyleType[attr] || 'none';
     if (uiType === 'none') continue;
 
-    const groups = new Map(); // key(JSON) -> { style, values:[] }
+    const groups = new Map();
     for (const [val, conf] of Object.entries(valMap || {})) {
       const st = {};
-      if (uiType === 'fontColor'      && conf.textColor)   st.fontColor      = conf.textColor;
-      if (uiType === 'backgroundColor'&& conf.bgColor)     st.backgroundColor= conf.bgColor;
-      if (uiType === 'borderColor'    && conf.borderColor) st.borderColor    = conf.borderColor;
-      if (uiType === 'fontFamily'     && conf.fontFamily)  st.fontFamily     = conf.fontFamily;
-      if (uiType === 'haloColor'      && conf.haloColor)   st.haloColor      = conf.haloColor;
+      if (uiType === 'fontColor'       && conf.textColor)   st.fontColor       = conf.textColor;
+      if (uiType === 'backgroundColor' && conf.bgColor)     st.backgroundColor = conf.bgColor;
+      if (uiType === 'borderColor'     && conf.borderColor) st.borderColor     = conf.borderColor;
+      if (uiType === 'fontFamily'      && conf.fontFamily)  st.fontFamily      = conf.fontFamily;
+      if (uiType === 'haloColor'       && conf.haloColor)   st.haloColor       = conf.haloColor;
 
       const key = JSON.stringify(st);
       if (!groups.has(key)) groups.set(key, { style: st, values: [] });
@@ -162,13 +157,10 @@ function injectStateIntoPanel(state) {
     }
   }
 
-  // 5) 如果当前已有属性被外层设定，重绘表格；否则等待用户点击属性按钮后再绘制
   if (stateMem.currentStyleAttr) {
     renderStyleTable(stateMem.currentStyleAttr);
   }
 }
-
-/** ========== 下方是面板交互可以复用的通用小函数 ========== */
 
 /**
  * 刷新“样式类型”下拉的可用项与提示文案：
@@ -198,9 +190,13 @@ export function refreshStyleTypeOptionsInSelect(selectEl, deps) {
     const isMine = owner === currentStyleAttr;
 
     opt.disabled = !!(owner && !isMine);
-    opt.textContent =
-      opt.dataset.baseText +
-      (owner && !isMine ? `（已绑定：${attributeLabels[owner] || owner}）` : '');
+
+    if (owner && !isMine) {
+      const ownerLabel = attributeLabels[owner] || owner;
+      opt.textContent = opt.dataset.baseText + t('style.select.occupiedSuffix', { owner: ownerLabel });
+    } else {
+      opt.textContent = opt.dataset.baseText;
+    }
   });
 }
 
@@ -212,13 +208,17 @@ export function computeStyleWindowViewModel(attr, deps = {}) {
     styleLabel = styleLabelText,
   } = deps;
 
-  const titleText = `${attributeLabels[attr] || attr} 样式`;
+  const attrLabel = attributeLabels[attr] || attr;
+  const titleText = t('style.window.title', { attr: attrLabel });
+
   const bound = boundStyleType[attr] || 'none';
   const hasBound = bound !== 'none';
 
   return {
     titleText,
-    hintText: hasBound ? `当前样式：${styleLabel(bound)}` : '当前样式：无',
+    hintText: hasBound
+      ? t('style.hint.current', { type: styleLabel(bound) })
+      : t('style.hint.none'),
     ui: {
       confirm: { disabled: true, display: hasBound ? 'none' : 'inline-block' },
       reset: { display: hasBound ? 'inline-block' : 'none' },
@@ -230,9 +230,7 @@ export function computeStyleWindowViewModel(attr, deps = {}) {
   };
 }
 
-/**
- * 将 VM 应用到真实 DOM（独立出来，便于重用与测试）
- */
+/** 将 VM 应用到真实 DOM（独立出来，便于重用与测试） */
 export function applyStyleWindowView(rootEls, vm) {
   const { styleTitleEl, styleWindowEl, typeSelEl, tbodyEl, confirmBtnEl, resetBtnEl, addBtnEl, hintEl } = rootEls;
 
@@ -282,22 +280,26 @@ export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
   let mapped = uiTypeToInternal(selectEl.value) || 'none';
   let stagedType = mapped;
 
-  // 当前属性已绑定：必须先“重置”
   const already = boundStyleType[currentStyleAttr] && boundStyleType[currentStyleAttr] !== 'none';
   if (already) {
     selectEl.value = 'none';
     stagedType = 'none';
-    setHint(`当前绑定：${styleLabel(boundStyleType[currentStyleAttr])}（如需更改，请先“重置”）`);
+    setHint(
+      t('style.hint.boundLocked', { type: styleLabel(boundStyleType[currentStyleAttr]) })
+    );
     disableConfirm(true);
     return { stagedType, blockedBy: 'self-bound' };
   }
 
-  // 全局唯一型占用判断
   if (mapped !== 'none') {
     const owner = styleTypeOwner[mapped];
     const isMine = owner === currentStyleAttr;
     if (owner && !isMine) {
-      const msg = `“${styleLabel(mapped)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`;
+      const ownerLabel = attributeLabels[owner] || owner;
+      const msg = t('style.alert.occupied', {
+        type: styleLabel(mapped),
+        owner: ownerLabel,
+      });
       if (typeof notify === 'function') notify(msg);
       selectEl.value = 'none';
       stagedType = 'none';
@@ -307,7 +309,6 @@ export function onStyleTypeChangeInSelect(selectEl, deps = {}) {
     }
   }
 
-  // 正常可选
   disableConfirm(stagedType === 'none');
   return { stagedType, blockedBy: null };
 }
@@ -329,44 +330,42 @@ export function confirmBindAction(deps = {}) {
     addBtnEl = null,
     hintEl = null,
     refreshOptions = null,
-    addStyleRow = () => {}, // 注入自定义新增行逻辑（通常来自 style-table.js）
+    addStyleRow = () => {},
     notify = (msg) => alert(msg),
     confirmDialog = (msg) => window.confirm(msg),
   } = deps;
 
   if (stagedType === 'none') return { ok: false, reason: 'none' };
 
-  // 再验占用
   const owner = styleTypeOwner[stagedType];
   if (owner && owner !== currentStyleAttr) {
-    notify(`“${styleLabel(stagedType)}” 已绑定到【${attributeLabels[owner] || owner}】。\n如需转移，请先到该属性中点击“重置”。`);
+    const ownerLabel = attributeLabels[owner] || owner;
+    notify(
+      t('style.alert.occupied', { type: styleLabel(stagedType), owner: ownerLabel })
+    );
     return { ok: false, reason: 'occupied', owner };
   }
 
-  // 若此前有绑定且不同，需清空原规则
   const prev = boundStyleType[currentStyleAttr] || 'none';
   if (prev !== 'none' && prev !== stagedType) {
-    const ok = confirmDialog('切换样式类型将清空该属性下已添加的样式行，是否继续？');
+    const ok = confirmDialog(t('style.confirm.switchClears'));
     if (!ok) return { ok: false, reason: 'cancelled' };
     if (tbodyEl) tbodyEl.innerHTML = '';
     if (styleTypeOwner[prev] === currentStyleAttr) delete styleTypeOwner[prev];
-    // 同时清空 stateMem.styleRules[attr]
     const bucket = stateMem.styleRules[currentStyleAttr];
     if (bucket) bucket.length = 0;
   }
 
-  // 写入绑定与占用
   boundStyleType[currentStyleAttr] = stagedType;
   styleTypeOwner[stagedType] = currentStyleAttr;
 
-  // UI
   if (confirmBtnEl) {
     confirmBtnEl.disabled = true;
     confirmBtnEl.style.display = 'none';
   }
   if (resetBtnEl) resetBtnEl.style.display = 'inline-block';
   if (addBtnEl) addBtnEl.disabled = false;
-  if (hintEl) hintEl.textContent = `当前样式：${styleLabel(stagedType)}`;
+  if (hintEl) hintEl.textContent = t('style.hint.current', { type: styleLabel(stagedType) });
 
   if (typeof refreshOptions === 'function') refreshOptions();
   if (typeof addStyleRow === 'function') addStyleRow();
@@ -392,23 +391,19 @@ export function resetBindAction(deps = {}) {
     confirmDialog = (msg) => window.confirm(msg),
   } = deps;
 
-  // 是否有行，二次确认
   const hasRows = !!tbodyEl && tbodyEl.querySelectorAll('tr').length > 0;
-  const ok = !hasRows || confirmDialog('重置将清空该属性下所有样式行，是否继续？');
+  const ok = !hasRows || confirmDialog(t('style.confirm.resetClears'));
   if (!ok) return { ok: false, reason: 'cancelled' };
 
-  // 释放占用者
   const prev = boundStyleType[currentStyleAttr] || 'none';
   if (prev !== 'none' && styleTypeOwner[prev] === currentStyleAttr) {
     delete styleTypeOwner[prev];
   }
 
-  // 清空规则与绑定
   boundStyleType[currentStyleAttr] = 'none';
   if (styleRulesRef[currentStyleAttr]) styleRulesRef[currentStyleAttr].length = 0;
   if (tbodyEl) tbodyEl.innerHTML = '';
 
-  // 复位控件与提示
   if (typeSelEl) typeSelEl.value = 'none';
   if (confirmBtnEl) {
     confirmBtnEl.disabled = true;
@@ -416,11 +411,10 @@ export function resetBindAction(deps = {}) {
   }
   if (resetBtnEl) resetBtnEl.style.display = 'none';
   if (addBtnEl) addBtnEl.disabled = true;
-  if (hintEl) hintEl.textContent = '当前样式：无';
+  if (hintEl) hintEl.textContent = t('style.hint.none');
 
   if (typeof refreshOptions === 'function') refreshOptions();
 
-  // 立即保存并应用
   applyCurrentStyles({ persist: true });
 
   return { ok: true, stagedType: 'none' };
@@ -433,7 +427,7 @@ function quickApplyCurrentStyles({ persist = false } = {}) {
     stateMem.styleRules,
     ENGINE_KEY_MAP,
   );
-  stateMem.lastAppliedEngineState = engineState; // ✅ 记录最近一次应用
+  stateMem.lastAppliedEngineState = engineState;
   const next = persist ? setStyleState(engineState) : engineState;
   applyStyleState(next, _opts);
 }
@@ -451,19 +445,19 @@ function openFallbackJsonPanel() {
     `;
     host.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong>样式编辑器（临时 JSON 面板）</strong>
-        <button id="sp-close">关闭</button>
+        <strong>${t('style.fallback.title')}</strong>
+        <button id="sp-close">${t('common.close')}</button>
       </div>
       <textarea id="sp-json" style="width:100%;height:260px;white-space:pre;font-family:ui-monospace,Consolas,monospace;"></textarea>
       <div style="display:flex; gap:8px; margin-top:8px;">
-        <button id="sp-apply">保存并应用</button>
-        <button id="sp-reset">清空并应用</button>
+        <button id="sp-apply">${t('style.fallback.apply')}</button>
+        <button id="sp-reset">${t('style.fallback.reset')}</button>
       </div>
     `;
     document.body.appendChild(host);
     host.querySelector('#sp-close').onclick = () => host.remove();
     host.querySelector('#sp-reset').onclick = () => {
-      resetStateMem(); // ✅ 统一重置
+      resetStateMem();
       const empty = { version: 1, boundTypes: {}, rules: {} };
       const saved = setStyleState(empty);
       applyStyleState(saved, _opts);
@@ -475,7 +469,7 @@ function openFallbackJsonPanel() {
         const saved = setStyleState(next);
         applyStyleState(saved, _opts);
       } catch (e) {
-        alert('JSON 解析失败：' + e.message);
+        alert(t('style.fallback.jsonParseFail', { msg: e.message }));
       }
     };
   }
