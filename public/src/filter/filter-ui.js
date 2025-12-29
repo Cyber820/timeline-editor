@@ -5,7 +5,9 @@
 // - 'filter:add-rule:confirm'         → { key, values } 仅更新规则，不立刻应用
 // - 'filter:remove-rule'              → { key } 清空该属性已选项（仅更新规则）
 // - 'filter:reset' / 'filter:set-logic' / 'filter:close-ui'
+
 import { getOptionKeys, getOptionsForKey, keyToLabel } from './filter-engine.js';
+import { t } from '../ui-text/index.js';
 
 export function initFilterUI({
   beforeElSelector = '#timeline',
@@ -34,13 +36,12 @@ export function initFilterUI({
     const triggerBtn = document.createElement('button');
     triggerBtn.type = 'button';
     triggerBtn.className = 'tl-filter-trigger';
-    triggerBtn.textContent = '过滤/筛选';
+    triggerBtn.textContent = t('filter.trigger'); // ✅
     triggerBtn.setAttribute('aria-haspopup', 'dialog');
     triggerBtn.addEventListener('click', togglePanel);
     toolbar.appendChild(triggerBtn);
   }
 
-  // 主面板构建
   function ensurePanel() {
     let panel = document.querySelector('#tl-filter-panel');
     if (panel) return panel;
@@ -50,41 +51,43 @@ export function initFilterUI({
     panel.className = 'tl-filter-panel';
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'false');
-    panel.setAttribute('aria-label', '过滤/筛选设置');
+    panel.setAttribute('aria-label', t('filter.panel.ariaLabel')); // ✅
+
+    // 注意：这里的文案都走 t()
     panel.innerHTML = `
       <div class="tl-filter-panel__row">
-        <button type="button" class="tl-btn" data-action="add">增加过滤/筛选标准</button>
-        <button type="button" class="tl-btn" data-action="reset">复原过滤/筛选标准</button>
+        <button type="button" class="tl-btn" data-action="add">${t('filter.panel.add')}</button>
+        <button type="button" class="tl-btn" data-action="reset">${t('filter.panel.reset')}</button>
       </div>
       <div class="tl-filter-panel__row">
-        <button type="button" class="tl-btn" data-action="and">用“和”逻辑过滤/筛选</button>
-        <button type="button" class="tl-btn" data-action="or">用“或”逻辑过滤/筛选</button>
+        <button type="button" class="tl-btn" data-action="and">${t('filter.panel.logicAnd')}</button>
+        <button type="button" class="tl-btn" data-action="or">${t('filter.panel.logicOr')}</button>
       </div>
 
-      <!-- ✅ 已选规则清单 -->
       <div id="tl-rule-summary" class="tl-rule-summary"></div>
 
-      <!-- 子面板：新增规则 -->
       <div class="tl-filter-builder" id="tl-filter-builder" hidden>
         <div class="tl-filter-builder__row">
-          <label class="tl-label">过滤属性</label>
+          <label class="tl-label">${t('filter.builder.attrLabel')}</label>
           <select id="tl-attr-select" class="tl-input"></select>
         </div>
         <div class="tl-filter-builder__row">
-          <label class="tl-label">过滤选项</label>
+          <label class="tl-label">${t('filter.builder.optionsLabel')}</label>
           <div class="tl-multi">
-            <input id="tl-search" type="text" class="tl-input" placeholder="输入关键字检索" />
+            <input id="tl-search" type="text" class="tl-input" placeholder="${t(
+              'filter.builder.searchPlaceholder',
+            )}" />
             <div id="tl-options" class="tl-options"></div>
           </div>
         </div>
         <div class="tl-filter-builder__row tl-filter-builder__row--end">
-          <button type="button" class="tl-btn" data-action="confirm">确定</button>
-          <button type="button" class="tl-btn tl-btn--ghost" data-action="cancel">取消</button>
+          <button type="button" class="tl-btn" data-action="confirm">${t('filter.builder.confirm')}</button>
+          <button type="button" class="tl-btn tl-btn--ghost" data-action="cancel">${t('filter.builder.cancel')}</button>
         </div>
       </div>
 
       <div class="tl-filter-panel__row tl-filter-panel__row--end">
-        <button type="button" class="tl-btn tl-btn--ghost" data-action="close">关闭窗口</button>
+        <button type="button" class="tl-btn tl-btn--ghost" data-action="close">${t('filter.panel.close')}</button>
       </div>
     `;
     document.body.appendChild(panel);
@@ -101,13 +104,9 @@ export function initFilterUI({
         hideBuilder();
         window.dispatchEvent(new CustomEvent('filter:reset'));
       } else if (action === 'and') {
-        window.dispatchEvent(
-          new CustomEvent('filter:set-logic', { detail: { mode: 'AND' } }),
-        );
+        window.dispatchEvent(new CustomEvent('filter:set-logic', { detail: { mode: 'AND' } }));
       } else if (action === 'or') {
-        window.dispatchEvent(
-          new CustomEvent('filter:set-logic', { detail: { mode: 'OR' } }),
-        );
+        window.dispatchEvent(new CustomEvent('filter:set-logic', { detail: { mode: 'OR' } }));
       } else if (action === 'confirm') {
         // ✅ 仅更新规则，不立刻应用
         const { key, values } = readBuilder();
@@ -116,7 +115,10 @@ export function initFilterUI({
             new CustomEvent('filter:add-rule:confirm', { detail: { key, values } }),
           );
           hideBuilder();
-          renderRuleSummary(); // 立刻刷新右侧规则清单
+          renderRuleSummary();
+        } else {
+          // 可选：你若不想提示就删掉这一段
+          // alert(t('filter.builder.needSelect'));
         }
       } else if (action === 'cancel') {
         hideBuilder();
@@ -135,16 +137,10 @@ export function initFilterUI({
       hidePanel();
     });
 
-    // 外部事件：打开新增规则
     window.addEventListener('filter:add-rule', () => openBuilder());
-
-    // 外部状态更新（来自 state.js）
     window.addEventListener('filter:state:updated', () => renderRuleSummary());
 
-    // 搜索与属性切换
-    panel
-      .querySelector('#tl-search')
-      .addEventListener('input', () => refreshOptions());
+    panel.querySelector('#tl-search').addEventListener('input', () => refreshOptions());
     panel.querySelector('#tl-attr-select').addEventListener('change', () => {
       refreshOptions(true);
       restoreCheckedFromExistingRule();
@@ -209,17 +205,20 @@ export function initFilterUI({
     let keys = getOptionKeys() || [];
     const current = sel.value;
 
-    // ❌ 从属性列表中移除“标签”
     keys = keys.filter((k) => k !== 'Tag');
 
-    // ✅ 确保“重要性”出现在属性列表中
-    if (!keys.includes('Importance')) {
-      keys.push('Importance');
-    }
+    if (!keys.includes('Importance')) keys.push('Importance');
 
-    // 用中文文案展示
     sel.innerHTML = keys
-      .map((k) => `<option value="${k}">${keyToLabel(k)}</option>`)
+      .map((k) => {
+        // 方案A：保持你现有 keyToLabel（目前多为中文）
+        const label = keyToLabel(k);
+
+        // 方案B（可选）：让 label 也 i18n（需要你在字典里提供 attribute 标签）
+        // const label = t(`attributes.${k}`) || keyToLabel(k) || k;
+
+        return `<option value="${k}">${label}</option>`;
+      })
       .join('');
 
     if (keys.includes(current)) sel.value = current;
@@ -228,7 +227,6 @@ export function initFilterUI({
     refreshOptions(true);
   }
 
-  // 根据现有规则，恢复勾选状态
   function restoreCheckedFromExistingRule() {
     const rules = getCurrentRules() || [];
     const key = ensurePanel().querySelector('#tl-attr-select').value;
@@ -245,24 +243,21 @@ export function initFilterUI({
     });
   }
 
-  // 从子面板读取当前选择
   function readBuilder() {
     const panel = ensurePanel();
     const key = panel.querySelector('#tl-attr-select').value;
-    const nodeList = panel.querySelectorAll(
-      '#tl-options input[type="checkbox"]:checked',
-    );
+    const nodeList = panel.querySelectorAll('#tl-options input[type="checkbox"]:checked');
     const values = Array.from(nodeList).map((ch) => ch.getAttribute('data-val'));
     return { key, values };
   }
 
-  // 刷新“过滤选项”列表（支持搜索）
+  // ✅ 修补：不再 innerHTML 拼 val，避免 val 中含 < 时注入
   function refreshOptions(resetScroll = false) {
     const panel = ensurePanel();
     const key = panel.querySelector('#tl-attr-select').value;
     const search = panel.querySelector('#tl-search').value.trim().toLowerCase();
     const items = getItems() || [];
-    const options = getOptionsForKey(items, key);
+    const options = getOptionsForKey(items, key) || [];
 
     const box = panel.querySelector('#tl-options');
     box.innerHTML = '';
@@ -271,15 +266,27 @@ export function initFilterUI({
     options
       .filter((o) => !search || String(o).toLowerCase().includes(search))
       .forEach((val) => {
-        const id = `opt-${key}-${btoa(
-          unescape(encodeURIComponent(String(val))),
-        ).replace(/=/g, '')}`;
+        const safeVal = String(val);
+
+        // 生成稳定 id
+        const id =
+          `opt-${key}-` +
+          btoa(unescape(encodeURIComponent(safeVal))).replace(/=/g, '');
+
         const wrap = document.createElement('label');
         wrap.className = 'tl-opt';
-        wrap.innerHTML = `
-          <input type="checkbox" data-val="${val}" id="${id}" />
-          <span>${val}</span>
-        `;
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.setAttribute('data-val', safeVal);
+        input.id = id;
+
+        const span = document.createElement('span');
+        span.textContent = safeVal;
+
+        wrap.appendChild(input);
+        wrap.appendChild(span);
+
         frag.appendChild(wrap);
       });
 
@@ -292,7 +299,7 @@ export function initFilterUI({
     const host = ensurePanel().querySelector('#tl-rule-summary');
     const rules = getCurrentRules() || [];
     if (!rules.length) {
-      host.innerHTML = `<div class="tl-hint">（尚未添加任何过滤/筛选标准）</div>`;
+      host.innerHTML = `<div class="tl-hint">${t('filter.summary.empty')}</div>`;
       return;
     }
 
@@ -301,18 +308,20 @@ export function initFilterUI({
         const chips = (r.values || [])
           .map((v) => `<span class="chip">${String(v)}</span>`)
           .join('');
+
         return `
         <div class="rule-row">
           <div class="rule-left">
             <span class="rule-key">${keyToLabel(r.key)}</span>
             <div class="rule-values">
-              ${chips || '<span class="chip chip--empty">（空）</span>'}
+              ${chips || `<span class="chip chip--empty">${t('filter.summary.emptyChip')}</span>`}
             </div>
           </div>
           <div class="rule-right">
-            <button type="button" class="tl-x" title="清空该属性" data-clear-key="${
-              r.key
-            }">×</button>
+            <button type="button"
+              class="tl-x"
+              title="${t('filter.summary.clearAttrTitle')}"
+              data-clear-key="${r.key}">×</button>
           </div>
         </div>
       `;
