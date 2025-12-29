@@ -2,109 +2,109 @@
 export default {
   common: {
     attribute: 'Attribute',
-    close: 'Close',
   },
-filter: {
-  list: {
-    empty: '(No active filters)',
-    removeOneTitle: 'Remove this value',
-    clearGroupTitle: 'Clear this group',
-    clearGroup: 'Clear',
-    removeGroupTitle: 'Remove this attribute filter',
-  },
-  attrSelect: {
-    placeholder: 'Select an attribute',
-  },
-  options: {
-    emptyOrLoading: '(No options / still loading)',
-  },
-},
 
+  // Top info buttons + dialogs + feedback form
   info: {
     buttons: {
-      usage: 'Usage',
+      usage: 'How to use',
       roadmap: 'Roadmap',
       feedback: 'Feedback',
     },
     dialogs: {
-      usageTitle: 'Usage',
+      usageTitle: 'How to use',
       roadmapTitle: 'Roadmap & Feedback',
-      feedbackTitle: 'Feedback',
+      feedbackTitle: 'Feedback & Suggestions',
       intro:
-        'If you find errors, missing items, or have suggestions, please leave feedback here.\n' +
-        'Your ID can be a nickname or handle so we can credit you in the changelog.',
+        'If you find any mistakes, missing entries, or have suggestions, please leave them here.\n' +
+        'Your Personal ID can be a nickname or handle so we can credit you in the changelog.',
     },
     form: {
-      // ✅ 对齐你 zh 的“必填/选填”结构（info-dialog.js 会根据 REQUIRE_ID 选择）
-      idLabelRequired: 'Your ID (required)',
-      idLabelOptional: 'Your ID (optional)',
-      idPlaceholder: 'Nickname / handle (optional)',
-      idRequiredAlert: 'Please enter your ID (nickname/handle is fine).',
+      idLabelRequired: 'Personal ID (Required)',
+      idLabelOptional: 'Personal ID (Optional)',
+      idPlaceholder: 'Nickname / Handle (optional)',
+      idRequiredAlert: 'Please fill in “Personal ID” (nickname / handle / ID).',
 
-      contactLabel: 'Contact (optional)',
-      contactPlaceholder: 'Email / social handle (optional)',
+      contactLabel: 'Contact (Optional)',
+      contactPlaceholder: 'Email / Social handle (optional)',
 
-      contentLabel: 'Message (required)',
-      contentPlaceholder: 'Describe the issue, suggestion, or additional info',
-      contentRequiredAlert: 'Please enter your message.',
+      contentLabel: 'Feedback (Required)',
+      contentPlaceholder: 'Describe the issue / suggestion / additional info',
+      contentRequiredAlert: 'Please fill in the feedback content.',
 
       submit: 'Submit',
       cancel: 'Cancel',
 
-      okToast: "Thanks! Your feedback has been sent.",
+      okToast: 'Thanks! Your feedback has been sent to the maintainer.',
       failToast: 'Submission failed. Please try again later.',
-      missingEndpoint: 'Feedback endpoint is not configured.',
+      missingEndpoint: 'Feedback endpoint is not configured (FEEDBACK_ENDPOINT missing).',
     },
   },
 
+  // Toolbar placeholders (used in style-ui.js)
   toolbar: {
     placeholders: {
       filtersReset: 'Filters reset (placeholder)',
-      filtersAppliedAnd: 'Applied AND logic (placeholder)',
-      filtersAppliedOr: 'Applied OR logic (placeholder)',
+      filtersAppliedAnd: 'AND logic applied (placeholder)',
+      filtersAppliedOr: 'OR logic applied (placeholder)',
     },
   },
 
+  // Attribute picker
   attrPicker: {
     notReady: 'Attribute picker is not ready (placeholder)',
   },
 
-  style: {
-    // ✅ style-panel.js 用到的 key
-    hint: {
-      none: 'Current style: none',
-      current: 'Current style: {type}',
-      boundLocked: 'Current binding: {type} (to change it, please reset first)',
+  // ✅ Filter panel (used in filter-ui.js / filter/filter-ui.js)
+  filter: {
+    trigger: 'Filter',
+    panel: {
+      ariaLabel: 'Filter settings',
+      add: 'Add filter rule',
+      reset: 'Reset filters',
+      logicAnd: 'Apply filters with AND',
+      logicOr: 'Apply filters with OR',
+      close: 'Close',
     },
-    select: {
-      occupiedSuffix: ' (bound to: {owner})',
+    builder: {
+      attrLabel: 'Field',
+      optionsLabel: 'Options',
+      searchPlaceholder: 'Search',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+      // needSelect: 'Please select at least one option.', // optional
     },
-    alert: {
-      occupied:
-        '"{type}" is already bound to [{owner}].\nTo transfer it, please go to that attribute and click "Reset" first.',
+    summary: {
+      empty: '(No filters added yet)',
+      emptyChip: '(Empty)',
+      clearAttrTitle: 'Clear this field',
     },
-    confirm: {
-      switchClears: 'Switching the style type will clear all style rows under this attribute. Continue?',
-      resetClears: 'Reset will clear all style rows under this attribute. Continue?',
+    // If you later i18n-ize “src/ui/filter-ui.js”, these are ready:
+    list: {
+      empty: '(No active filters)',
+      removeOneTitle: 'Remove this item',
+      clearGroupTitle: 'Clear this group',
+      clearGroup: 'Clear',
+      removeGroupTitle: 'Remove filters for this field',
     },
-    fallback: {
-      title: 'Style Editor (temporary JSON panel)',
-      apply: 'Save & Apply',
-      reset: 'Clear & Apply',
-      jsonParseFail: 'JSON parse failed: {msg}',
+    attrSelect: {
+      placeholder: 'Select a field',
     },
+    options: {
+      emptyOrLoading: '(No options / still loading)',
+    },
+  },
 
-    // ✅ 给 computeStyleWindowViewModel 用
+  // Style window & controls (used in style-ui.js / style-panel.js, etc.)
+  style: {
     window: {
       title: '{attr} Styles',
       currentStyleNone: 'Current style: none',
     },
-
     placeholders: {
-      addStyleRow: 'Add style (placeholder)',
-      saved: 'Style saved (placeholder)',
+      addStyleRow: 'Add style row (placeholder)',
+      saved: 'Styles saved (placeholder)',
     },
-
     controls: {
       fontFamily: {
         placeholder: 'Choose a font',
@@ -112,10 +112,8 @@ filter: {
       color: {
         ariaLabel: 'Pick a color',
       },
-      todo: '{type} (TBD)',
+      todo: '{type} (todo)',
     },
-
-    // 颜色名（主要用于 title/tooltip，如果你后续把 palette 改成走字典）
     palette: {
       amber: 'Amber',
       indigo: 'Indigo',
