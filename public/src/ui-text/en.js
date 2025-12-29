@@ -14,34 +14,34 @@ export default {
     dialogs: {
       usageTitle: 'How to use',
       roadmapTitle: 'Roadmap & Feedback',
-      feedbackTitle: 'Feedback',
+      feedbackTitle: 'Feedback & Suggestions',
       intro:
-        'If you find errors, missing items, or have additional sources/suggestions, please submit them here.\n' +
-        'Your Personal ID can be a nickname or any identifier for credit in future changelogs.',
+        'If you find any mistakes, missing entries, or have suggestions, please leave them here.\n' +
+        'Your Personal ID can be a nickname or handle so we can credit you in the changelog.',
     },
     form: {
-      idLabelRequired: 'Personal ID (required)',
-      idLabelOptional: 'Personal ID (optional)',
-      idPlaceholder: 'Nickname / ID (optional)',
-      idRequiredAlert: 'Please fill in your Personal ID (nickname / identifier).',
+      idLabelRequired: 'Personal ID (Required)',
+      idLabelOptional: 'Personal ID (Optional)',
+      idPlaceholder: 'Nickname / Handle (optional)',
+      idRequiredAlert: 'Please fill in “Personal ID” (nickname / handle / ID).',
 
-      contactLabel: 'Contact (optional)',
-      contactPlaceholder: 'Email / social handle (optional)',
+      contactLabel: 'Contact (Optional)',
+      contactPlaceholder: 'Email / Social handle (optional)',
 
-      contentLabel: 'Feedback (required)',
+      contentLabel: 'Feedback (Required)',
       contentPlaceholder: 'Describe the issue / suggestion / additional info',
       contentRequiredAlert: 'Please fill in the feedback content.',
 
       submit: 'Submit',
       cancel: 'Cancel',
 
-      okToast: 'Thanks! Your feedback has been sent to the maintainer document.',
+      okToast: 'Thanks! Your feedback has been sent to the maintainer.',
       failToast: 'Submission failed. Please try again later.',
       missingEndpoint: 'Feedback endpoint is not configured (FEEDBACK_ENDPOINT missing).',
     },
   },
 
-  // Toolbar placeholders (used by style-ui.js)
+  // Toolbar placeholders (used in style-ui.js)
   toolbar: {
     placeholders: {
       filtersReset: 'Filters reset (placeholder)',
@@ -55,24 +55,48 @@ export default {
     notReady: 'Attribute picker is not ready (placeholder)',
   },
 
-  // ✅ Filter UI (used by src/ui/filter-ui.js)
+  // ✅ Filter panel (used in filter-ui.js / filter/filter-ui.js)
   filter: {
+    trigger: 'Filter',
+    panel: {
+      ariaLabel: 'Filter settings',
+      add: 'Add filter rule',
+      reset: 'Reset filters',
+      logicAnd: 'Apply filters with AND',
+      logicOr: 'Apply filters with OR',
+      close: 'Close',
+    },
+    builder: {
+      attrLabel: 'Field',
+      optionsLabel: 'Options',
+      searchPlaceholder: 'Search',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+      // needSelect: 'Please select at least one option.', // optional
+    },
+    summary: {
+      empty: '(No filters added yet)',
+      emptyChip: '(Empty)',
+      clearAttrTitle: 'Clear this field',
+    },
+
+    // 兼容你之前为“另一套 filter UI（src/ui/filter-ui.js）”准备的 key
     list: {
       empty: '(No active filters)',
-      removeOneTitle: 'Remove this value',
+      removeOneTitle: 'Remove this item',
       clearGroupTitle: 'Clear this group',
       clearGroup: 'Clear',
-      removeGroupTitle: 'Remove this filter group',
+      removeGroupTitle: 'Remove filters for this field',
     },
     attrSelect: {
-      placeholder: 'Select an attribute',
+      placeholder: 'Select a field',
     },
     options: {
       emptyOrLoading: '(No options / still loading)',
     },
   },
 
-  // ✅ Detail popover field labels (used by timeline/mount.js buildKvHTML)
+  // ✅ Detail popover (used by timeline/mount.js buildKvHTML via t('detail.fields.*'))
   detail: {
     fields: {
       eventName: 'Event',
@@ -90,24 +114,24 @@ export default {
     },
   },
 
-  // Style window & controls (used by style-ui.js)
+  // Style window & controls (used in style-ui.js / style-panel.js, etc.)
   style: {
     window: {
-      title: '{attr} Style',
-      currentStyleNone: 'Current style: None',
+      title: '{attr} Styles',
+      currentStyleNone: 'Current style: none',
     },
     placeholders: {
-      addStyleRow: 'Add style (placeholder)',
-      saved: 'Style saved (placeholder)',
+      addStyleRow: 'Add style row (placeholder)',
+      saved: 'Styles saved (placeholder)',
     },
     controls: {
       fontFamily: {
-        placeholder: 'Select a font',
+        placeholder: 'Choose a font',
       },
       color: {
-        ariaLabel: 'Choose a color',
+        ariaLabel: 'Pick a color',
       },
-      todo: '{type} (TBD)',
+      todo: '{type} (todo)',
     },
     palette: {
       amber: 'Amber',
