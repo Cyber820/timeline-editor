@@ -55,7 +55,7 @@ export default {
     notReady: '属性选择弹窗未就绪（占位）',
   },
 
-  // ✅ 过滤面板（filter-ui.js / filter/filter-ui.js 使用）
+  // 过滤面板（filter/filter-ui.js 使用）
   filter: {
     trigger: '过滤/筛选',
     panel: {
@@ -72,13 +72,25 @@ export default {
       searchPlaceholder: '输入关键字检索',
       confirm: '确定',
       cancel: '取消',
-      // needSelect: '请至少选择一个过滤选项。', // 可选
     },
     summary: {
       empty: '（尚未添加任何过滤/筛选标准）',
       emptyChip: '（空）',
       clearAttrTitle: '清空该属性',
     },
+
+    // ✅ key -> 显示名
+    fields: {
+      EventType: '事件类型',
+      Region: '地区',
+      Platform: '平台类型',
+      ConsolePlatform: '主机类型',
+      Company: '公司',
+      Importance: '重要性',
+      Tag: '标签',
+      Status: '状态',
+    },
+
     list: {
       empty: '（暂无过滤条件）',
       removeOneTitle: '移除此项',
@@ -94,7 +106,7 @@ export default {
     },
   },
 
-  // ✅ 事件详情弹窗字段名（timeline/mount.js 若使用 t('detail.fields.*')）
+  // 详情弹窗字段名（mount.js 使用）
   detail: {
     fields: {
       eventName: '事件名称',
@@ -112,25 +124,72 @@ export default {
     },
   },
 
-  // 样式窗口 & 控件文本（style-ui.js / style-panel.js 等使用）
+  // ✅ 样式 UI（timeline/mount.js 使用）
   style: {
+    buttons: {
+      event: '事件样式',
+      platform: '平台样式',
+      console: '主机样式',
+      company: '公司样式',
+      region: '地区样式',
+    },
+
     window: {
       title: '{attr} 样式',
       currentStyleNone: '当前样式：无',
+      currentStyle: '当前样式：{style}',
+      currentBound: '当前绑定：{style}（如需更改，请先“重置”）',
+      boundHint: '“{style}”已绑定到【{attr}】',
     },
-    placeholders: {
-      addStyleRow: '新增样式（占位）',
-      saved: '样式已保存（占位）',
+
+    panel: {
+      baseTitle: '样式',
+      styleTypeLabel: '样式类型',
+      noneOption: '（未选择）',
+      confirmBind: '确认绑定',
+      reset: '重置',
+      addRow: '新增样式行',
+      saveApply: '保存并应用',
+      close: '关闭',
+
+      table: {
+        style: '样式',
+        values: '作用属性值',
+        action: '操作',
+      },
+
+      pickValues: '添加/修改属性',
+      pickDialogTitle: '选择属性值',
+      takenSuffix: '（已被占用）',
+      ok: '确定',
+      cancel: '取消',
+      deleteRowTitle: '删除该样式行',
+
+      resetConfirm: '重置将清空该属性下所有样式行，是否继续？',
+      needBindAlert: '请先绑定样式类型',
+      conflictAlert:
+        '“{value}” 已被同属性的其他样式行占用，请取消或更换。',
     },
+
+    types: {
+      fontColor: '字体颜色',
+      backgroundColor: '背景颜色',
+      borderColor: '边框颜色',
+      fontFamily: '字体',
+      haloColor: '光晕颜色',
+      none: '无',
+    },
+
     controls: {
       fontFamily: {
         placeholder: '请选择字体',
+        default: '（默认字体）',
       },
       color: {
         ariaLabel: '选择颜色',
       },
-      todo: '{type}（待配置）',
     },
+
     palette: {
       amber: '琥珀',
       indigo: '靛蓝',
