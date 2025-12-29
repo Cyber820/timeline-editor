@@ -55,9 +55,12 @@ export default {
     notReady: 'Attribute picker is not ready (placeholder)',
   },
 
-  // ✅ Filter panel (used in filter-ui.js / filter/filter-ui.js)
+  // ===============================
+  // Filter UI
+  // ===============================
   filter: {
     trigger: 'Filter',
+
     panel: {
       ariaLabel: 'Filter settings',
       add: 'Add filter rule',
@@ -66,21 +69,35 @@ export default {
       logicOr: 'Apply filters with OR',
       close: 'Close',
     },
+
     builder: {
       attrLabel: 'Field',
       optionsLabel: 'Options',
       searchPlaceholder: 'Search',
       confirm: 'Confirm',
       cancel: 'Cancel',
-      // needSelect: 'Please select at least one option.', // optional
     },
+
     summary: {
       empty: '(No filters added yet)',
       emptyChip: '(Empty)',
       clearAttrTitle: 'Clear this field',
     },
 
-    // 兼容你之前为“另一套 filter UI（src/ui/filter-ui.js）”准备的 key
+    // ✅【关键补齐】过滤属性 → 显示名映射
+    // filter-ui.js 会直接调用 t('filter.fields.X')
+    fields: {
+      EventType: 'Event Type',
+      Region: 'Region',
+      Platform: 'Platform',
+      ConsolePlatform: 'Console Platform',
+      Company: 'Company',
+      Importance: 'Importance',
+      Tag: 'Tags',
+      Status: 'Status',
+    },
+
+    // 兼容旧 / 另一套 filter UI 的 key
     list: {
       empty: '(No active filters)',
       removeOneTitle: 'Remove this item',
@@ -88,15 +105,19 @@ export default {
       clearGroup: 'Clear',
       removeGroupTitle: 'Remove filters for this field',
     },
+
     attrSelect: {
       placeholder: 'Select a field',
     },
+
     options: {
       emptyOrLoading: '(No options / still loading)',
     },
   },
 
-  // ✅ Detail popover (used by timeline/mount.js buildKvHTML via t('detail.fields.*'))
+  // ===============================
+  // Detail popover (event click)
+  // ===============================
   detail: {
     fields: {
       eventName: 'Event',
@@ -114,7 +135,9 @@ export default {
     },
   },
 
-  // Style window & controls (used in style-ui.js / style-panel.js, etc.)
+  // ===============================
+  // Style UI
+  // ===============================
   style: {
     window: {
       title: '{attr} Styles',
