@@ -1,19 +1,19 @@
 // public/src/timeline/mount.js
 // -------------------------------------------------------------
-// 清理：中文化样式标题/提示，移除调试字样；页面标题=“电子游戏时间轴Beta版本”
-// - 样式面板标题、提示、下拉“已绑定”均显示中文
-// - 仅显示标题；点击卡片显示详情弹窗
+// - 点击卡片显示详情弹窗
 // - 过滤/重绘后都会重新应用样式
 // - ⭐ 初次加载默认只显示 Importance 为 4/5 的事件
-//
-// ✅ i18n（本次改动重点）：
-// - 详情弹窗字段名通过 t('detail.fields.*') 输出（随语言变化）
-// - blob 字段解析同时兼容中文标签与英文标签（不影响你现有数据）
 // -------------------------------------------------------------
 
 import { fetchAndNormalize } from './fetch.js';
 import { initFilterUI } from '../filter/filter-ui.js';
-import { setLogic, upsertRule, clearRules, removeRule, getState } from '../filter/filter-state.js';
+import {
+  setLogic,
+  upsertRule,
+  clearRules,
+  removeRule,
+  getState,
+} from '../filter/filter-state.js';
 import { applyFilters } from '../filter/filter-engine.js';
 
 import { stateMem } from '../style/stateMem.js';
@@ -35,20 +35,6 @@ import { t } from '../ui-text/index.js';
 
 /**
  * ---------------- UI 预设（可调参数） ----------------
- * 这里是集中控制“画布尺寸 / 事件卡片外观 / 布局 / 缩放”的地方。
- *
- * 👉 常改参数：
- *  - UI.canvas.height        时间轴画布高度（px）
- *  - UI.item.fontSize        事件标题字号（px）
- *  - UI.item.paddingX/Y      事件卡片内边距（左右 / 上下，px）
- *  - UI.item.borderRadius    事件卡片圆角大小（px）
- *  - UI.item.maxWidth        事件卡片最大宽度（px）
- *  - UI.layout.itemPosition  事件框相对时间轴的位置（'top' | 'bottom'）
- *  - UI.layout.axisPosition  轴线位置（'top' | 'bottom'）
- *  - UI.layout.verticalItemGap  事件卡片与轴之间/事件之间的纵向间距（px）
- *  - UI.layout.stack         是否允许事件纵向堆叠（true=多行，false=单行）
- *  - UI.zoom.verticalScroll  是否允许垂直滚动
- *  - UI.zoom.key             鼠标缩放需要按下的按键（如 'ctrlKey'）
  */
 const UI = {
   canvas: { height: 600 },
@@ -66,62 +52,40 @@ function asDisplay(v) {
   return s ? s : '—';
 }
 
-// ---------------- blob 字段解析（兼容中英文标签） ----------------
+// “长描述字段”里要解析出来的标签名称
+const FIELD_LABELS = [
+  '事件名称',
+  '事件类型',
+  '时间',
+  '状态',
+  '地区',
+  '平台类型',
+  '主机类型',
+  '公司',
+  '标签',
+  '重要性',
+  '描述',
+  '贡献者',
+];
 
-/**
- * 统一的“字段别名表”：
- * - 左侧是“规范字段名”（仅用于 parse 输出的键名）
- * - 右侧是可被识别的 label 列表（中文 + 英文）
- */
-const BLOB_LABEL_ALIASES = {
-  title: ['事件名称', 'Event Name', 'Title', 'Name'],
-  eventType: ['事件类型', 'Event Type', 'Type'],
-  time: ['时间', 'Time', 'Date'],
-  status: ['状态', 'Status'],
-  region: ['地区', 'Region'],
-  platform: ['平台类型', '平台', 'Platform'],
-  consolePlatform: ['主机类型', '主机', 'Console', 'Console Platform'],
-  company: ['公司', 'Company'],
-  tag: ['标签', 'Tag', 'Tags'],
-  importance: ['重要性', 'Importance', 'Priority'],
-  description: ['描述', 'Description', 'Desc'],
-  contributor: ['贡献者', '提交者', 'Contributor', 'Submitter', 'Author'],
-};
-
-/**
- * parseBlobFields
- * 从“长文本描述”（通常是 Title 或 content）里，按“字段名: 值”的格式解析出结构化字段。
- * 支持中英文 label，最终统一输出到：
- *  out.title/out.eventType/out.time/out.status/out.region/...
- * 并额外输出 out.__start/out.__end（从 time 解析）
- */
 function parseBlobFields(blob) {
   const s = toPlain(blob);
   const out = {};
   if (!s) return out;
 
-  const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = FIELD_LABELS.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const lookahead = '(?=\\s*(?:' + escaped.join('|') + ')\\s*[:：]|$)';
 
-  for (const [canonical, labels] of Object.entries(BLOB_LABEL_ALIASES)) {
-    const escapedLabels = (labels || []).map(esc);
-    if (!escapedLabels.length) continue;
-
-    const head = '(?:' + escapedLabels.join('|') + ')';
-    const lookahead = '(?=\\s*(?:' + head + ')\\s*[:：]|$)';
-
-    // 捕获 label 后面的值，直到下一个 label 或结束
-    const re = new RegExp(head + '\\s*[:：]\\s*([\\s\\S]*?)' + lookahead, 'i');
+  for (const label of FIELD_LABELS) {
+    const re = new RegExp(label + '\\s*[:：]\\s*([\\s\\S]*?)' + lookahead, 'i');
     const m = re.exec(s);
-    if (m) out[canonical] = m[1].replace(/\\n/g, '\n').trim();
+    if (m) out[label] = m[1].replace(/\\n/g, '\n').trim();
   }
 
-  // 尝试从 time 字段解析起止日期
-  const tval = out.time;
+  const tval = out['时间'];
   if (tval) {
     const m1 =
-      /([0-9]{4}-[0-9]{2}-[0-9]{2})\s*[~—–-]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(
-        tval,
-      );
+      /([0-9]{4}-[0-9]{2}-[0-9]{2})\s*[~—–-]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(tval);
     if (m1) {
       out.__start = m1[1];
       out.__end = m1[2];
@@ -130,7 +94,6 @@ function parseBlobFields(blob) {
       if (m2) out.__start = m2[1];
     }
   }
-
   return out;
 }
 
@@ -149,26 +112,23 @@ function toMs(ts) {
 }
 
 /**
- * buildKvHTML
- * 生成弹窗中“详情信息”的 HTML（键值对展示）。
- * 显示字段包括：事件名称 / 时间 / 类型 / 地区 / 平台 / 主机 / 公司 / 标签 / 描述 / 贡献者 / 重要性。
- *
- * ✅ 本次改动：字段名用 t('detail.fields.*')，从而随语言切换。
+ * buildKvHTML（详情弹窗）
+ * 这里你已经实现了英文显示；我保持你的逻辑不改。
  */
 function buildKvHTML(obj) {
   const kv = [
-    [t('detail.fields.eventName'), obj.title],
-    [t('detail.fields.start'), obj.start],
-    [t('detail.fields.end'), obj.end],
-    [t('detail.fields.eventType'), obj.EventType],
-    [t('detail.fields.region'), obj.Region],
-    [t('detail.fields.platform'), obj.Platform],
-    [t('detail.fields.consolePlatform'), obj.ConsolePlatform],
-    [t('detail.fields.company'), obj.Company],
-    [t('detail.fields.importance'), obj.Importance],
-    [t('detail.fields.tag'), Array.isArray(obj.Tag) ? obj.Tag.join('，') : obj.Tag || ''],
-    [t('detail.fields.description'), obj.Description],
-    [t('detail.fields.contributor'), obj.Contributor || obj.Submitter],
+    [t('detail.fields.eventName') || 'Event', obj.title],
+    [t('detail.fields.start') || 'Start', obj.start],
+    [t('detail.fields.end') || 'End', obj.end],
+    [t('detail.fields.eventType') || 'Event Type', obj.EventType],
+    [t('detail.fields.region') || 'Region', obj.Region],
+    [t('detail.fields.platform') || 'Platform', obj.Platform],
+    [t('detail.fields.consolePlatform') || 'Console Platform', obj.ConsolePlatform],
+    [t('detail.fields.company') || 'Company', obj.Company],
+    [t('detail.fields.importance') || 'Importance', obj.Importance],
+    [t('detail.fields.tag') || 'Tags', Array.isArray(obj.Tag) ? obj.Tag.join('，') : obj.Tag || ''],
+    [t('detail.fields.description') || 'Description', obj.Description],
+    [t('detail.fields.contributor') || 'Contributor', obj.Contributor || obj.Submitter],
   ];
 
   const rows = kv
@@ -176,7 +136,7 @@ function buildKvHTML(obj) {
       ([k, v]) =>
         '<div class="kv-row" style="display:flex;gap:8px;align-items:flex-start;">' +
         '<dt class="kv-key" style="min-width:84px;flex:0 0 auto;font-weight:600;">' +
-        toPlain(k) +
+        k +
         '</dt>' +
         '<dd class="kv-val" style="margin:0;white-space:pre-wrap;word-break:break-word;">' +
         asDisplay(v) +
@@ -195,38 +155,15 @@ function buildKvHTML(obj) {
   );
 }
 
-/**
- * injectScopedStyles
- * 为当前 container 注入一段带“随机 scope class”的样式，避免影响页面其他区域。
- */
 function injectScopedStyles(container, ui) {
   const scope = 'tl-scope-' + Math.random().toString(36).slice(2, 8);
   container.classList.add(scope);
+
   const css =
-    '.' +
-    scope +
-    ' .vis-item.event{border-radius:' +
-    ui.item.borderRadius +
-    'px;}' +
-    '.' +
-    scope +
-    ' .vis-item .vis-item-content{padding:' +
-    ui.item.paddingY +
-    'px ' +
-    ui.item.paddingX +
-    'px;max-width:' +
-    ui.item.maxWidth +
-    'px;}' +
-    '.' +
-    scope +
-    ' .event-title{font-size:' +
-    ui.item.fontSize +
-    'px;line-height:1.4;margin:0;max-width:' +
-    ui.item.maxWidth +
-    'px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-    '.' +
-    scope +
-    ' #event-popover{position:absolute;z-index:1000;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 24px rgba(0,0,0,.15);' +
+    '.' + scope + ' .vis-item.event{border-radius:' + ui.item.borderRadius + 'px;}' +
+    '.' + scope + ' .vis-item .vis-item-content{padding:' + ui.item.paddingY + 'px ' + ui.item.paddingX + 'px;max-width:' + ui.item.maxWidth + 'px;}' +
+    '.' + scope + ' .event-title{font-size:' + ui.item.fontSize + 'px;line-height:1.4;margin:0;max-width:' + ui.item.maxWidth + 'px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.' + scope + ' #event-popover{position:absolute;z-index:1000;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 24px rgba(0,0,0,.15);' +
     'border-radius:10px;padding:12px;overflow:auto;pointer-events:auto;min-width:280px;min-height:140px;max-width:700px;max-height:70vh;font-size:12px;line-height:1;display:none;}' +
     '.te-style-btn{display:inline-flex;align-items:center;gap:.25rem;padding:.35rem .6rem;border:1px solid #dadde1;border-radius:.5rem;background:#fff;cursor:pointer;font-size:.9rem;}' +
     '.te-style-btn+.te-style-btn{margin-left:.5rem}.te-style-btn:hover{background:#f6f7f9}' +
@@ -238,6 +175,7 @@ function injectScopedStyles(container, ui) {
     '#styleTable{width:100%;border-collapse:collapse}#styleTable thead tr{border-bottom:1px solid #eee}#styleTable th,#styleTable td{text-align:left;padding:8px 4px}' +
     '.attr-chips span{display:inline-block;padding:2px 6px;margin:2px;border:1px solid #ccc;border-radius:10px;font-size:12px}' +
     '.te-muted{color:#666;font-size:.9rem}';
+
   const styleEl = document.createElement('style');
   styleEl.textContent = css;
   styleEl.setAttribute('data-scope', scope);
@@ -245,36 +183,17 @@ function injectScopedStyles(container, ui) {
   return scope;
 }
 
-/**
- * createLoadingOverlay
- * 创建一个简单的“加载中”小条，挂在 container 里，在数据加载完成后移除。
- */
 function createLoadingOverlay() {
   const el = document.createElement('div');
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
-  el.textContent = '加载时间轴数据中…';
+  el.textContent = 'Loading…';
   el.style.cssText =
     'position:absolute;top:12px;left:12px;background:#fff;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);z-index:10;font-size:12px;';
   return el;
 }
 
 // ---------------- 数据映射 ----------------
-
-function pickFirstNonEmpty(...vals) {
-  for (const v of vals) {
-    if (v == null) continue;
-    const s = String(v).trim();
-    if (s) return s;
-  }
-  return '';
-}
-
-/**
- * normalizeEvent
- * 将 Google Sheet / 后端返回的原始事件对象转成 vis-timeline 使用的 item 结构，
- * 并额外挂上 detailHtml 等弹窗展示需要的字段。
- */
 function normalizeEvent(event, i) {
   const Start = event.Start ?? event.start ?? '';
   const End = event.End ?? event.end ?? '';
@@ -283,27 +202,26 @@ function normalizeEvent(event, i) {
 
   const title =
     toPlain(event.Title) ||
-    pickFirstNonEmpty(parsed.title) ||
+    parsed['事件名称'] ||
     toPlain(event.title) ||
     toPlain(event.content) ||
-    '(无标题)';
+    '(Untitled)';
 
   const start = Start || parsed.__start || '';
   const end = End || parsed.__end || '';
 
-  const EventType = event.EventType ?? parsed.eventType ?? '';
-  const Region = event.Region ?? parsed.region ?? '';
-  const Platform = event.Platform ?? parsed.platform ?? '';
-  const Company = event.Company ?? parsed.company ?? '';
-  const Status = event.Status ?? parsed.status ?? '';
-  const ConsolePlatform = event.ConsolePlatform ?? parsed.consolePlatform ?? '';
-  const Desc = event.Description ?? parsed.description ?? '';
-  const Contrib = event.Contributor ?? event.Submitter ?? parsed.contributor ?? '';
-  const TagRaw = event.Tag ?? parsed.tag ?? '';
+  const EventType = event.EventType ?? parsed['事件类型'] ?? '';
+  const Region = event.Region ?? parsed['地区'] ?? '';
+  const Platform = event.Platform ?? parsed['平台类型'] ?? '';
+  const Company = event.Company ?? parsed['公司'] ?? '';
+  const Status = event.Status ?? parsed['状态'] ?? '';
+  const ConsolePlatform = event.ConsolePlatform ?? parsed['主机类型'] ?? '';
+  const Desc = event.Description ?? parsed['描述'] ?? '';
+  const Contrib = event.Contributor ?? event.Submitter ?? parsed['贡献者'] ?? '';
+  const TagRaw = event.Tag ?? parsed['标签'] ?? '';
   const Tag = normalizeTags(TagRaw);
 
-  // ⭐ 从后端字段或 blob 中解析“重要性”
-  const Importance = event.Importance ?? parsed.importance ?? '';
+  const Importance = event.Importance ?? parsed['重要性'] ?? '';
 
   const detailHtml = buildKvHTML({
     title,
@@ -340,8 +258,7 @@ function normalizeEvent(event, i) {
 }
 
 // ---------------- 样式应用（单点出口） ----------------
-
-function safeApplyStyles(reason = '') {
+function safeApplyStyles() {
   try {
     const saved = getStyleState();
     if (saved && (saved.boundTypes || saved.rules)) {
@@ -350,62 +267,102 @@ function safeApplyStyles(reason = '') {
         titleSelector: DEFAULTS.TITLE_SELECTOR,
       });
     }
-  } catch {
-    // 静默失败
-  }
+  } catch {}
 }
 
-// ---------------- 样式面板（中文化） ----------------
+// ---------------- 样式面板（i18n） ----------------
+
+function tr(key, fallback) {
+  const v = t(key);
+  return v && v !== key ? v : fallback;
+}
+function tf(key, vars, fallback) {
+  const raw = tr(key, fallback || key);
+  return String(raw).replace(/\{(\w+)\}/g, (_, k) => (vars && k in vars ? vars[k] : `{${k}}`));
+}
+function attrLabelI18n(attrKey) {
+  // 优先使用 filter.fields（你已经在 en/zh 都补齐了）
+  const v = t(`filter.fields.${attrKey}`);
+  if (v && v !== `filter.fields.${attrKey}`) return v;
+  // 兜底：constants 的中文 labels 或 raw key
+  return attributeLabels?.[attrKey] || attrKey;
+}
+function styleTypeLabelI18n(typeKey) {
+  const v = t(`style.types.${typeKey}`);
+  if (v && v !== `style.types.${typeKey}`) return v;
+  return STYLE_LABELS?.[typeKey] || styleLabel(typeKey) || typeKey;
+}
 
 const STYLE_ATTR_BTNS = [
-  { label: '事件样式', field: 'EventType' },
-  { label: '平台样式', field: 'Platform' },
-  { label: '主机样式', field: 'ConsolePlatform' },
-  { label: '公司样式', field: 'Company' },
-  { label: '地区样式', field: 'Region' },
+  { textKey: 'event', field: 'EventType' },
+  { textKey: 'platform', field: 'Platform' },
+  { textKey: 'console', field: 'ConsolePlatform' },
+  { textKey: 'company', field: 'Company' },
+  { textKey: 'region', field: 'Region' },
 ];
 
 const UI_STYLE_TYPES = [
-  { key: 'fontColor', label: STYLE_LABELS.fontColor || '字体颜色' },
-  { key: 'backgroundColor', label: STYLE_LABELS.backgroundColor || '背景颜色' },
-  { key: 'borderColor', label: STYLE_LABELS.borderColor || '边框颜色' },
-  { key: 'fontFamily', label: STYLE_LABELS.fontFamily || '字体' },
-  { key: 'haloColor', label: STYLE_LABELS.haloColor || '光晕颜色' },
+  { key: 'fontColor' },
+  { key: 'backgroundColor' },
+  { key: 'borderColor' },
+  { key: 'fontFamily' },
+  { key: 'haloColor' },
 ];
 
 let panelInjected = false;
 
 function ensureStylePanelInjected() {
   if (panelInjected) return;
+
   const host = document.createElement('div');
   host.id = 'style-window';
+
+  const optNone = tr('style.panel.noneOption', '（未选择）');
+  const baseTitle = tr('style.panel.baseTitle', '样式');
+  const typeLabel = tr('style.panel.styleTypeLabel', '样式类型');
+  const confirmBind = tr('style.panel.confirmBind', '确认绑定');
+  const reset = tr('style.panel.reset', '重置');
+  const addRow = tr('style.panel.addRow', '新增样式行');
+  const saveApply = tr('style.panel.saveApply', '保存并应用');
+  const close = tr('style.panel.close', '关闭');
+
+  const thStyle = tr('style.panel.table.style', '样式');
+  const thValues = tr('style.panel.table.values', '作用属性值');
+  const thAction = tr('style.panel.table.action', '操作');
+
   host.innerHTML =
     '<div class="sw-backdrop"></div>' +
     '<div class="sw-panel">' +
     '<header>' +
-    '<div><div id="style-title" style="font-weight:600;font-size:1.05rem;">样式</div>' +
-    '<div id="bound-type-hint" class="te-muted" style="margin-top:4px;">当前样式：无</div></div>' +
-    '<button id="style-close" title="关闭" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>' +
+    '<div><div id="style-title" style="font-weight:600;font-size:1.05rem;">' + baseTitle + '</div>' +
+    '<div id="bound-type-hint" class="te-muted" style="margin-top:4px;">' +
+      tr('style.window.currentStyleNone', '当前样式：无') +
+    '</div></div>' +
+    '<button id="style-close" title="' + close + '" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>' +
     '</header>' +
     '<section>' +
     '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">' +
-    '<label>样式类型：</label>' +
-    '<select id="style-type-select"><option value="none">（未选择）</option>' +
-    UI_STYLE_TYPES.map((t) => '<option value="' + t.key + '">' + t.label + '</option>').join('') +
+    '<label>' + typeLabel + '：</label>' +
+    '<select id="style-type-select"><option value="none">' + optNone + '</option>' +
+    UI_STYLE_TYPES.map((x) => '<option value="' + x.key + '">' + styleTypeLabelI18n(x.key) + '</option>').join('') +
     '</select>' +
-    '<button id="style-confirm" style="display:inline-block;" disabled>确认绑定</button>' +
-    '<button id="style-reset" style="display:none;">重置</button>' +
-    '<button id="style-add" disabled>新增样式行</button>' +
+    '<button id="style-confirm" style="display:inline-block;" disabled>' + confirmBind + '</button>' +
+    '<button id="style-reset" style="display:none;">' + reset + '</button>' +
+    '<button id="style-add" disabled>' + addRow + '</button>' +
     '</div>' +
     '<table id="styleTable"><thead><tr>' +
-    '<th style="width:36%;">样式</th><th>作用属性值</th><th style="width:72px;">操作</th>' +
+    '<th style="width:36%;">' + thStyle + '</th><th>' + thValues + '</th><th style="width:72px;">' + thAction + '</th>' +
     '</tr></thead><tbody id="styleTableBody"></tbody></table>' +
     '</section>' +
-    '<footer><button id="style-save" style="background:#111;color:#fff;border:1px solid #111;border-radius:8px;padding:8px 12px;cursor:pointer;">保存并应用</button></footer>' +
+    '<footer><button id="style-save" style="background:#111;color:#fff;border:1px solid #111;border-radius:8px;padding:8px 12px;cursor:pointer;">' +
+      saveApply +
+    '</button></footer>' +
     '</div>';
+
   document.body.appendChild(host);
   panelInjected = true;
 }
+
 function openStylePanelLight() {
   ensureStylePanelInjected();
   document.getElementById('style-window').style.display = 'block';
@@ -419,6 +376,8 @@ function buildColorControl(rule) {
   const wrap = document.createElement('div');
   const color = document.createElement('input');
   color.type = 'color';
+  color.setAttribute('aria-label', tr('style.controls.color.ariaLabel', '选择颜色'));
+
   const hex = document.createElement('input');
   hex.type = 'text';
   hex.placeholder = '#RRGGBB';
@@ -454,19 +413,23 @@ function buildColorControl(rule) {
   wrap.appendChild(hex);
   return wrap;
 }
+
 function buildFontControl(rule) {
   const wrap = document.createElement('div');
   const sel = document.createElement('select');
+
+  const optDefault = tr('style.controls.fontFamily.default', '（默认字体）');
   sel.innerHTML =
-    '<option value="">（默认字体）</option>' +
-    '<option value="Microsoft YaHei, PingFang SC, Noto Sans SC, system-ui">微软雅黑 / 苹方 / 思源黑体</option>' +
-    '<option value="SimHei">黑体 (SimHei)</option>' +
-    '<option value="SimSun">宋体 (SimSun)</option>' +
-    '<option value="KaiTi">楷体 (KaiTi)</option>' +
-    '<option value="LiSu">隶书 (LiSu)</option>' +
-    '<option value="YouYuan">幼圆 (YouYuan)</option>' +
-    '<option value="STCaiyun">华文彩云 (STCaiyun)</option>' +
-    '<option value="FZShuTi">方正舒体 (FZShuTi)</option>';
+    `<option value="">${optDefault}</option>` +
+    '<option value="Microsoft YaHei, PingFang SC, Noto Sans SC, system-ui">Microsoft YaHei / PingFang / Noto Sans SC</option>' +
+    '<option value="SimHei">SimHei</option>' +
+    '<option value="SimSun">SimSun</option>' +
+    '<option value="KaiTi">KaiTi</option>' +
+    '<option value="LiSu">LiSu</option>' +
+    '<option value="YouYuan">YouYuan</option>' +
+    '<option value="STCaiyun">STCaiyun</option>' +
+    '<option value="FZShuTi">FZShuTi</option>';
+
   sel.value = rule.style?.fontFamily || '';
   sel.addEventListener('change', () => {
     (rule.style ||= {}).fontFamily = sel.value || '';
@@ -474,12 +437,13 @@ function buildFontControl(rule) {
   wrap.appendChild(sel);
   return wrap;
 }
+
 function buildStyleCellControl(rule) {
   if (['fontColor', 'backgroundColor', 'borderColor', 'haloColor'].includes(rule.type))
     return buildColorControl(rule);
   if (rule.type === 'fontFamily') return buildFontControl(rule);
   const span = document.createElement('span');
-  span.textContent = STYLE_LABELS[rule.type] || rule.type;
+  span.textContent = styleTypeLabelI18n(rule.type);
   return span;
 }
 
@@ -495,7 +459,7 @@ function renderChips(container, values) {
   if (!list.length) {
     const s = document.createElement('span');
     s.className = 'te-muted';
-    s.textContent = '（未选择）';
+    s.textContent = tr('filter.summary.emptyChip', '（空）');
     container.appendChild(s);
     return;
   }
@@ -518,14 +482,14 @@ function getTakenValuesForAttr(attrKey, exceptRowId) {
 }
 
 function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
-  const tr = document.createElement('tr');
-  tr.dataset.rowId = rule.id;
-  tr.dataset.attrKey = attrKey;
+  const trEl = document.createElement('tr');
+  trEl.dataset.rowId = rule.id;
+  trEl.dataset.attrKey = attrKey;
 
   const tdStyle = document.createElement('td');
   tdStyle.dataset.styleType = rule.type;
   tdStyle.appendChild(buildStyleCellControl(rule));
-  tr.appendChild(tdStyle);
+  trEl.appendChild(tdStyle);
 
   const tdVals = document.createElement('td');
   const chips = document.createElement('div');
@@ -535,10 +499,10 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
 
   const btnPick = document.createElement('button');
   btnPick.type = 'button';
-  btnPick.textContent = '添加/修改属性';
+  btnPick.textContent = tr('style.panel.pickValues', '添加/修改属性');
   btnPick.style.marginLeft = '8px';
   tdVals.appendChild(btnPick);
-  tr.appendChild(tdVals);
+  trEl.appendChild(tdVals);
 
   renderChips(chips, rule.values || []);
 
@@ -550,14 +514,21 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
     const box = document.createElement('div');
     box.style.cssText =
       'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+
     const panel = document.createElement('div');
     panel.style.cssText =
       'width:min(720px,92vw);max-height:70vh;overflow:auto;background:#fff;border-radius:10px;padding:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);';
-    panel.innerHTML = '<div style="font-weight:600;margin-bottom:8px;">选择属性值</div>';
+
+    panel.innerHTML =
+      '<div style="font-weight:600;margin-bottom:8px;">' +
+      tr('style.panel.pickDialogTitle', '选择属性值') +
+      '</div>';
 
     const grid = document.createElement('div');
     grid.style.cssText =
       'display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;';
+
+    const takenSuffix = tr('style.panel.takenSuffix', '（已被占用）');
 
     list.forEach((v) => {
       const label = document.createElement('label');
@@ -574,8 +545,9 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
         if (cb.checked) current.add(v);
         else current.delete(v);
       });
+
       const span = document.createElement('span');
-      span.textContent = isTaken ? v + '（已被占用）' : v;
+      span.textContent = isTaken ? v + takenSuffix : v;
       span.style.opacity = isTaken ? '0.55' : '1';
 
       label.appendChild(cb);
@@ -588,23 +560,26 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
     const footer = document.createElement('div');
     footer.style.cssText =
       'display:flex;justify-content:flex-end;gap:8px;margin-top:10px;';
+
     const ok = document.createElement('button');
-    ok.textContent = '确定';
+    ok.textContent = tr('style.panel.ok', '确定');
+
     const cancel = document.createElement('button');
-    cancel.textContent = '取消';
+    cancel.textContent = tr('style.panel.cancel', '取消');
 
     ok.addEventListener('click', () => {
       const finalSelected = Array.from(current);
       const finalTaken = getTakenValuesForAttr(attrKey, rule.id);
-      const conflict = finalSelected.find((v) => finalTaken.has(v));
+      const conflict = finalSelected.find((x) => finalTaken.has(x));
       if (conflict) {
-        alert('“' + conflict + '” 已被同属性的其他样式行占用，请取消或更换。');
+        alert(tf('style.panel.conflictAlert', { value: conflict }, `“${conflict}” 已被占用`));
         return;
       }
       rule.values = finalSelected;
       renderChips(chips, rule.values);
       document.body.removeChild(box);
     });
+
     cancel.addEventListener('click', () => document.body.removeChild(box));
 
     footer.appendChild(ok);
@@ -617,18 +592,18 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
   const tdAction = document.createElement('td');
   const del = document.createElement('button');
   del.type = 'button';
-  del.title = '删除该样式行';
+  del.title = tr('style.panel.deleteRowTitle', '删除该样式行');
   del.textContent = '×';
   del.addEventListener('click', () => {
     const bucket = (stateMem.styleRules && stateMem.styleRules[attrKey]) || [];
     const idx = bucket.findIndex((r) => r.id === rule.id);
     if (idx >= 0) bucket.splice(idx, 1);
-    tr.remove();
+    trEl.remove();
   });
   tdAction.appendChild(del);
-  tr.appendChild(tdAction);
+  trEl.appendChild(tdAction);
 
-  containerTbody.appendChild(tr);
+  containerTbody.appendChild(trEl);
 }
 
 function collectOptionsForAttr(mapped, attrKey) {
@@ -643,18 +618,22 @@ function refreshTypeOptions(selectEl) {
   Array.from(selectEl.options).forEach((opt) => {
     if (!opt.dataset.baseText) opt.dataset.baseText = opt.textContent;
     const type = opt.value;
+
     if (type === 'none') {
       opt.disabled = false;
       opt.textContent = opt.dataset.baseText;
       return;
     }
+
     const owner = stateMem.styleTypeOwner?.[type];
     const isMine = owner === stateMem.currentStyleAttr;
+
     opt.disabled = !!(owner && !isMine);
-    const ownerCN = owner ? attributeLabels[owner] || owner : '';
+
+    const ownerLabel = owner ? attrLabelI18n(owner) : '';
+    const base = styleTypeLabelI18n(type);
     opt.textContent =
-      (STYLE_LABELS[type] || opt.dataset.baseText) +
-      (owner && !isMine ? `（已绑定：${ownerCN}）` : '');
+      base + (owner && !isMine ? ` (${tr('style.window.boundTo', 'bound to')}: ${ownerLabel})` : '');
   });
 }
 
@@ -676,27 +655,33 @@ function mountStyleButtonsRightOfFilter(container, mapped) {
     let btn = document.querySelector('[data-role="filter-toggle"],[data-te-filter-toggle]');
     if (btn) return btn;
     const cands = Array.from(document.querySelectorAll('button,[role="button"]'));
-    return cands.find((b) => /筛选|过滤/.test((b.textContent || '').trim())) || null;
+    return cands.find((b) => /Filter|筛选|过滤/.test((b.textContent || '').trim())) || null;
   }
+
   function doAttach() {
     const filterBtn = findFilterBtn();
     if (!filterBtn) return false;
+
     const frag = document.createDocumentFragment();
+
     STYLE_ATTR_BTNS.forEach((def) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'te-style-btn';
-      b.textContent = def.label;
+      b.textContent = tr(`style.buttons.${def.textKey}`, def.textKey);
       b.addEventListener('click', () => openStyleEditorFor(def.field, mapped));
       frag.appendChild(b);
     });
+
     filterBtn.parentElement &&
       (filterBtn.nextSibling
         ? filterBtn.parentElement.insertBefore(frag, filterBtn.nextSibling)
         : filterBtn.parentElement.appendChild(frag));
     return true;
   }
+
   if (doAttach()) return;
+
   const obs = new MutationObserver(() => {
     if (doAttach()) obs.disconnect();
   });
@@ -722,8 +707,8 @@ function openStyleEditorFor(attrKey, mapped) {
   const btnAdd = document.getElementById('style-add');
   const btnSave = document.getElementById('style-save');
 
-  const attrCN = attributeLabels[attrKey] || attrKey;
-  titleEl && (titleEl.textContent = `${attrCN} 样式`);
+  const attrText = attrLabelI18n(attrKey);
+  titleEl && (titleEl.textContent = tf('style.window.title', { attr: attrText }, `${attrText} Styles`));
 
   if (tbody) {
     tbody.innerHTML = '';
@@ -739,8 +724,16 @@ function openStyleEditorFor(attrKey, mapped) {
 
   const currentBound = boundNow();
   const currentLabel =
-    currentBound === 'none' ? '无' : styleLabel(currentBound) || currentBound;
-  hintEl && (hintEl.textContent = `当前样式：${currentLabel}`);
+    currentBound === 'none'
+      ? tr('style.types.none', 'None')
+      : styleTypeLabelI18n(currentBound);
+
+  hintEl &&
+    (hintEl.textContent =
+      currentBound === 'none'
+        ? tr('style.window.currentStyleNone', 'Current style: none')
+        : tf('style.window.currentStyle', { style: currentLabel }, `Current style: ${currentLabel}`));
+
   btnAdd && (btnAdd.disabled = currentBound === 'none');
   btnReset && (btnReset.style.display = currentBound === 'none' ? 'none' : 'inline-block');
   typeSel && (typeSel.disabled = currentBound !== 'none');
@@ -755,19 +748,21 @@ function openStyleEditorFor(attrKey, mapped) {
       if (current !== 'none') {
         typeSel.value = 'none';
         btnConfirm && (btnConfirm.disabled = true);
-        const currLabel = styleLabel(current) || current;
         hintEl &&
-          (hintEl.textContent = `当前绑定：${currLabel}（如需更改，请先“重置”）`);
+          (hintEl.textContent = tf('style.window.currentBound', { style: styleTypeLabelI18n(current) },
+            `Current binding: ${styleTypeLabelI18n(current)} (reset required to change)`));
         return;
       }
 
       const owner = stateMem.styleTypeOwner?.[val];
       if (val !== 'none' && owner && owner !== attrKey) {
-        const ownerCN = attributeLabels[owner] || owner;
+        const ownerText = attrLabelI18n(owner);
         typeSel.value = 'none';
         btnConfirm && (btnConfirm.disabled = true);
         hintEl &&
-          (hintEl.textContent = `“${styleLabel(val) || val}”已绑定到【${ownerCN}】`);
+          (hintEl.textContent = tf('style.window.boundHint',
+            { style: styleTypeLabelI18n(val), attr: ownerText },
+            `“${styleTypeLabelI18n(val)}” is already bound to [${ownerText}]`));
         return;
       }
 
@@ -785,7 +780,10 @@ function openStyleEditorFor(attrKey, mapped) {
       stateMem.styleTypeOwner[stagedType] = attrKey;
 
       hintEl &&
-        (hintEl.textContent = `当前样式：${styleLabel(stagedType) || stagedType}`);
+        (hintEl.textContent =
+          tf('style.window.currentStyle', { style: styleTypeLabelI18n(stagedType) },
+            `Current style: ${styleTypeLabelI18n(stagedType)}`));
+
       btnConfirm.disabled = true;
       btnReset && (btnReset.style.display = 'inline-block');
       btnAdd && (btnAdd.disabled = false);
@@ -796,25 +794,27 @@ function openStyleEditorFor(attrKey, mapped) {
         () => 'rule_' + Math.random().toString(36).slice(2, 8),
       );
       ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
-      tbody &&
-        renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
+      tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
     });
 
   btnReset &&
     (btnReset.onclick = () => {
       const bucketLen = (stateMem.styleRules[attrKey] || []).length;
-      if (bucketLen && !confirm('重置将清空该属性下所有样式行，是否继续？')) return;
+      if (bucketLen && !confirm(tr('style.panel.resetConfirm', 'Reset?'))) return;
+
       const prev = boundNow();
       if (prev !== 'none' && stateMem.styleTypeOwner[prev] === attrKey)
         delete stateMem.styleTypeOwner[prev];
+
       stateMem.boundStyleType[attrKey] = 'none';
       const bucket = stateMem.styleRules[attrKey];
       if (bucket) bucket.length = 0;
 
       tbody && (tbody.innerHTML = '');
-      hintEl && (hintEl.textContent = '当前样式：无');
+      hintEl && (hintEl.textContent = tr('style.window.currentStyleNone', 'Current style: none'));
       btnAdd && (btnAdd.disabled = true);
       btnReset.style.display = 'none';
+
       if (typeSel) {
         typeSel.value = 'none';
         typeSel.disabled = false;
@@ -826,18 +826,17 @@ function openStyleEditorFor(attrKey, mapped) {
 
   btnAdd &&
     (btnAdd.onclick = () => {
-      const t0 = boundNow();
-      if (!t0 || t0 === 'none') {
-        alert('请先绑定样式类型');
+      const tt = boundNow();
+      if (!tt || tt === 'none') {
+        alert(tr('style.panel.needBindAlert', 'Please bind a style type first.'));
         return;
       }
       const rule = createEmptyRuleForType(
-        t0,
+        tt,
         () => 'rule_' + Math.random().toString(36).slice(2, 8),
       );
       ensureBucketIn(stateMem.styleRules, attrKey).push(rule);
-      tbody &&
-        renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
+      tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
     });
 
   btnSave &&
@@ -856,34 +855,29 @@ function openStyleEditorFor(attrKey, mapped) {
       closeStylePanelLight();
     });
 
-  document
-    .getElementById('style-close')
-    ?.addEventListener('click', closeStylePanelLight);
-  document
-    .querySelector('#style-window .sw-backdrop')
-    ?.addEventListener('click', closeStylePanelLight);
+  document.getElementById('style-close')?.addEventListener('click', closeStylePanelLight);
+  document.querySelector('#style-window .sw-backdrop')?.addEventListener('click', closeStylePanelLight);
 
   openStylePanelLight();
 }
 
 // ---------------- 主挂载 ----------------
-
 export async function mountTimeline(container, overrides = {}) {
   if (typeof container === 'string') {
     const node = document.querySelector(container);
     if (!node) {
-      console.error('mountTimeline: 未找到容器选择器：', container);
+      console.error('mountTimeline: container not found:', container);
       return { timeline: null, items: null, destroy() {} };
     }
     container = node;
   }
   if (!container) {
-    console.error('mountTimeline: 容器不存在');
+    console.error('mountTimeline: container missing');
     return { timeline: null, items: null, destroy() {} };
   }
   if (!window.vis || !window.vis.Timeline || !window.vis.DataSet) {
     container.innerHTML =
-      '<div style="padding:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">vis.js 未加载，请检查脚本引入顺序。</div>';
+      '<div style="padding:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">vis.js is not loaded.</div>';
     return { timeline: null, items: null, destroy() {} };
   }
 
@@ -900,28 +894,23 @@ export async function mountTimeline(container, overrides = {}) {
     mapped = null;
 
   try {
-    // 1) 拉取数据
     const raw = await fetchAndNormalize();
     const data = Array.isArray(raw) ? raw : [];
     if (!data.length) {
       container.innerHTML =
-        '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">接口返回 0 条记录。</div>';
+        '<div style="padding:12px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;color:#856404;">0 records returned.</div>';
       return { timeline: null, items: null, destroy() {} };
     }
 
-    // 2) 标准化事件
     mapped = data.map((evt, i) => normalizeEvent(evt, i));
 
-    // ⭐ 初次加载 & 每次页面刷新：默认只显示重要性为 4 或 5 的事件
     clearRules();
     setLogic('AND');
     upsertRule('Importance', ['4', '5']);
     const initialItems = applyFilters(mapped, getState());
 
-    // 用过滤后的结果初始化 DataSet
     dataset = new window.vis.DataSet(initialItems);
 
-    // 3) 计算时间范围，生成 options
     const tvals = mapped
       .map((it) => toMs(it.start ?? it.end))
       .filter(Number.isFinite);
@@ -935,7 +924,6 @@ export async function mountTimeline(container, overrides = {}) {
       endDate = new Date(maxT + pad);
     }
 
-    // 👉 手动指定默认窗口（示例：集中看 1990–2000）
     startDate = new Date('1990-01-01');
     endDate = new Date('2000-12-31');
 
@@ -969,7 +957,7 @@ export async function mountTimeline(container, overrides = {}) {
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
         h4.className = 'event-title';
-        h4.textContent = item.titleText || item.content || '(无标题)';
+        h4.textContent = item.titleText || item.content || '(Untitled)';
         root.appendChild(h4);
         return root;
       },
@@ -982,18 +970,16 @@ export async function mountTimeline(container, overrides = {}) {
     const vis = window.vis;
     timeline = new vis.Timeline(container, dataset, options);
 
-    // 顶部过滤 UI（会读取 getState().rules，看到默认的 Importance: 4,5）
     initFilterUI({
       beforeElSelector: beforeSelector,
       getItems: () => mapped,
       getCurrentRules: () => getState().rules,
     });
 
-    // 样式按钮
+    // ✅ style buttons (i18n)
     mountStyleButtonsRightOfFilter(container, mapped);
 
-    // 初次挂载样式
-    safeApplyStyles('mount:init');
+    safeApplyStyles();
 
     function ensurePopover() {
       let pop = container.querySelector('#event-popover');
@@ -1004,6 +990,7 @@ export async function mountTimeline(container, overrides = {}) {
       }
       return pop;
     }
+
     const pop = ensurePopover();
     let currentAnchor = null;
 
@@ -1025,8 +1012,7 @@ export async function mountTimeline(container, overrides = {}) {
       const anchor = findAnchorFromProps(props);
       if (!anchor) return;
       const dsItem = dataset.get(props.item);
-      pop.innerHTML =
-        dsItem?.detailHtml || '<div style="padding:8px;">（无详情）</div>';
+      pop.innerHTML = dsItem?.detailHtml || '<div style="padding:8px;">(No details)</div>';
 
       const cb = container.getBoundingClientRect();
       const ib = anchor.getBoundingClientRect();
@@ -1073,14 +1059,11 @@ export async function mountTimeline(container, overrides = {}) {
     });
 
     window.addEventListener('resize', () => {
-      try {
-        timeline.redraw();
-      } catch {}
+      try { timeline.redraw(); } catch {}
       hidePopover();
-      safeApplyStyles('window:resize');
+      safeApplyStyles();
     });
 
-    // 过滤联动：通过 state + applyFilters，每次重新算 dataset
     window.addEventListener('filter:add-rule:confirm', (e) => {
       const { key, values } = e.detail || {};
       upsertRule(key, values);
@@ -1092,14 +1075,14 @@ export async function mountTimeline(container, overrides = {}) {
       const next = applyFilters(mapped, getState());
       dataset.clear();
       dataset.add(next);
-      requestAnimationFrame(() => safeApplyStyles('filter:set-logic'));
+      requestAnimationFrame(() => safeApplyStyles());
     });
 
     window.addEventListener('filter:reset', () => {
       clearRules();
       dataset.clear();
       dataset.add(mapped);
-      requestAnimationFrame(() => safeApplyStyles('filter:reset'));
+      requestAnimationFrame(() => safeApplyStyles());
     });
 
     window.addEventListener('filter:remove-rule', (e) => {
@@ -1108,32 +1091,26 @@ export async function mountTimeline(container, overrides = {}) {
       const next = applyFilters(mapped, getState());
       dataset.clear();
       dataset.add(next);
-      requestAnimationFrame(() => safeApplyStyles('filter:remove-rule'));
+      requestAnimationFrame(() => safeApplyStyles());
     });
 
-    timeline.on('changed', () =>
-      requestAnimationFrame(() => safeApplyStyles('timeline:changed')),
-    );
+    timeline.on('changed', () => requestAnimationFrame(() => safeApplyStyles()));
 
     return {
       timeline,
       items: dataset,
       destroy() {
-        try {
-          timeline.destroy();
-        } catch {}
+        try { timeline.destroy(); } catch {}
       },
     };
   } catch (err) {
     console.error(err);
-    container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">加载失败：${toPlain(
-      err?.message || err,
-    )}</div>`;
+    container.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">
+      Load failed: ${toPlain(err?.message || err)}
+    </div>`;
     return { timeline: null, items: null, destroy() {} };
   } finally {
-    try {
-      container.contains(loading) && loading.remove();
-    } catch {}
+    try { container.contains(loading) && loading.remove(); } catch {}
   }
 }
 
