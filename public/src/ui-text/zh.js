@@ -55,31 +55,8 @@ export default {
     notReady: '属性选择弹窗未就绪（占位）',
   },
 
-  // ✅ 过滤面板（filter-ui.js / filter/filter-ui.js 使用）
+  // ✅ Filter UI（src/ui/filter-ui.js 使用）
   filter: {
-    trigger: '过滤/筛选',
-    panel: {
-      ariaLabel: '过滤/筛选设置',
-      add: '增加过滤/筛选标准',
-      reset: '复原过滤/筛选标准',
-      logicAnd: '用“和”逻辑过滤/筛选',
-      logicOr: '用“或”逻辑过滤/筛选',
-      close: '关闭窗口',
-    },
-    builder: {
-      attrLabel: '过滤属性',
-      optionsLabel: '过滤选项',
-      searchPlaceholder: '输入关键字检索',
-      confirm: '确定',
-      cancel: '取消',
-      // needSelect: '请至少选择一个过滤选项。', // 可选：你要提示时再启用
-    },
-    summary: {
-      empty: '（尚未添加任何过滤/筛选标准）',
-      emptyChip: '（空）',
-      clearAttrTitle: '清空该属性',
-    },
-    // 若你后续把 “src/ui/filter-ui.js” 也 i18n 了，可继续补充：
     list: {
       empty: '（暂无过滤条件）',
       removeOneTitle: '移除此项',
@@ -95,7 +72,25 @@ export default {
     },
   },
 
-  // 样式窗口 & 控件文本（style-ui.js / style-panel.js 等使用）
+  // ✅ 详情弹窗字段名（timeline/mount.js buildKvHTML 使用）
+  detail: {
+    fields: {
+      eventName: '事件名称',
+      start: '开始时间',
+      end: '结束时间',
+      eventType: '事件类型',
+      region: '地区',
+      platform: '平台类型',
+      consolePlatform: '主机类型',
+      company: '公司',
+      importance: '重要性',
+      tag: '标签',
+      description: '描述',
+      contributor: '贡献者',
+    },
+  },
+
+  // 样式窗口 & 控件文本（style-ui.js 里使用）
   style: {
     window: {
       title: '{attr} 样式',
