@@ -2,24 +2,7 @@
 export default {
   common: {
     attribute: '属性',
-    close: '关闭',
   },
-  
-filter: {
-  list: {
-    empty: '（暂无过滤条件）',
-    removeOneTitle: '移除此项',
-    clearGroupTitle: '清空该组',
-    clearGroup: '清空',
-    removeGroupTitle: '移除该属性的过滤',
-  },
-  attrSelect: {
-    placeholder: '选择属性',
-  },
-  options: {
-    emptyOrLoading: '（暂无可选项 / 仍在加载）',
-  },
-},
 
   // 顶部信息按钮 + 弹窗 + 反馈表单
   info: {
@@ -72,32 +55,48 @@ filter: {
     notReady: '属性选择弹窗未就绪（占位）',
   },
 
-  // 样式相关（style-ui.js / style-panel.js 使用）
-  style: {
-    // ✅ style-panel.js 用到的 key（新增）
-    hint: {
-      none: '当前样式：无',
-      current: '当前样式：{type}',
-      boundLocked: '当前绑定：{type}（如需更改，请先“重置”）',
+  // ✅ 过滤面板（filter-ui.js / filter/filter-ui.js 使用）
+  filter: {
+    trigger: '过滤/筛选',
+    panel: {
+      ariaLabel: '过滤/筛选设置',
+      add: '增加过滤/筛选标准',
+      reset: '复原过滤/筛选标准',
+      logicAnd: '用“和”逻辑过滤/筛选',
+      logicOr: '用“或”逻辑过滤/筛选',
+      close: '关闭窗口',
     },
-    select: {
-      occupiedSuffix: '（已绑定：{owner}）',
+    builder: {
+      attrLabel: '过滤属性',
+      optionsLabel: '过滤选项',
+      searchPlaceholder: '输入关键字检索',
+      confirm: '确定',
+      cancel: '取消',
+      // needSelect: '请至少选择一个过滤选项。', // 可选：你要提示时再启用
     },
-    alert: {
-      occupied: '“{type}” 已绑定到【{owner}】。\n如需转移，请先到该属性中点击“重置”。',
+    summary: {
+      empty: '（尚未添加任何过滤/筛选标准）',
+      emptyChip: '（空）',
+      clearAttrTitle: '清空该属性',
     },
-    confirm: {
-      switchClears: '切换样式类型将清空该属性下已添加的样式行，是否继续？',
-      resetClears: '重置将清空该属性下所有样式行，是否继续？',
+    // 若你后续把 “src/ui/filter-ui.js” 也 i18n 了，可继续补充：
+    list: {
+      empty: '（暂无过滤条件）',
+      removeOneTitle: '移除此项',
+      clearGroupTitle: '清空该组',
+      clearGroup: '清空',
+      removeGroupTitle: '移除该属性的过滤',
     },
-    fallback: {
-      title: '样式编辑器（临时 JSON 面板）',
-      apply: '保存并应用',
-      reset: '清空并应用',
-      jsonParseFail: 'JSON 解析失败：{msg}',
+    attrSelect: {
+      placeholder: '选择属性',
     },
+    options: {
+      emptyOrLoading: '（暂无可选项 / 仍在加载）',
+    },
+  },
 
-    // ✅ 你原来的结构（保留）
+  // 样式窗口 & 控件文本（style-ui.js / style-panel.js 等使用）
+  style: {
     window: {
       title: '{attr} 样式',
       currentStyleNone: '当前样式：无',
