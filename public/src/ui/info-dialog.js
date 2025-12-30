@@ -1,10 +1,11 @@
 // public/src/ui/info-dialog.js
 // ✅ Usage / Roadmap / Feedback 三个弹窗
 // ✅ 文本全部走 ui-text 字典：t('info....')
+// ✅ Usage/Roadmap 正文：按 region+lang/variant 动态取（_staging/info-content.js）
 // ✅ feedback endpoint：优先读 globalThis.TIMELINE_FEEDBACK_ENDPOINT
 // ✅ 提交附带 variantKey/region/lang/pageUrl，便于 Doc 中区分来源
 
-import { HOW_TO_USE_TEXT, ROADMAP_TEXT } from '../_staging/info-content.js';
+import { getInfoText } from '../_staging/info-content.js';
 import { t } from '../ui-text/index.js';
 
 const REQUIRE_ID = false; // 如坚持“个人ID必填”，改为 true
@@ -133,8 +134,6 @@ function ensureFeedbackRoot() {
 
   const introText = t('info.dialogs.intro');
   const idLabel = REQUIRE_ID ? t('info.form.idLabel') : t('info.form.idLabelOptional');
-  // 注：如果你暂时没有 idLabelOptional 这个 key，会回退到中文（或显示 key）
-  // 你也可以直接在 zh/en 字典里补上。
 
   root.innerHTML = `
     <div class="fb-dialog-backdrop" style="
@@ -305,14 +304,16 @@ export function initInfoDialogs() {
   if (btnHelp) {
     btnHelp.textContent = t('info.buttons.usage');
     btnHelp.addEventListener('click', () => {
-      openInfoDialog(t('info.dialogs.usageTitle'), HOW_TO_USE_TEXT);
+      // ✅ 动态取：按当前 variantKey 返回对应正文
+      openInfoDialog(t('info.dialogs.usageTitle'), getInfoText('howToUse'));
     });
   }
 
   if (btnRoadmap) {
     btnRoadmap.textContent = t('info.buttons.roadmap');
     btnRoadmap.addEventListener('click', () => {
-      openInfoDialog(t('info.dialogs.roadmapTitle'), ROADMAP_TEXT);
+      // ✅ 动态取：按当前 variantKey 返回对应正文
+      openInfoDialog(t('info.dialogs.roadmapTitle'), getInfoText('roadmap'));
     });
   }
 
