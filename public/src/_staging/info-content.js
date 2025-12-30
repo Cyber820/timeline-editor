@@ -1,59 +1,338 @@
-// public/src/_staging/info-content.js
-// 说明：用于存放“使用方法”和“开发计划与反馈”的纯文本内容。
-// 你只需要改这里的模板字符串即可，空行会被 <pre> 保留。
+// public/src/ui/info-dialog.js
+// ✅ Usage / Roadmap / Feedback 三个弹窗
+// ✅ 文本全部走 ui-text 字典：t('info....')
+// ✅ Usage/Roadmap 正文：按 region+lang/variant 动态取（_staging/info-content.js）
+// ✅ feedback endpoint：优先读 globalThis.TIMELINE_FEEDBACK_ENDPOINT
+// ✅ 提交附带 variantKey/region/lang/pageUrl，便于 Doc 中区分来源
 
-export const HOW_TO_USE_TEXT = `
-【使用方法】
-初次渲染的时候，默认只显示重要性为4和5的事件（事件分级标准在下文）
+import { getInfoText } from '../_staging/info-content.js';
+import { t } from '../ui-text/index.js';
 
-1. 基本操作
-- 在时间轴上拖动：按住鼠标左键拖动时间轴。
-- 缩放时间轴：按住 Ctrl 键滚动鼠标滚轮进行缩放。
+const REQUIRE_ID = false; // 如坚持“个人ID必填”，改为 true
 
-2. 查看事件详情
-- 点击时间轴上的事件卡片，会在页面中间弹出详情窗口。
-- 再次点击空白区域，可以关闭详情窗口。
+const LEGACY_FALLBACK_ENDPOINT =
+  'https://script.google.com/macros/s/AKfycbwOFJP5nRI_zwU2fuY1uelyfvEYV8VeKMJbYRDWNHKG1RgurzZvwViw1ewFKpB6Td7-/exec';
 
-3. 筛选事件
-- 点击「筛选」按钮，打开过滤面板。
-- 可以按照地区、平台类型、事件类型等条件进行筛选。
-- 筛选条件支持多选，部分条件之间支持 AND / OR 逻辑组合；
-  当前“和”逻辑的意思是：同时满足过滤属性A中选择的过滤选项以及属性B中选择的过滤选项
-  “或”逻辑的意思是：任意满足所选择的过滤选项。
-  复杂的过滤/筛选功能暂时没有开发安排。
-  
-4. 样式调整（仅对当前浏览器生效）
-- 在筛选按钮右侧，可以看到「事件样式 / 平台样式 / 主机样式 / 公司 / 地区」等按钮。
-- 可以为不同类型的事件设置文字颜色、背景颜色、边框颜色等。
-- 刷新页面后，样式会恢复为默认设置。
+function resolveFeedbackEndpoint() {
+  const ep1 = globalThis.TIMELINE_FEEDBACK_ENDPOINT;
+  if (ep1) return ep1;
 
-5. 关于重要性的打分（可能编者主观情绪比较重，有意见欢迎反馈）
-- 5：世界性里程碑事件（比如PS、GBA等游戏主机的发售）
-- 4：地区性里程碑事件/世界性重要事件：对某地区而言有巨大影响力或者引起重大连锁反应的事件；或者在世界范围内非常重要但未到里程碑性的事件（比如某区域性电子游戏媒体的发售）
-- 3：地区性重要事件/世界性值得一提事件：对某地区在当时有巨大影响力但是不到开创性的高度；或者在世界范围在当初有影响力但是后续影响力不足的事件
-- 2：地区性值得一提事件/世界性有特定影响事件：在某地区在当初有影响力但是后续影响力不足的事件；在世界范围内特定群体里有一定影响的事件
-- 1：地区性有特定影响事件
-- 0：特殊事件：一般是展现某种故事或者轶闻的事件，但往往缺少对行业的影响力
+  const ep2 = globalThis.__variant?.endpoints?.feedback;
+  if (ep2) return ep2;
 
-`.trim();
+  return LEGACY_FALLBACK_ENDPOINT;
+}
 
-export const ROADMAP_TEXT = `
-【开发计划与反馈】
-这个是当前的Beta版本，后续还有逐步的功能更新和完善。
-无论是对时间轴的功能或者bug，还是对当前时间轴上的事件有反馈，都可以小红书联系“赛博820”或者微信号“TheCyber820”
+function getVariantMeta() {
+  const v = globalThis.__variant || {};
+  const region = v.region || globalThis.TIMELINE_REGION || '';
+  const lang = v.lang || globalThis.TIMELINE_LANG || '';
+  const key = v.key || (region && lang ? `${String(region)}-${String(lang)}` : '');
+  return { key, region, lang };
+}
 
-已完成功能
-- 时间轴基础展示（支持拖动与缩放）
-- 事件详情点击弹窗
-- 基于条件的筛选功能（地区 / 平台 / 主机 / 事件类型等）
-- 简单的样式自定义功能（按事件属性设置颜色、字体）
-- 根据重要性（主观）调整默认显示的事件（2025/11/21）
-- 简易反馈功能（2025/11/25）
+let dialogRoot = null;   // 纯文本信息弹窗（Usage / Roadmap）
+let feedbackRoot = null; // 反馈弹窗
 
-计划中功能
-- 编辑者模式（方便提交有关事件的反馈）
-- 加入标签功能（短期内可能不会实现，除了可能需要改变当前的一些数据结构之外，另一个原因是可能会让样式功能产生冲突）
+/* ---------------- 纯文本信息弹窗（Usage / Roadmap） ---------------- */
 
+function ensureDialogRoot() {
+  if (dialogRoot) return dialogRoot;
 
+  const root = document.createElement('div');
+  root.id = 'info-dialog-root';
+  root.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  `;
 
-`.trim();
+  root.innerHTML = `
+    <div class="info-dialog-backdrop" style="
+      position:absolute;inset:0;
+      background:rgba(0,0,0,.35);
+    "></div>
+    <div class="info-dialog-panel" style="
+      position:relative;
+      width:min(720px, 94vw);
+      max-height: 80vh;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 16px 40px rgba(0,0,0,.35);
+      padding:16px 18px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h2 id="info-dialog-title" style="margin:0;font-size:1.05rem;font-weight:600;"></h2>
+        <button id="info-dialog-close" title="Close" style="
+          border:none;background:transparent;
+          font-size:20px;cursor:pointer;
+        ">×</button>
+      </div>
+      <div id="info-dialog-body" style="
+        margin-top:4px;
+        padding:8px 4px 4px;
+        border-top:1px solid #e5e7eb;
+        overflow:auto;
+        font-size:13px;
+        line-height:1.6;
+        white-space:pre-wrap;
+      "></div>
+    </div>
+  `;
+
+  document.body.appendChild(root);
+
+  const backdrop = root.querySelector('.info-dialog-backdrop');
+  const btnClose = root.querySelector('#info-dialog-close');
+  const hide = () => (root.style.display = 'none');
+  backdrop.addEventListener('click', hide);
+  btnClose.addEventListener('click', hide);
+
+  dialogRoot = root;
+  return root;
+}
+
+function openInfoDialog(title, text) {
+  const root = ensureDialogRoot();
+  const titleEl = root.querySelector('#info-dialog-title');
+  const bodyEl = root.querySelector('#info-dialog-body');
+
+  if (titleEl) titleEl.textContent = title || '';
+  if (bodyEl) {
+    bodyEl.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.textContent = text || '';
+    pre.style.margin = '0';
+    pre.style.whiteSpace = 'pre-wrap';
+    bodyEl.appendChild(pre);
+  }
+
+  root.style.display = 'flex';
+}
+
+/* ---------------- 反馈与建议弹窗 ---------------- */
+
+function ensureFeedbackRoot() {
+  if (feedbackRoot) return feedbackRoot;
+
+  const root = document.createElement('div');
+  root.id = 'feedback-dialog-root';
+  root.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  const introText = t('info.dialogs.intro');
+  const idLabel = REQUIRE_ID ? t('info.form.idLabel') : t('info.form.idLabelOptional');
+
+  root.innerHTML = `
+    <div class="fb-dialog-backdrop" style="
+      position:absolute;inset:0;
+      background:rgba(0,0,0,.35);
+    "></div>
+    <div class="fb-dialog-panel" style="
+      position:relative;
+      width:min(640px, 94vw);
+      max-height: 80vh;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 16px 40px rgba(0,0,0,.35);
+      padding:14px 16px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      font-size:14px;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h2 style="margin:0;font-size:1.05rem;font-weight:600;">${t('info.dialogs.feedbackTitle')}</h2>
+        <button class="fb-dialog-close" title="Close" style="
+          border:none;background:transparent;
+          font-size:20px;cursor:pointer;
+        ">×</button>
+      </div>
+
+      <div style="font-size:13px;color:#4b5563;margin-bottom:4px;line-height:1.6;white-space:pre-wrap;">
+        ${escapeHtml(introText)}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:2px;">
+        <div class="fb-field">
+          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">${escapeHtml(idLabel)}</label>
+          <input id="fb-id" type="text" style="
+            width:100%;box-sizing:border-box;
+            border:1px solid #e5e7eb;border-radius:8px;
+            padding:6px 8px;font-size:13px;
+          " placeholder="${escapeHtml(t('info.form.idPlaceholder'))}">
+        </div>
+
+        <div class="fb-field">
+          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">${escapeHtml(t('info.form.contactLabel'))}</label>
+          <input id="fb-contact" type="text" style="
+            width:100%;box-sizing:border-box;
+            border:1px solid #e5e7eb;border-radius:8px;
+            padding:6px 8px;font-size:13px;
+          " placeholder="${escapeHtml(t('info.form.contactPlaceholder'))}">
+        </div>
+
+        <div class="fb-field">
+          <label style="display:block;font-size:13px;color:#374151;margin-bottom:2px;">${escapeHtml(t('info.form.contentLabel'))}</label>
+          <textarea id="fb-content" rows="4" style="
+            width:100%;box-sizing:border-box;
+            border:1px solid #e5e7eb;border-radius:8px;
+            padding:6px 8px;font-size:13px;
+            resize:vertical;min-height:80px;
+          " placeholder="${escapeHtml(t('info.form.contentPlaceholder'))}"></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">
+        <button type="button" class="fb-btn-submit" style="
+          padding:6px 12px;border-radius:8px;
+          border:1px solid #111827;background:#111827;
+          color:#fff;cursor:pointer;font-size:13px;
+        ">${escapeHtml(t('info.form.submit'))}</button>
+        <button type="button" class="fb-btn-cancel" style="
+          padding:6px 12px;border-radius:8px;
+          border:1px solid #d1d5db;background:#fff;
+          cursor:pointer;font-size:13px;
+        ">${escapeHtml(t('info.form.cancel'))}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(root);
+
+  const backdrop = root.querySelector('.fb-dialog-backdrop');
+  const btnClose = root.querySelector('.fb-dialog-close');
+  const btnCancel = root.querySelector('.fb-btn-cancel');
+
+  const hide = () => (root.style.display = 'none');
+  backdrop.addEventListener('click', hide);
+  btnClose.addEventListener('click', hide);
+  btnCancel.addEventListener('click', hide);
+
+  const btnSubmit = root.querySelector('.fb-btn-submit');
+  const idInput = root.querySelector('#fb-id');
+  const contactInput = root.querySelector('#fb-contact');
+  const contentInput = root.querySelector('#fb-content');
+
+  btnSubmit.addEventListener('click', async () => {
+    const id = (idInput?.value || '').trim();
+    const contact = (contactInput?.value || '').trim();
+    const content = (contentInput?.value || '').trim();
+
+    if (REQUIRE_ID && !id) {
+      alert(t('info.form.idRequiredAlert'));
+      idInput && idInput.focus();
+      return;
+    }
+    if (!content) {
+      alert(t('info.form.contentRequiredAlert'));
+      contentInput && contentInput.focus();
+      return;
+    }
+
+    const endpoint = resolveFeedbackEndpoint();
+    if (!endpoint) {
+      alert(t('info.form.endpointMissingAlert'));
+      return;
+    }
+
+    const { key: variantKey, region, lang } = getVariantMeta();
+
+    const payload = new URLSearchParams({
+      id,
+      contact,
+      content,
+      variantKey,
+      region,
+      lang,
+      pageUrl: location.href,
+    });
+
+    try {
+      await fetch(endpoint, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        body: payload.toString(),
+      });
+
+      alert(t('info.form.okToast'));
+
+      if (idInput) idInput.value = '';
+      if (contactInput) contactInput.value = '';
+      if (contentInput) contentInput.value = '';
+
+      hide();
+    } catch (err) {
+      console.error('feedback submit failed:', err);
+      alert(t('info.form.failToast'));
+    }
+  });
+
+  feedbackRoot = root;
+  return root;
+}
+
+function openFeedbackDialog() {
+  const root = ensureFeedbackRoot();
+  root.style.display = 'flex';
+  const contentInput = root.querySelector('#fb-content');
+  if (contentInput) setTimeout(() => contentInput.focus(), 20);
+}
+
+/* ---------------- 对外接口：初始化三个按钮 ---------------- */
+
+export function initInfoDialogs() {
+  const btnHelp = document.getElementById('btn-help');
+  const btnRoadmap = document.getElementById('btn-roadmap');
+  const btnFeedback = document.getElementById('btn-feedback');
+
+  if (btnHelp) {
+    btnHelp.textContent = t('info.buttons.usage');
+    btnHelp.addEventListener('click', () => {
+      // ✅ 动态取：按当前 variantKey 返回对应正文
+      openInfoDialog(t('info.dialogs.usageTitle'), getInfoText('howToUse'));
+    });
+  }
+
+  if (btnRoadmap) {
+    btnRoadmap.textContent = t('info.buttons.roadmap');
+    btnRoadmap.addEventListener('click', () => {
+      // ✅ 动态取：按当前 variantKey 返回对应正文
+      openInfoDialog(t('info.dialogs.roadmapTitle'), getInfoText('roadmap'));
+    });
+  }
+
+  if (btnFeedback) {
+    btnFeedback.textContent = t('info.buttons.feedback');
+    btnFeedback.addEventListener('click', () => {
+      openFeedbackDialog();
+    });
+  }
+}
+
+/* ---------------- util ---------------- */
+
+function escapeHtml(s) {
+  // 防止 intro 文案里出现 < > 被当成 html（尤其未来你可能把 intro 改成含符号）
+  return String(s ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
