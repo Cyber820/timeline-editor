@@ -1,28 +1,49 @@
-// public/src/_staging/info-content.js
-// 说明：用于存放“使用方法”和“开发计划与反馈”的纯文本内容。
-// ✅ 支持按 region + lang（或 TIMELINE_VARIANT / __variant.key）返回不同内容。
-// ✅ 你只需要改 CONTENTS 里的模板字符串即可，空行会被 <pre> 保留。
+// public/src/_staging/info-contents.js
+// =============================================================================
+// Info Contents (How-to / Roadmap)
+// =============================================================================
+// 职责：
+// - 维护“使用方法（howToUse）”与“开发计划与反馈（roadmap）”的纯文本内容
+// - 按 variantKey（region-lang）返回不同版本内容
+// - 兼容历史写法：仍导出 HOW_TO_USE_TEXT / ROADMAP_TEXT
+//
+// 变体选择优先级（resolveVariantKey）：
+// 1) globalThis.__variant.key
+// 2) globalThis.TIMELINE_VARIANT
+// 3) globalThis.__variant.region + __variant.lang（或 TIMELINE_REGION/TIMELINE_LANG）
+// 4) <html lang="..."> 推断（zh -> world-zh，否则 world-en）
+// 5) 默认 world-zh
+//
+// 🔌 GENERALIZATION:
+// - 若未来你的 variant 体系扩大（例如 japan-ja / usa-en），只需要在 CONTENTS 里新增键即可。
+// - 若你希望“china-* 未维护时自动复用 world-*”，见 pickPack() 的 fallback 策略。
+// =============================================================================
 
+/** 将输入规范化为小写 key */
 function norm(x) {
   return String(x ?? '').trim().toLowerCase();
 }
 
+/**
+ * resolveVariantKey()
+ * - 生成标准的 variantKey：region-lang，例如 china-zh / china-en / world-zh / world-en
+ */
 export function resolveVariantKey() {
-  // 优先：你系统里已经存在的 __variant.key
+  // 1) 优先：系统里已存在的 __variant.key
   const v = globalThis.__variant || {};
   const key1 = norm(v.key);
   if (key1) return key1;
 
-  // 次优先：TIMELINE_VARIANT
+  // 2) 次优先：TIMELINE_VARIANT
   const key2 = norm(globalThis.TIMELINE_VARIANT);
   if (key2) return key2;
 
-  // 再次：region + lang
+  // 3) 再次：region + lang
   const region = norm(v.region || globalThis.TIMELINE_REGION);
   const lang = norm(v.lang || globalThis.TIMELINE_LANG);
   if (region && lang) return `${region}-${lang}`;
 
-  // 最后兜底：根据 <html lang="">
+  // 4) 最后兜底：根据 <html lang="">
   const docLang = norm(document?.documentElement?.lang);
   if (docLang) {
     const short = docLang.startsWith('zh') ? 'zh' : 'en';
@@ -33,11 +54,18 @@ export function resolveVariantKey() {
 }
 
 /**
- * 维护“地区×语言”的纯文本内容
+ * =============================================================================
+ * 内容字典：地区×语言 -> 文本包
+ * =============================================================================
  * key 例：china-zh / china-en / world-zh / world-en
  *
- * 你可以先只维护你现有的 2 份（例如 world-zh / world-en），
- * 之后再逐步补齐 china-* 或其他区域。
+ * 约定字段：
+ * - howToUse: string
+ * - roadmap:  string
+ *
+ * 注意：
+ * - 文本将被 <pre> 保留换行与空行，所以这里用模板字符串最合适
+ * - 每一段最终会 trim()，避免首尾多余空行
  */
 const CONTENTS = Object.freeze({
   /* ---------------- world-zh ---------------- */
@@ -61,7 +89,7 @@ const CONTENTS = Object.freeze({
   当前“和”逻辑的意思是：同时满足过滤属性A中选择的过滤选项以及属性B中选择的过滤选项
   “或”逻辑的意思是：任意满足所选择的过滤选项。
   复杂的过滤/筛选功能暂时没有开发安排。
-  
+
 4. 样式调整（仅对当前浏览器生效）
 - 在筛选按钮右侧，可以看到「事件样式 / 平台样式 / 主机样式 / 公司 / 地区」等按钮。
 - 可以为不同类型的事件设置文字颜色、背景颜色、边框颜色等。
@@ -95,9 +123,7 @@ const CONTENTS = Object.freeze({
 `.trim(),
   },
 
-  /* ---------------- world-en ----------------
-   * 先给一个可用英文版占位正文（你可再逐步润色/扩写）
-   */
+  /* ---------------- world-en ---------------- */
   'world-en': {
     howToUse: `
 Frankly speaking, this page is made for future update, I currently do not have a plan to translate this timeline yet.
@@ -155,7 +181,9 @@ Planned
 `.trim(),
   },
 
-    'china-zh': {
+  /* ---------------- china-zh ---------------- */
+  'china-zh': {
+    // 你目前内容与 world-zh 一致也完全 OK（未来再替换为“中文游戏时间轴”的定制说明）
     howToUse: `
 【使用方法】
 初次渲染的时候，默认只显示重要性为4和5的事件（事件分级标准在下文）
@@ -175,7 +203,7 @@ Planned
   当前“和”逻辑的意思是：同时满足过滤属性A中选择的过滤选项以及属性B中选择的过滤选项
   “或”逻辑的意思是：任意满足所选择的过滤选项。
   复杂的过滤/筛选功能暂时没有开发安排。
-  
+
 4. 样式调整（仅对当前浏览器生效）
 - 在筛选按钮右侧，可以看到「事件样式 / 平台样式 / 主机样式 / 公司 / 地区」等按钮。
 - 可以为不同类型的事件设置文字颜色、背景颜色、边框颜色等。
@@ -208,12 +236,9 @@ Planned
 - 加入标签功能（短期内可能不会实现，除了可能需要改变当前的一些数据结构之外，另一个原因是可能会让样式功能产生冲突）
 `.trim(),
   },
-  /* ---------------- china-zh / china-en ----------------
-   * 你现在如果还没准备好内容，可以先复用 world-* 的内容，
-   * 以后再单独替换即可。
-   */
 
-   'china-en': {
+  /* ---------------- china-en ---------------- */
+  'china-en': {
     howToUse: `
 Still gradually working on this timeline to translate from Chinese to English.
 
@@ -267,46 +292,64 @@ Completed
 Planned
 - Editor mode (easier event corrections/submissions)
 - Tag system (likely not soon; may conflict with styles and needs data changes)
-`.trim()},
-      
+`.trim(),
+  },
 });
 
+/**
+ * pickPack(key)
+ * - 先按完整 key 精确匹配
+ * - 再按 region-lang 拆解做 fallback
+ * - 最后按语言 fallback 到 world-en / world-zh
+ *
+ * 说明：
+ * - 你原本写了“如果存在但为 null 表示复用”，但 CONTENTS 里并未用到 null。
+ * - 这里采用更明确的策略：若 key 命中则返回；否则按语言回退到 world-*。
+ */
 function pickPack(key) {
   const k = norm(key);
+
+  // 1) 精确匹配
   if (k && CONTENTS[k]) return CONTENTS[k];
 
-  // 如果存在但为 null：表示“暂时复用 world-*”
-  if (k === 'china-zh') return CONTENTS['world-zh'];
-  if (k === 'china-en') return CONTENTS['world-en'];
-
-  // region fallback
+  // 2) region-lang fallback（比如传入 china-zh，但没维护时回退）
   if (k.includes('-')) {
     const [region, lang] = k.split('-');
+
+    // 优先尝试 region-lang
     if (region && lang) {
-      const r1 = CONTENTS[`${region}-${lang}`];
-      if (r1) return r1;
-      // fallback by language
+      const direct = CONTENTS[`${region}-${lang}`];
+      if (direct) return direct;
+
+      // 再按语言回退到 world-*
       if (lang === 'en') return CONTENTS['world-en'];
       if (lang === 'zh') return CONTENTS['world-zh'];
     }
   }
 
+  // 3) 最终兜底
   return CONTENTS['world-zh'];
 }
 
 /**
+ * getInfoText(kind)
  * kind: 'howToUse' | 'roadmap'
  */
 export function getInfoText(kind) {
   const key = resolveVariantKey();
   const pack = pickPack(key);
   if (!pack) return '';
-  return (pack[kind] || '').trim();
+  return String(pack[kind] || '').trim();
 }
 
-/* 兼容旧写法：仍导出 HOW_TO_USE_TEXT / ROADMAP_TEXT
- * - 旧代码直接 import 常量也能继续工作
- * - 新代码建议用 getInfoText('howToUse'/'roadmap')
+/**
+ * 兼容旧写法：仍导出 HOW_TO_USE_TEXT / ROADMAP_TEXT
+ * - 旧代码：import { HOW_TO_USE_TEXT } from '...'
+ * - 新代码：建议用 getInfoText('howToUse'/'roadmap')
+ *
+ * 注意：
+ * - 这两个常量在模块初始化时求值，因此若你在运行时动态改变 __variant，
+ *   常量不会自动更新；此时应调用 getInfoText() 重新取值。
  */
 export const HOW_TO_USE_TEXT = getInfoText('howToUse');
 export const ROADMAP_TEXT = getInfoText('roadmap');
