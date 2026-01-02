@@ -100,6 +100,8 @@ const CONTENTS = Object.freeze({
    */
   'world-en': {
     howToUse: `
+Frankly speaking, this page is made for future update, I currently do not have a plan to translate this timeline yet.
+
 [How to Use]
 On first load, only events with Importance 4 or 5 are shown by default.
 
