@@ -112,3 +112,48 @@ destroy() 会调用 timeline.destroy()
 已知“未来可能需要重构/拆分”的区域
 
 样式面板 UI（ensureStylePanelInjected 到 openStyleEditorFor）逻辑较大，建议未来拆到独立模块，mount.js 保持“接线层”。
+
+文件： public/src/_staging/info-contents.js
+定位： “使用方法 / 开发计划与反馈”文案内容库 + variant 选择器
+
+核心职责
+
+提供按 variantKey（region-lang）区分的纯文本内容
+
+维护 CONTENTS 字典：键如 china-zh / china-en / world-zh / world-en
+
+每个键对应 { howToUse, roadmap } 两段文本（供 <pre> 渲染）
+
+在运行时解析当前页面的 variantKey
+
+resolveVariantKey() 按优先级读取：
+
+globalThis.__variant.key
+
+globalThis.TIMELINE_VARIANT
+
+(__variant.region|TIMELINE_REGION) + (__variant.lang|TIMELINE_LANG)
+
+<html lang=""> 推断
+
+默认 world-zh
+
+按 fallback 策略返回可用内容包
+
+pickPack(key)：优先精确命中；否则按语言回退到 world-en / world-zh；最后兜底 world-zh
+
+对外 API（供 UI 层使用）
+
+getInfoText(kind)：kind 为 'howToUse' | 'roadmap'
+
+兼容旧接口：导出 HOW_TO_USE_TEXT 与 ROADMAP_TEXT
+
+可修改点（文案维护/扩展区域）
+
+仅需编辑 CONTENTS 中对应 key 的模板字符串内容（换行/空行会被 <pre> 保留）。
+
+新增地区/语言时：直接加新键（例如 japan-ja、usa-en）。
+
+产品化/泛化相关注意
+
+若未来 variant 体系变复杂（例如多维：region + lang + theme），建议把 resolveVariantKey() 改为“schema 驱动”的组合规则，或者把 key 解析下沉到统一的 variant.js，此文件只做“内容映射”。
