@@ -1,1 +1,114 @@
 
+
+
+
+
+
+
+逐个文件功能：
+文件： public/src/timeline/mount.js
+定位： 时间轴“主挂载与接线”模块（vis.js + 数据映射 + 过滤桥接 + 样式桥接 + 弹窗交互）
+
+核心职责
+
+拉取数据并做字段标准化
+
+调用 fetchAndNormalize() 获取原始事件数组。
+
+通过 normalizeEvent() 产出 vis item（id/content/start/end）以及业务字段（EventType/Region/.../Tag/Importance）。
+
+同时预生成 detailHtml 用于点击弹窗展示。
+
+初始化 vis Timeline
+
+dataset = new vis.DataSet(initialItems)
+
+timeline = new vis.Timeline(container, dataset, options)
+
+options.template() 定义每个卡片的 DOM 结构（当前仅显示标题）。
+
+默认首屏过滤规则
+
+Importance 默认过滤为 ['4','5']（AND 逻辑）。
+
+通过 applyFilters(mapped, getState()) 得到 initialItems。
+
+详情弹窗（popover）交互
+
+timeline.on('click')：点 item 显示弹窗，点空白关闭。
+
+document.mousedown：点击弹窗外/卡片外关闭。
+
+弹窗内容来自 dataset.get(id).detailHtml。
+
+过滤系统桥接（事件驱动）
+
+监听 window 的 filter:* 事件，重算并更新 dataset。
+
+事件包括：filter:set-logic、filter:reset、filter:remove-rule、filter:add-rule:confirm（目前只更新 state，不立刻重算 dataset）。
+
+样式系统桥接
+
+safeApplyStyles() 从 getStyleState() 读取持久化样式状态并调用 applyStyleState()。
+
+在初次加载、过滤重绘、窗口 resize、timeline changed 时重新应用样式。
+
+template() 内调用 attachEventDataAttrs() 给 DOM 打数据属性，以便样式引擎用 CSS selector 命中。
+
+可用于 UI 优化的参数/入口（高频改动点）
+
+UI 常量：
+
+canvas.height：画布高度
+
+item.fontSize/padding/borderRadius/maxWidth：卡片排版
+
+layout.itemPosition/axisPosition/verticalItemGap/stack：布局
+
+zoom.key/verticalScroll：缩放方式
+
+injectScopedStyles()：
+
+卡片标题截断、多行、popover 样式、面板样式
+
+baseOptions：
+
+margin.axis、locale、template()（卡片展示内容）
+
+showPopoverOverItem()：
+
+弹窗尺寸上限/下限与定位策略
+
+泛化/产品化时最关键的改动点（字段/列变化）
+
+字段映射与解析：
+
+FIELD_LABELS、parseBlobFields()：如果长文本里的标签发生变化，必须改
+
+normalizeEvent()：从数据列映射到统一字段（这会影响过滤、弹窗、样式）
+
+弹窗字段集合：
+
+buildKvHTML()：要显示哪些字段、字段顺序、字段 label
+
+过滤维度：
+
+默认规则里用到的字段名（例如 Importance）以及过滤 UI 支持哪些字段（通常在 filter 模块与 constants 里）
+
+样式入口字段：
+
+STYLE_ATTR_BTNS：目前写死了 EventType/Platform/ConsolePlatform/Company/Region；产品化应由 schema 动态生成
+
+对外 API
+
+mountTimeline(container, overrides?) -> Promise<{ timeline, items, destroy }>
+
+container 支持 selector 或 DOM
+
+overrides 可覆盖 vis options
+
+destroy() 会调用 timeline.destroy()
+
+已知“未来可能需要重构/拆分”的区域
+
+样式面板 UI（ensureStylePanelInjected 到 openStyleEditorFor）逻辑较大，建议未来拆到独立模块，mount.js 保持“接线层”。
