@@ -241,6 +241,7 @@ Planned
   'china-en': {
     howToUse: `
 Still gradually working on this timeline to translate from Chinese to English.
+And for non-Chinese users, try not to use "Fonts" for Styles function because currently the chosen fonts are mainly for Chinese characters, letters may fail.
 
 [How to Use]
 On first load, only events with Importance 4 or 5 are shown by default.
@@ -266,12 +267,12 @@ On first load, only events with Importance 4 or 5 are shown by default.
 - Refreshing the page resets styles.
 
 5. Importance scale (subjective; feedback welcome)
-- 5: global milestones (e.g., launch of major consoles)
-- 4: regional milestones / globally important events
-- 3: important regional events / notable global events
-- 2: notable regional events / niche global impact
-- 1: limited regional impact
-- 0: anecdotal / special items with little industry impact
+- 5：Milestone events for China or corresponding country, or the event brought great global impact.
+- 4：The event has critical impact to video game industry in China or corresponding country/the event has "first" title in specific area in China or corresponding country. Or, the event had some impact both in China or corresponding country and worldwide.
+- 3：The event made some influence on Chinese video game development, yet limited influence worldwide. Or, the non-Chinese events but influenced China to some extent or to make a contrast with Chinese events.
+- 2: The event had some influence in some specific video game areas in China.
+- 1：The event had limited influence on Chinese video game development.
+- 0：Special events for anecdote, usually limited impact on the industry.
 `.trim(),
 
     roadmap: `
