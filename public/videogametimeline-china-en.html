@@ -1,3 +1,11 @@
+
+---
+
+## 2) 英文版中国电子游戏时间轴 HTML（完整替换版，含初始时间范围）
+
+你给的示例我按“初始时间范围放在 HTML”的要求改造，并把参数注入集中到同一个 `<script>` 里，确保加载顺序稳定。
+
+```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -21,7 +29,7 @@
 
 <body>
   <div class="topbar">
-    <div class="topbar-title">Chinese Video Game Timeline </div>
+    <div class="topbar-title">Chinese Video Game Timeline</div>
     <div class="topbar-spacer"></div>
     <button id="btn-help" class="topbar-btn">Usage</button>
     <button id="btn-roadmap" class="topbar-btn">Roadmap</button>
@@ -30,10 +38,30 @@
 
   <div id="timeline"></div>
 
+  <!-- Runtime parameters: MUST be defined before app.js -->
   <script>
+    // Variant / locale
     window.TIMELINE_REGION = 'china';
     window.TIMELINE_LANG = 'en';
+
+    // Initial visible range (recommended)
+    // You can change these two dates freely per entry page (china-en / china-cn / world-en ...)
+    window.TIMELINE_INITIAL_RANGE = {
+      start: '1990-01-01',
+      end: '2000-12-31',
+    };
+
+    // Optional: endpoints (set here if you want per-entry explicit config)
+    // window.TIMELINE_ENDPOINT = 'https://script.google.com/macros/s/xxxxx/exec';
+    // window.TIMELINE_FEEDBACK_ENDPOINT = 'https://script.google.com/macros/s/yyyyy/exec';
+
+    // Optional: style remote compile
+    // window.STYLE_COMPILE_ENDPOINT = '/api/compile-style';
+
+    // Optional: defaults override (border width etc.)
+    // window.DEFAULTS_OVERRIDE = { BORDER_WIDTH_PX: 2 };
   </script>
- <script type="module" src="./src/app.js"></script>
+
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
