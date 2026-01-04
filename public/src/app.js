@@ -1,5 +1,6 @@
 // public/src/app.js
-// ✅ App 入口：绑定工具栏 → 挂载时间轴 → 提供全局少量兼容钩子
+// ✅ App 入口：绑定工具栏 → 挂载时间轴 → 提供必要的全局注入（endpoint / 兼容钩子）
+// 目标：稳定运作；删除运行时调试输出（console.log / debug globals）
 
 import { attachEventDataAttrs, applyStyleState } from './style/engine.js';
 import { getStyleState, setStyleState, onStyleStateChange } from './state/styleState.js';
@@ -14,7 +15,7 @@ import {
 
 import { getVariant } from './variant/variant.js';
 
-// ✅ NEW: 信息弹窗（Usage / Roadmap / Feedback）
+// 信息弹窗（Usage / Roadmap / Feedback）
 import { initInfoDialogs } from './ui/info-dialog.js';
 
 // UI：工具栏占位绑定（attr-picker 已在内部接线）
@@ -25,8 +26,7 @@ import { renderFilterList } from './ui/filter-ui.js';
 import { mountTimeline } from './timeline/mount.js';
 
 // ========== 运行态（保持轻量） ==========
-let allOptions = {};               // 可选：后续接入真实 options 源
-let activeFilters = {};            // 例：{ Region:['日本','北美'] }
+let activeFilters = {};            // 例：{ Region:['Japan','North America'] }
 let filterLogic = 'and';           // 'and' | 'or'
 let timeline = null;               // vis.Timeline 实例
 let itemsDS = null;                // vis.DataSet（当前展示集）
@@ -34,14 +34,12 @@ let originalItems = [];            // 初始 items 的快照（用于过滤回�
 
 // ========== Variant（region/lang → endpoints） ==========
 const variant = getVariant();
-window.__variant = variant; // 便于调试
 
 // 当前页面的 events endpoint（权威来源）
 const ENDPOINT = variant?.endpoints?.events || null;
 
-// 如果 events endpoint 缺失，尽早报错（比 fetch 时报一堆二次错误更好定位）
+// 如果 events endpoint 缺失，尽早抛错（比 fetch 二次错误更好定位）
 if (!ENDPOINT) {
-  console.error('[app] Missing events endpoint for variant:', variant);
   throw new Error('[app] TIMELINE events endpoint is not set');
 }
 
@@ -53,27 +51,19 @@ globalThis.TIMELINE_FEEDBACK_ENDPOINT = variant?.endpoints?.feedback || null;
 // 兼容旧逻辑（test.html/旧模块可能读 window.ENDPOINT）
 window.ENDPOINT = ENDPOINT;
 
-// ========== 兼容旧全局 ==========
+// ========== 兼容旧全局（稳定性优先，不删） ==========
 window.attributeLabels = attributeLabels;
-window.PRESET_COLORS  = PRESET_COLORS;
-window.styleLabel     = styleLabel;
+window.PRESET_COLORS = PRESET_COLORS;
+window.styleLabel = styleLabel;
 
+// 兼容外部模块/历史入口可能用到的钩子（不输出日志）
 window.__styleEngine = { attachEventDataAttrs, applyStyleState };
-window.__styleState  = { getStyleState, setStyleState, onStyleStateChange };
+window.__styleState = { getStyleState, setStyleState, onStyleStateChange };
 
-// 方便你验证四个入口是否切换成功
-console.log('app.js loaded', {
-  variantKey: variant.key,
-  region: variant.region,
-  lang: variant.lang,
-  eventsEndpoint: ENDPOINT,
-  optionsEndpoint: globalThis.TIMELINE_OPTIONS_ENDPOINT,
-  feedbackEndpoint: globalThis.TIMELINE_FEEDBACK_ENDPOINT,
-});
-
+// 供旧逻辑依赖的启动信号（不输出日志）
 window.dispatchEvent(new Event('style:ready'));
 
-// 按需加载样式面板（旧按钮示例）
+// 按需加载样式面板（旧按钮示例，保留但不输出日志）
 const openBtn = document.getElementById('open-style');
 if (openBtn) {
   openBtn.addEventListener('click', async () => {
@@ -89,6 +79,7 @@ if (openBtn) {
 function updateFilterList() {
   const div = document.getElementById('current-filters');
   if (!div) return;
+
   renderFilterList(
     div,
     activeFilters,
@@ -99,13 +90,13 @@ function updateFilterList() {
         delete activeFilters[key];
       } else {
         const arr = activeFilters[key] || [];
-        activeFilters[key] = arr.filter(v => v !== value);
+        activeFilters[key] = arr.filter((v) => v !== value);
         if (activeFilters[key].length === 0) delete activeFilters[key];
       }
       updateFilterList();
       window.updateTimelineByFilter?.();
     },
-    { perValueRemove: true } // 每个值渲染为可移除 chip
+    { perValueRemove: true }, // 每个值渲染为可移除 chip
   );
 }
 window.updateFilterList = updateFilterList;
@@ -122,39 +113,34 @@ function updateTimelineByFilter() {
   const next = getFilteredItems();
   itemsDS.clear();
   if (next.length) itemsDS.add(next);
-  // 轻量 redraw
-  try { timeline.redraw(); } catch {}
+  try {
+    timeline.redraw();
+  } catch {}
 }
 window.updateTimelineByFilter = updateTimelineByFilter;
 
 // ========== 页面就绪：绑定工具栏 & 信息弹窗 & 挂载时间轴 ==========
 window.addEventListener('DOMContentLoaded', async () => {
-  // 1) 绑定顶部工具栏（如果你后续把筛选按钮/样式入口放在这里，这里仍然是起点）
+  // 1) 绑定顶部工具栏
   bindToolbar();
 
-  // ✅ NEW: 绑定 Usage / Roadmap / Feedback 三个按钮
-  // - 你的 HTML 已提供 btn-help / btn-roadmap / btn-feedback
-  // - 若某些页面没有这些按钮，initInfoDialogs 内部会自动跳过（你那份代码就是这么写的）
+  // 2) 绑定 Usage / Roadmap / Feedback（三按钮若不存在会自动跳过）
   try {
     initInfoDialogs();
-    console.log('[app] info dialogs bound');
-  } catch (e) {
-    console.error('[app] initInfoDialogs failed', e);
+  } catch {
+    // 保持静默：不影响主流程稳定运行
   }
 
-  // 2) 挂载时间轴
+  // 3) 挂载时间轴
   const el = document.getElementById('timeline');
-  if (!el) {
-    console.error('[timeline] 未找到 #timeline 容器');
-    return;
-  }
+  if (!el) return;
 
   // ⚠️ 当前不改 mount.js：不要把 {variant, endpoint} 作为第二参传入
   // 因为 mount.js 会把第二参当作 vis options merge，属于隐患。
   const handle = await mountTimeline(el);
 
   timeline = handle?.timeline || null;
-  itemsDS  = handle?.items || null;
+  itemsDS = handle?.items || null;
 
   // 记录原始 items（用于过滤回放）
   try {
@@ -163,6 +149,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     originalItems = [];
   }
 
-  // 初次渲染过滤 UI（若有默认过滤）
+  // 初次渲染过滤 UI
   updateFilterList();
 });
