@@ -6,7 +6,7 @@
 // 1) 拉取并规范化事件数据（fetchAndNormalize -> normalizeEvent）
 // 2) 创建 vis.Timeline + DataSet，并负责首屏视窗范围与渲染模板（template）
 // 3) 统一处理：点击事件卡片 -> 详情弹窗（popover）
-// 4) 与过滤系统对接：接收 filter:* 事件，重算 items 并重绘
+// 4) 与过滤系统对接：接收 filter:* 事件，重算 items 并重绘（按你的约束：新增规则不立刻生效）
 // 5) 与样式系统对接：在每次“初次加载/过滤重绘/窗口变化”后重新应用样式
 //
 // 重要行为：
@@ -52,11 +52,6 @@ import { t } from '../ui-text/index.js';
  * =============================================================================
  * UI 预设（可调参数）
  * =============================================================================
- * 🔧 UI TUNING: 这里是“视觉体验”最常改的一组参数入口，便于交接者快速定位。
- * - canvas.height：时间轴画布固定高度（minHeight/maxHeight）
- * - item.fontSize/padding/borderRadius/maxWidth：事件卡片排版
- * - layout.itemPosition/axisPosition/verticalItemGap/stack：轴线与卡片堆叠方式
- * - zoom.key/verticalScroll：缩放/滚轮行为
  */
 const UI = {
   canvas: { height: 600 },
@@ -83,7 +78,6 @@ const UI = {
  * =============================================================================
  * 通用小工具函数（文本处理/字段标准化）
  * =============================================================================
- * 这些函数用于保证：弹窗内容安全可读、字段缺失时 UI 有兜底值。
  */
 function toPlain(x) {
   return x == null ? '' : String(x).replace(/<[^>]*>/g, '').trim();
@@ -98,12 +92,6 @@ function asDisplay(v) {
  * =============================================================================
  * 兼容“blob 详情文本”的字段解析
  * =============================================================================
- * 背景：你的数据来源可能包含一个“长描述字段”（title/content）里拼接的多行 KV 文本。
- * 这里用 FIELD_LABELS 作为“可识别标签集合”，将 blob 文本拆回结构化字段。
- *
- * 🔌 GENERALIZATION:
- * - 若你要把时间轴泛化到“艺术史/文学史”等，字段标签很可能变化，
- *   FIELD_LABELS 与 parseBlobFields 需要同步调整（或改成可配置 schema）。
  */
 const FIELD_LABELS = [
   '事件名称',
@@ -120,27 +108,20 @@ const FIELD_LABELS = [
   '贡献者',
 ];
 
-/**
- * parseBlobFields(blob)
- * 从“多行 KV 文本”中解析出 out[label]，并额外推导 __start/__end。
- */
 function parseBlobFields(blob) {
   const s = toPlain(blob);
   const out = {};
   if (!s) return out;
 
-  // 为避免 label 中有正则特殊字符，先做转义
   const escaped = FIELD_LABELS.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const lookahead = '(?=\\s*(?:' + escaped.join('|') + ')\\s*[:：]|$)';
 
-  // 每个 label 按“label: value 直到下一个 label 或结束”提取
   for (const label of FIELD_LABELS) {
     const re = new RegExp(label + '\\s*[:：]\\s*([\\s\\S]*?)' + lookahead, 'i');
     const m = re.exec(s);
     if (m) out[label] = m[1].replace(/\\n/g, '\n').trim();
   }
 
-  // 解析“时间”字段，提取 __start/__end（YYYY-MM-DD）
   const tval = out['时间'];
   if (tval) {
     const m1 =
@@ -156,13 +137,6 @@ function parseBlobFields(blob) {
   return out;
 }
 
-/**
- * normalizeTags(v)
- * Tag 字段兼容：数组 / 逗号分隔字符串 / 空值
- *
- * 🔌 GENERALIZATION:
- * - 若未来 Tag 改为分号、管道符或多列结构，这里是第一个要改的位置。
- */
 function normalizeTags(v) {
   if (!v && v !== 0) return [];
   if (Array.isArray(v)) return v.filter(Boolean);
@@ -172,10 +146,6 @@ function normalizeTags(v) {
     .filter(Boolean);
 }
 
-/**
- * toMs(ts)
- * 用于计算整体数据范围（min/max），得到默认视窗 start/end 的 padding。
- */
 function toMs(ts) {
   if (typeof ts === 'number') return ts;
   const n = +new Date(ts);
@@ -186,16 +156,6 @@ function toMs(ts) {
  * =============================================================================
  * 详情弹窗内容生成
  * =============================================================================
- * buildKvHTML(obj) -> HTML string
- *
- * 说明：
- * - 你已实现 i18n 的 label 显示，这里保持原逻辑不改。
- * - asDisplay() 保证空值输出为 '—'。
- *
- * 🔧 UI TUNING:
- * - 若想改变弹窗排版/字体/间距，可以在这里或 injectScopedStyles 中做。
- * 🔌 GENERALIZATION:
- * - 若字段集合变化，KV 列表应同步变化；建议未来做“schema 驱动”的字段映射。
  */
 function buildKvHTML(obj) {
   const kv = [
@@ -241,19 +201,24 @@ function buildKvHTML(obj) {
  * =============================================================================
  * 作用域样式注入（scoped CSS）
  * =============================================================================
- * injectScopedStyles(container, ui)
- * - 给 container 增加随机 scope class，避免 CSS 污染全局
- * - 注入 vis-item 与弹窗（popover）以及样式面板的基础样式
- *
- * 🔧 UI TUNING:
- * - 事件卡片 padding/maxWidth/title font 等在这里同步调整。
- * - popover 的 max-height、shadow、border-radius 也在这里调。
+ * B3 修改：避免重复挂载造成 style 累积（同一 container 内会替换旧 style，并移除旧 scope class）
  */
 function injectScopedStyles(container, ui) {
+  const STYLE_ID = 'tl-scoped-style';
+
+  // 若同一 container 曾经注入过：移除旧 scope class，并替换 style
+  const oldStyle = container.querySelector(`style#${STYLE_ID}`);
+  if (oldStyle) {
+    const oldScope = oldStyle.getAttribute('data-scope');
+    if (oldScope) container.classList.remove(oldScope);
+    try {
+      oldStyle.parentNode && oldStyle.parentNode.removeChild(oldStyle);
+    } catch {}
+  }
+
   const scope = 'tl-scope-' + Math.random().toString(36).slice(2, 8);
   container.classList.add(scope);
 
-  // 注意：这里仍使用字符串拼接；若后续要更易维护，可改为模板字符串分段。
   const css =
     '.' + scope + ' .vis-item.event{border-radius:' + ui.item.borderRadius + 'px;}' +
     '.' + scope + ' .vis-item .vis-item-content{padding:' + ui.item.paddingY + 'px ' + ui.item.paddingX + 'px;max-width:' + ui.item.maxWidth + 'px;}' +
@@ -272,17 +237,13 @@ function injectScopedStyles(container, ui) {
     '.te-muted{color:#666;font-size:.9rem}';
 
   const styleEl = document.createElement('style');
+  styleEl.id = STYLE_ID;
   styleEl.textContent = css;
   styleEl.setAttribute('data-scope', scope);
   container.appendChild(styleEl);
   return scope;
 }
 
-/**
- * createLoadingOverlay()
- * - timeline 初始化期间展示“Loading…”
- * - 位置在 container 左上角
- */
 function createLoadingOverlay() {
   const el = document.createElement('div');
   el.setAttribute('role', 'status');
@@ -297,26 +258,14 @@ function createLoadingOverlay() {
  * =============================================================================
  * 数据映射：raw event -> vis item + 业务字段（用于过滤与弹窗）
  * =============================================================================
- * normalizeEvent(event, i)
- *
- * 输出是 vis.DataSet 可接受的 item（至少包含 id/content/start/end），
- * 并额外挂上过滤与渲染所需字段：EventType/Region/Platform/Company/.../Tag/Importance。
- *
- * 🔌 GENERALIZATION:
- * - 这一块是“列变化影响最大”的区域。
- * - 如果将来列名变化（例如艺术史用 Person/Work/School），这里必须改；
- *   并且同步影响 buildKvHTML（弹窗字段）与过滤系统的字段集合。
  */
 function normalizeEvent(event, i) {
-  // 兼容不同来源字段名（Start/End vs start/end）
   const Start = event.Start ?? event.start ?? '';
   const End = event.End ?? event.end ?? '';
 
-  // blob 文本兼容：一些来源把 KV 文本拼在 title/content 里
   const blob = (event.title || event.content || '').toString();
   const parsed = parseBlobFields(blob);
 
-  // 标题优先级：显式列 > blob 解析 > fallback
   const title =
     toPlain(event.Title) ||
     parsed['事件名称'] ||
@@ -324,11 +273,9 @@ function normalizeEvent(event, i) {
     toPlain(event.content) ||
     '(Untitled)';
 
-  // 时间优先级：显式列 > blob 推导
   const start = Start || parsed.__start || '';
   const end = End || parsed.__end || '';
 
-  // 业务字段（用于过滤/样式/弹窗）
   const EventType = event.EventType ?? parsed['事件类型'] ?? '';
   const Region = event.Region ?? parsed['地区'] ?? '';
   const Platform = event.Platform ?? parsed['平台类型'] ?? '';
@@ -341,7 +288,6 @@ function normalizeEvent(event, i) {
   const Tag = normalizeTags(TagRaw);
   const Importance = event.Importance ?? parsed['重要性'] ?? '';
 
-  // 详情弹窗 HTML（预先生成以提升点击响应）
   const detailHtml = buildKvHTML({
     title,
     start,
@@ -359,13 +305,11 @@ function normalizeEvent(event, i) {
   });
 
   return {
-    // vis item 基本字段
     id: event.id || `auto-${i + 1}`,
     content: title,
     start: start || undefined,
     end: end || undefined,
 
-    // 自定义扩展字段（供 template/弹窗/过滤/样式使用）
     detailHtml,
     titleText: title,
 
@@ -384,12 +328,6 @@ function normalizeEvent(event, i) {
  * =============================================================================
  * 样式应用（单点出口）
  * =============================================================================
- * safeApplyStyles()
- * - 从持久化的 styleState 中读取，并通过 style engine 应用到 DOM
- * - try/catch 容错，避免样式系统异常导致时间轴主逻辑崩溃
- *
- * 🔧 UI TUNING:
- * - 若选择器结构变化（比如 vis 的 DOM 结构变化），需要改 DEFAULTS.SELECTOR_BASE 等。
  */
 function safeApplyStyles() {
   try {
@@ -401,7 +339,7 @@ function safeApplyStyles() {
       });
     }
   } catch {
-    // 保持静默：避免 UI 端打断主流程；调试期可考虑 console.warn
+    // keep silent
   }
 }
 
@@ -409,17 +347,7 @@ function safeApplyStyles() {
  * =============================================================================
  * Style Panel（样式面板）+ i18n 支持
  * =============================================================================
- * 说明：
- * - 这部分是“样式编辑 UI”的轻量实现，直接在 mount.js 内注入 #style-window。
- * - 依赖 stateMem 维护：当前属性绑定、样式类型所有权、规则集合等。
- *
- * ⚠️ PRODUCTIZATION NOTE:
- * - 从架构角度，这一坨 UI 最终应该拆到独立模块（例如 ui/style-panel.js），
- *   mount.js 保持“挂载 + 管线接线”即可。
- * - 你现在把它放在这里是可行的，但交接文档应强调它的职责与未来拆分方向。
  */
-
-// i18n helpers：tr/tf 给面板与控件使用
 function tr(key, fallback) {
   const v = t(key);
   return v && v !== key ? v : fallback;
@@ -432,33 +360,18 @@ function tf(key, vars, fallback) {
   );
 }
 
-/**
- * attrLabelI18n(attrKey)
- * - 优先使用 i18n: filter.fields.*
- * - fallback 到 constants 的 attributeLabels（中文）或 raw key
- */
 function attrLabelI18n(attrKey) {
   const v = t(`filter.fields.${attrKey}`);
   if (v && v !== `filter.fields.${attrKey}`) return v;
   return attributeLabels?.[attrKey] || attrKey;
 }
 
-/**
- * styleTypeLabelI18n(typeKey)
- * - 优先使用 i18n: style.types.*
- * - fallback 到 constants 的 STYLE_LABELS 或 styleLabel() 或 raw key
- */
 function styleTypeLabelI18n(typeKey) {
   const v = t(`style.types.${typeKey}`);
   if (v && v !== `style.types.${typeKey}`) return v;
   return STYLE_LABELS?.[typeKey] || styleLabel(typeKey) || typeKey;
 }
 
-/**
- * 样式面板入口按钮：绑定到哪个字段（EventType/Platform/...）
- * 🔧 UI TUNING: 可增减这里的字段，让“样式入口按钮”更多/更少
- * 🔌 GENERALIZATION: 若你的产品允许用户自定义字段，这里应由 schema 动态生成
- */
 const STYLE_ATTR_BTNS = [
   { textKey: 'event', field: 'EventType' },
   { textKey: 'platform', field: 'Platform' },
@@ -467,11 +380,6 @@ const STYLE_ATTR_BTNS = [
   { textKey: 'region', field: 'Region' },
 ];
 
-/**
- * 面板支持的“样式类型”集合
- * 注意：你有“同一种属性只能绑定一种样式类型”的约束，
- * 这由 stateMem.styleTypeOwner + boundStyleType 实现。
- */
 const UI_STYLE_TYPES = [
   { key: 'fontColor' },
   { key: 'backgroundColor' },
@@ -481,15 +389,8 @@ const UI_STYLE_TYPES = [
 ];
 
 let panelInjected = false;
+let stylePanelCloseBound = false; // B4：确保关闭行为只绑定一次
 
-/**
- * ensureStylePanelInjected()
- * - 懒加载注入 #style-window DOM
- * - 文案全部走 i18n（tr/styleTypeLabelI18n）
- *
- * 🔧 UI TUNING:
- * - 可在这里改面板宽度/布局/表头名称/按钮文本
- */
 function ensureStylePanelInjected() {
   if (panelInjected) return;
 
@@ -560,11 +461,21 @@ function ensureStylePanelInjected() {
 
   document.body.appendChild(host);
   panelInjected = true;
+
+  // B4：关闭/backdrop 点击行为只绑定一次（在 injected 阶段绑定）
+  if (!stylePanelCloseBound) {
+    stylePanelCloseBound = true;
+    document.getElementById('style-close')?.addEventListener('click', closeStylePanelLight);
+    document
+      .querySelector('#style-window .sw-backdrop')
+      ?.addEventListener('click', closeStylePanelLight);
+  }
 }
 
 function openStylePanelLight() {
   ensureStylePanelInjected();
-  document.getElementById('style-window').style.display = 'block';
+  const el = document.getElementById('style-window');
+  if (el) el.style.display = 'block';
 }
 
 function closeStylePanelLight() {
@@ -572,10 +483,6 @@ function closeStylePanelLight() {
   if (el) el.style.display = 'none';
 }
 
-/**
- * 颜色控件：input[type=color] + hex 文本输入
- * - 写回 rule.style[rule.type]
- */
 function buildColorControl(rule) {
   const wrap = document.createElement('div');
 
@@ -596,8 +503,6 @@ function buildColorControl(rule) {
     let s = String(v || '').trim();
     if (!s) return null;
     if (s[0] !== '#') s = '#' + s;
-
-    // 支持 #RGB -> #RRGGBB
     if (/^#([0-9a-fA-F]{3})$/.test(s)) {
       s = '#' + s.slice(1).split('').map((c) => c + c).join('');
     }
@@ -623,13 +528,6 @@ function buildColorControl(rule) {
   return wrap;
 }
 
-/**
- * 字体控件：预设字体族下拉
- * - 写回 rule.style.fontFamily
- *
- * 🔧 UI TUNING:
- * - 你可根据目标用户环境增删字体选项
- */
 function buildFontControl(rule) {
   const wrap = document.createElement('div');
   const sel = document.createElement('select');
@@ -655,9 +553,6 @@ function buildFontControl(rule) {
   return wrap;
 }
 
-/**
- * 根据 rule.type 选择对应控件
- */
 function buildStyleCellControl(rule) {
   if (['fontColor', 'backgroundColor', 'borderColor', 'haloColor'].includes(rule.type)) {
     return buildColorControl(rule);
@@ -675,10 +570,6 @@ function uniqueSorted(list) {
   );
 }
 
-/**
- * renderChips(container, values)
- * - 用 chips 展示当前 rule.values
- */
 function renderChips(container, values) {
   container.innerHTML = '';
   const list = Array.isArray(values) ? values : [];
@@ -698,10 +589,6 @@ function renderChips(container, values) {
   });
 }
 
-/**
- * getTakenValuesForAttr(attrKey, exceptRowId)
- * - 防止“同一个属性值”被多个样式行重复占用（你现在的约束）
- */
 function getTakenValuesForAttr(attrKey, exceptRowId) {
   const taken = new Set();
   const bucket = (stateMem.styleRules && stateMem.styleRules[attrKey]) || [];
@@ -713,22 +600,16 @@ function getTakenValuesForAttr(attrKey, exceptRowId) {
   return taken;
 }
 
-/**
- * renderRow(...)
- * - 样式面板表格的一行：左侧是样式控件，中间是 chips + 选择器，右侧删除
- */
 function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
   const trEl = document.createElement('tr');
   trEl.dataset.rowId = rule.id;
   trEl.dataset.attrKey = attrKey;
 
-  // 1) 样式控件
   const tdStyle = document.createElement('td');
   tdStyle.dataset.styleType = rule.type;
   tdStyle.appendChild(buildStyleCellControl(rule));
   trEl.appendChild(tdStyle);
 
-  // 2) 作用属性值 chips + 选择按钮
   const tdVals = document.createElement('td');
 
   const chips = document.createElement('div');
@@ -746,7 +627,6 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
 
   renderChips(chips, rule.values || []);
 
-  // 选择属性值弹窗（含“已占用”禁用）
   btnPick.addEventListener('click', () => {
     const list = uniqueSorted(allOptionsForAttr);
     const current = new Set(Array.isArray(rule.values) ? rule.values : []);
@@ -811,7 +691,6 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
     ok.addEventListener('click', () => {
       const finalSelected = Array.from(current);
 
-      // 再检查一次冲突（防止并发/意外）
       const finalTaken = getTakenValuesForAttr(attrKey, rule.id);
       const conflict = finalSelected.find((x) => finalTaken.has(x));
       if (conflict) {
@@ -834,7 +713,6 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
     document.body.appendChild(box);
   });
 
-  // 3) 删除按钮
   const tdAction = document.createElement('td');
   const del = document.createElement('button');
   del.type = 'button';
@@ -853,14 +731,6 @@ function renderRow(containerTbody, attrKey, rule, allOptionsForAttr) {
   containerTbody.appendChild(trEl);
 }
 
-/**
- * collectOptionsForAttr(mapped, attrKey)
- * - 从当前数据集中收集该字段可能的值，用于样式行选择器
- * - 兼容字段值是数组（如 Tag）
- *
- * 🔌 GENERALIZATION:
- * - 若将来字段可以是对象或复杂结构，这里需要扩展“可枚举值提取策略”
- */
 function collectOptionsForAttr(mapped, attrKey) {
   const vals = mapped
     .map((it) => it?.[attrKey])
@@ -869,9 +739,8 @@ function collectOptionsForAttr(mapped, attrKey) {
 }
 
 /**
- * refreshTypeOptions(selectEl)
- * - 样式类型下拉：如果某类型已被别的属性绑定，则禁用并提示绑定到哪个属性
- * - 使用 stateMem.styleTypeOwner 维护“样式类型归属”
+ * A1 修改：不再依赖不存在的 i18n key（例如 style.window.boundTo）
+ * - 被别的属性占用时，直接显示为：`样式名 (属性名)`，避免出现英文碎片
  */
 function refreshTypeOptions(selectEl) {
   if (!selectEl) return;
@@ -893,19 +762,10 @@ function refreshTypeOptions(selectEl) {
     const ownerLabel = owner ? attrLabelI18n(owner) : '';
     const base = styleTypeLabelI18n(type);
 
-    opt.textContent =
-      base +
-      (owner && !isMine
-        ? ` (${tr('style.window.boundTo', 'bound to')}: ${ownerLabel})`
-        : '');
+    opt.textContent = owner && !isMine ? `${base} (${ownerLabel})` : base;
   });
 }
 
-/**
- * persistAndApply()
- * - 将 stateMem 中的规则，转换为 engine 可消费的结构并持久化，再应用到 DOM
- * - buildEngineStyleState(...) 负责“UI state -> engine state”的映射
- */
 function persistAndApply() {
   const engineState = buildEngineStyleState(
     stateMem.boundStyleType,
@@ -920,14 +780,9 @@ function persistAndApply() {
 }
 
 /**
- * mountStyleButtonsRightOfFilter(container, mapped)
- * - 在“筛选按钮右侧”插入一组“样式入口按钮”
- * - 如果筛选按钮是动态生成的，使用 MutationObserver 与延迟重试进行挂载
- *
- * 🔧 UI TUNING:
- * - findFilterBtn() 的识别策略可按你的 UI 结构调整（data-role、文本等）
+ * A2：这里返回 cleanup，用于 destroy() 时断开 observer & timeout
  */
-function mountStyleButtonsRightOfFilter(container, mapped) {
+function mountStyleButtonsRightOfFilter(container, mapped, registerCleanup = () => {}) {
   function findFilterBtn() {
     let btn = document.querySelector('[data-role="filter-toggle"],[data-te-filter-toggle]');
     if (btn) return btn;
@@ -940,12 +795,16 @@ function mountStyleButtonsRightOfFilter(container, mapped) {
     const filterBtn = findFilterBtn();
     if (!filterBtn) return false;
 
+    // 防止重复插入：若已经插入过（同一页面重复 mount），则跳过
+    if (filterBtn.parentElement?.querySelector?.('[data-te-style-btn="1"]')) return true;
+
     const frag = document.createDocumentFragment();
 
     STYLE_ATTR_BTNS.forEach((def) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'te-style-btn';
+      b.setAttribute('data-te-style-btn', '1');
       b.textContent = tr(`style.buttons.${def.textKey}`, def.textKey);
       b.addEventListener('click', () => openStyleEditorFor(def.field, mapped));
       frag.appendChild(b);
@@ -966,24 +825,21 @@ function mountStyleButtonsRightOfFilter(container, mapped) {
   });
   obs.observe(document.body, { childList: true, subtree: true });
 
-  // 兼容不同渲染时序
-  [120, 400, 1000].forEach((ms) => setTimeout(() => doAttach(), ms));
+  registerCleanup(() => {
+    try { obs.disconnect(); } catch {}
+  });
+
+  const tids = [120, 400, 1000].map((ms) => setTimeout(() => doAttach(), ms));
+  registerCleanup(() => {
+    tids.forEach((id) => {
+      try { clearTimeout(id); } catch {}
+    });
+  });
 }
 
-/**
- * openStyleEditorFor(attrKey, mapped)
- * - 打开样式面板，并加载当前 attrKey 对应的规则 bucket
- * - 实现“先绑定样式类型，再添加多条规则行”的流程
- * - 强制约束：同一种样式类型只能被一个属性绑定（styleTypeOwner）
- *
- * ⚠️ PRODUCTIZATION NOTE:
- * - 若未来允许用户“同时对一个属性使用多种样式类型”，
- *   这里的 boundStyleType/styleTypeOwner 约束需要整体重构。
- */
 function openStyleEditorFor(attrKey, mapped) {
   ensureStylePanelInjected();
 
-  // stateMem 的结构若不存在则初始化
   stateMem.currentStyleAttr = attrKey;
   stateMem.boundStyleType ||= {};
   stateMem.styleTypeOwner ||= {};
@@ -1004,7 +860,6 @@ function openStyleEditorFor(attrKey, mapped) {
   titleEl &&
     (titleEl.textContent = tf('style.window.title', { attr: attrText }, `${attrText} Styles`));
 
-  // 渲染现有规则 bucket
   if (tbody) {
     tbody.innerHTML = '';
     const bucket = stateMem.styleRules[attrKey] || [];
@@ -1036,7 +891,6 @@ function openStyleEditorFor(attrKey, mapped) {
   btnReset && (btnReset.style.display = currentBound === 'none' ? 'none' : 'inline-block');
   typeSel && (typeSel.disabled = currentBound !== 'none');
 
-  // stagedType：用户在下拉里选中的“待绑定样式类型”
   let stagedType = 'none';
 
   if (typeSel) {
@@ -1044,7 +898,6 @@ function openStyleEditorFor(attrKey, mapped) {
       const current = boundNow();
       const val = typeSel.value || 'none';
 
-      // 已绑定则不允许换（必须 reset）
       if (current !== 'none') {
         typeSel.value = 'none';
         btnConfirm && (btnConfirm.disabled = true);
@@ -1057,7 +910,6 @@ function openStyleEditorFor(attrKey, mapped) {
         return;
       }
 
-      // 样式类型被别的属性占用：禁止绑定
       const owner = stateMem.styleTypeOwner?.[val];
       if (val !== 'none' && owner && owner !== attrKey) {
         const ownerText = attrLabelI18n(owner);
@@ -1077,7 +929,6 @@ function openStyleEditorFor(attrKey, mapped) {
     };
   }
 
-  // 确认绑定：创建第一条样式规则行
   btnConfirm &&
     (btnConfirm.onclick = () => {
       const curr = boundNow();
@@ -1107,7 +958,6 @@ function openStyleEditorFor(attrKey, mapped) {
       tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
     });
 
-  // 重置绑定：清空 bucket，并释放 styleTypeOwner 占用
   btnReset &&
     (btnReset.onclick = () => {
       const bucketLen = (stateMem.styleRules[attrKey] || []).length;
@@ -1134,11 +984,9 @@ function openStyleEditorFor(attrKey, mapped) {
       }
       btnConfirm && (btnConfirm.disabled = true);
 
-      // 重置后立即应用（清除样式）
       persistAndApply();
     });
 
-  // 新增样式行：同一 attrKey 下可有多行规则，每行占用不同的 values 集合
   btnAdd &&
     (btnAdd.onclick = () => {
       const tt = boundNow();
@@ -1156,12 +1004,10 @@ function openStyleEditorFor(attrKey, mapped) {
       tbody && renderRow(tbody, attrKey, rule, collectOptionsForAttr(mapped, attrKey));
     });
 
-  // 保存并应用：会剔除不完整行（无样式值或无 values）
   btnSave &&
     (btnSave.onclick = () => {
       const bucket = stateMem.styleRules[attrKey] || [];
 
-      // 从后往前删，避免 index 变化
       for (let i = bucket.length - 1; i >= 0; i--) {
         const r = bucket[i];
 
@@ -1179,47 +1025,54 @@ function openStyleEditorFor(attrKey, mapped) {
       closeStylePanelLight();
     });
 
-  // 面板关闭行为：右上角 X 或 backdrop 点击
-  document.getElementById('style-close')?.addEventListener('click', closeStylePanelLight);
-  document
-    .querySelector('#style-window .sw-backdrop')
-    ?.addEventListener('click', closeStylePanelLight);
-
   openStylePanelLight();
+}
+
+/**
+ * =============================================================================
+ * B2：初始显示范围解析（允许你指定首屏范围，但不会硬编码覆盖 overrides）
+ * =============================================================================
+ * 你可在页面全局设置其一：
+ * 1) globalThis.TIMELINE_INITIAL_RANGE = { start:'1990-01-01', end:'2000-12-31' }
+ * 2) globalThis.TIMELINE_INITIAL_START / TIMELINE_INITIAL_END
+ *
+ * 调用 mountTimeline 时传 overrides.start/end 的优先级最高。
+ */
+function resolveInitialRange() {
+  const r = globalThis?.TIMELINE_INITIAL_RANGE;
+  const s = r?.start ?? globalThis?.TIMELINE_INITIAL_START;
+  const e = r?.end ?? globalThis?.TIMELINE_INITIAL_END;
+
+  const start = s ? new Date(s) : null;
+  const end = e ? new Date(e) : null;
+
+  const okStart = start && Number.isFinite(+start);
+  const okEnd = end && Number.isFinite(+end);
+
+  return {
+    start: okStart ? start : null,
+    end: okEnd ? end : null,
+  };
 }
 
 /**
  * =============================================================================
  * 主挂载：mountTimeline(container, overrides?)
  * =============================================================================
- * 对外 API：
- * - mountTimeline('#timeline', overrides) -> Promise<{ timeline, items, destroy }>
- *
- * container:
- * - 支持 selector string 或 HTMLElement
- *
- * overrides:
- * - 允许覆盖 vis Timeline options（比如 start/end/locale/margin/...）
- *
- * 关键流程：
- * 1) 校验 container 与 vis.js
- * 2) 注入 scoped CSS + loading overlay
- * 3) fetch -> normalizeEvent -> mapped
- * 4) 初始化过滤默认规则（Importance 4/5）
- * 5) new DataSet(initialItems) -> new Timeline(...)
- * 6) initFilterUI + style buttons + safeApplyStyles
- * 7) 绑定 timeline click -> popover
- * 8) 监听 filter:* 事件 -> dataset 重算/重绘 -> safeApplyStyles
- *
- * 🔧 UI TUNING:
- * - baseOptions 里的 locale / margin / stack / zoomKey / template 可调整。
- * - startDate/endDate 目前被硬编码覆盖为 1990-2000（见下方标记）。
- *
- * ⚠️ PRODUCTIZATION NOTE:
- * - startDate/endDate 固定范围用于 demo/聚焦；产品化需改回“按数据自动范围”或用户可配置。
  */
 export async function mountTimeline(container, overrides = {}) {
-  // 允许传入 selector string
+  // A2：统一注册清理函数，destroy() 释放所有监听器/observer/timeout
+  const cleanups = [];
+  function registerCleanup(fn) {
+    if (typeof fn === 'function') cleanups.push(fn);
+  }
+  function on(target, type, handler, opts) {
+    target.addEventListener(type, handler, opts);
+    registerCleanup(() => {
+      try { target.removeEventListener(type, handler, opts); } catch {}
+    });
+  }
+
   if (typeof container === 'string') {
     const node = document.querySelector(container);
     if (!node) {
@@ -1234,23 +1087,19 @@ export async function mountTimeline(container, overrides = {}) {
     return { timeline: null, items: null, destroy() {} };
   }
 
-  // vis.js 依赖检查
   if (!window.vis || !window.vis.Timeline || !window.vis.DataSet) {
     container.innerHTML =
       '<div style="padding:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">vis.js is not loaded.</div>';
     return { timeline: null, items: null, destroy() {} };
   }
 
-  // loading overlay
   const loading = createLoadingOverlay();
   const needRel = getComputedStyle(container).position === 'static';
   if (needRel) container.style.position = 'relative';
   container.appendChild(loading);
 
-  // scoped CSS
   injectScopedStyles(container, UI);
 
-  // filter UI 会把按钮插到某个元素前，这里需要一个 selector
   const beforeSelector = container.id ? `#${container.id}` : '#timeline';
 
   let timeline = null;
@@ -1258,9 +1107,6 @@ export async function mountTimeline(container, overrides = {}) {
   let mapped = null;
 
   try {
-    /**
-     * 1) 拉取数据
-     */
     const raw = await fetchAndNormalize();
     const data = Array.isArray(raw) ? raw : [];
 
@@ -1270,53 +1116,33 @@ export async function mountTimeline(container, overrides = {}) {
       return { timeline: null, items: null, destroy() {} };
     }
 
-    /**
-     * 2) 数据映射（结构化 + 预生成 detailHtml）
-     */
     mapped = data.map((evt, i) => normalizeEvent(evt, i));
 
-    /**
-     * 3) 初始化默认过滤规则：Importance = 4/5
-     *    ⭐ 这是你的产品默认行为
-     */
     clearRules();
     setLogic('AND');
     upsertRule('Importance', ['4', '5']);
 
     const initialItems = applyFilters(mapped, getState());
 
-    /**
-     * 4) vis 数据集
-     */
     dataset = new window.vis.DataSet(initialItems);
 
-    /**
-     * 5) 计算默认视窗范围：按数据 min/max + padding
-     *    （但你下面又用硬编码覆盖了 1990-2000）
-     */
     const tvals = mapped.map((it) => toMs(it.start ?? it.end)).filter(Number.isFinite);
 
-    let startDate, endDate;
+    let autoStart = null;
+    let autoEnd = null;
     if (tvals.length) {
       const minT = Math.min(...tvals);
       const maxT = Math.max(...tvals);
 
       const DAY = 86400000;
       const pad = Math.max(7 * DAY, Math.round((maxT - minT) * 0.05));
-      startDate = new Date(minT - pad);
-      endDate = new Date(maxT + pad);
+      autoStart = new Date(minT - pad);
+      autoEnd = new Date(maxT + pad);
     }
 
-    // ⚠️ PRODUCTIZATION NOTE:
-    // 你当前强制把视窗固定为 1990-2000。
-    // 如果未来要“自动聚焦数据范围”或“由用户配置”，删除/迁移这两行。
-    startDate = new Date('1990-01-01');
-    endDate = new Date('2000-12-31');
+    // B2：允许你指定首屏范围（但不强行覆盖 overrides.start/end）
+    const initial = resolveInitialRange();
 
-    /**
-     * 6) vis Timeline options
-     * 🔧 UI TUNING: 这里是第二个最常改的区域（与 UI 常量配合）。
-     */
     const baseOptions = {
       minHeight: UI.canvas.height,
       maxHeight: UI.canvas.height,
@@ -1328,22 +1154,15 @@ export async function mountTimeline(container, overrides = {}) {
 
       margin: { item: UI.layout.verticalItemGap, axis: 50 },
 
+      // B1 保留：固定 en，避免你提到的中文乱码风险（你明确要求保留）
       locale: 'en',
+
       editable: false,
       stack: UI.layout.stack,
 
-      // 滚轮/缩放
       verticalScroll: UI.zoom.verticalScroll,
       zoomKey: UI.zoom.key,
 
-      /**
-       * template(item, element)
-       * - element: vis 渲染时提供的内容 DOM 容器
-       * - 这里我们将 item/titleText 渲染为单行标题，并挂上 data attrs 供样式引擎使用
-       *
-       * 🔧 UI TUNING:
-       * - 若要支持多行标题、显示时间、或在卡片上显示更多字段，从这里改。
-       */
       template: (item, element) => {
         try {
           const contentEl = element;
@@ -1357,9 +1176,7 @@ export async function mountTimeline(container, overrides = {}) {
             contentEl.classList.add('event');
             attachEventDataAttrs?.(contentEl, item);
           }
-        } catch {
-          // 忽略：避免影响主渲染流程
-        }
+        } catch {}
 
         const root = document.createElement('div');
         const h4 = document.createElement('h4');
@@ -1370,41 +1187,37 @@ export async function mountTimeline(container, overrides = {}) {
       },
     };
 
-    // 允许外部覆盖 options（例如不同页面/variant）
     const options = { ...baseOptions, ...overrides };
-    if (startDate) options.start = startDate;
-    if (endDate) options.end = endDate;
 
-    /**
-     * 7) 创建 Timeline
-     */
+    // start/end 优先级：
+    // 1) overrides.start/end（调用者显式指定）
+    // 2) globalThis 初始范围（你手动指定）
+    // 3) 自动范围（按数据）
+    if (!('start' in overrides)) {
+      if (initial.start) options.start = initial.start;
+      else if (autoStart) options.start = autoStart;
+    }
+    if (!('end' in overrides)) {
+      if (initial.end) options.end = initial.end;
+      else if (autoEnd) options.end = autoEnd;
+    }
+
     const vis = window.vis;
     timeline = new vis.Timeline(container, dataset, options);
+    registerCleanup(() => {
+      try { timeline?.destroy(); } catch {}
+    });
 
-    /**
-     * 8) 初始化过滤 UI（只负责 UI，不直接改 dataset）
-     */
     initFilterUI({
       beforeElSelector: beforeSelector,
       getItems: () => mapped,
       getCurrentRules: () => getState().rules,
     });
 
-    /**
-     * 9) 样式入口按钮（i18n）
-     */
-    mountStyleButtonsRightOfFilter(container, mapped);
+    // A2：样式按钮挂载的 observer/timeouts 纳入 destroy 清理
+    mountStyleButtonsRightOfFilter(container, mapped, registerCleanup);
 
-    /**
-     * 10) 初次应用样式（从持久化 state）
-     */
     safeApplyStyles();
-
-    /**
-     * =============================================================================
-     * Popover（详情弹窗）：点击 vis item 显示，点击空白关闭
-     * =============================================================================
-     */
 
     function ensurePopover() {
       let pop = container.querySelector('#event-popover');
@@ -1424,11 +1237,6 @@ export async function mountTimeline(container, overrides = {}) {
       currentAnchor = null;
     }
 
-    /**
-     * findAnchorFromProps(props)
-     * - vis click 事件会给 props.item (id) 与 props.event.target
-     * - 优先用 event.target 找最近 vis-item，失败则用 data-id 查询
-     */
     function findAnchorFromProps(props) {
       const t0 = props?.event?.target;
       const hit = t0 && t0.closest ? t0.closest('.vis-item') : null;
@@ -1450,7 +1258,6 @@ export async function mountTimeline(container, overrides = {}) {
       const cb = container.getBoundingClientRect();
       const ib = anchor.getBoundingClientRect();
 
-      // 🔧 UI TUNING: 弹窗尺寸策略
       const MIN_W = 280;
       const MIN_H = 140;
       const MAX_W = Math.min(520, container.clientWidth);
@@ -1462,7 +1269,6 @@ export async function mountTimeline(container, overrides = {}) {
       const width = Math.min(Math.max(ib.width, MIN_W), MAX_W);
       const height = Math.min(Math.max(ib.height, MIN_H), MAX_H);
 
-      // 保证弹窗不超出容器可视区域（留 8px 边距）
       const maxLeft = container.scrollLeft + (container.clientWidth - width - 8);
       const maxTop = container.scrollTop + (container.clientHeight - height - 8);
 
@@ -1481,7 +1287,7 @@ export async function mountTimeline(container, overrides = {}) {
       currentAnchor = anchor;
     }
 
-    // timeline click：点空白隐藏；点 item 显示弹窗
+    // timeline.on -> 在 destroy() 里会随 timeline.destroy() 清掉（vis 自己释放）
     timeline.on('click', (props) => {
       if (!props || props.item == null) {
         hidePopover();
@@ -1490,42 +1296,35 @@ export async function mountTimeline(container, overrides = {}) {
       showPopoverOverItem(props);
     });
 
-    // 点击弹窗外/卡片外关闭
-    document.addEventListener('mousedown', (e) => {
+    // A2：document/window 监听纳入清理
+    const onDocMouseDown = (e) => {
       if (pop.style.display === 'none') return;
       const inPop = pop.contains(e.target);
       const onAnchor = currentAnchor && currentAnchor.contains(e.target);
       if (!inPop && !onAnchor) hidePopover();
-    });
+    };
+    on(document, 'mousedown', onDocMouseDown);
 
-    // resize：重绘 + 关闭弹窗 + 重新应用样式
-    window.addEventListener('resize', () => {
-      try {
-        timeline.redraw();
-      } catch {}
+    const onResize = () => {
+      try { timeline.redraw(); } catch {}
       hidePopover();
       safeApplyStyles();
-    });
+    };
+    on(window, 'resize', onResize);
 
     /**
-     * =============================================================================
-     * Filter 事件桥接：filter-ui -> 触发 window event -> mount.js 更新 dataset
-     * =============================================================================
-     * 约定事件：
-     * - filter:add-rule:confirm  { key, values }   -> upsertRule
-     * - filter:set-logic         { mode }          -> setLogic + applyFilters + dataset
-     * - filter:reset                              -> clearRules + dataset = mapped
-     * - filter:remove-rule      { key }           -> removeRule + applyFilters + dataset
+     * Filter 事件桥接
+     * - A3 保留：新增规则不立刻生效（你明确要求）
+     * - A4 保留：reset 清空规则并展示全量（你明确要求）
      */
-
-    window.addEventListener('filter:add-rule:confirm', (e) => {
+    const onAddRule = (e) => {
       const { key, values } = e.detail || {};
       upsertRule(key, values);
-      // 注意：这里你当前“只更新 state，不立刻重算 dataset”
-      // 如果希望“新增规则立即生效”，可在这里 applyFilters + dataset 重算。
-    });
+      // 按你的要求：不立即重算 dataset，等待用户选择 AND/OR 逻辑再应用
+    };
+    on(window, 'filter:add-rule:confirm', onAddRule);
 
-    window.addEventListener('filter:set-logic', (e) => {
+    const onSetLogic = (e) => {
       const mode = e?.detail?.mode;
       setLogic(mode);
 
@@ -1534,17 +1333,19 @@ export async function mountTimeline(container, overrides = {}) {
       dataset.add(next);
 
       requestAnimationFrame(() => safeApplyStyles());
-    });
+    };
+    on(window, 'filter:set-logic', onSetLogic);
 
-    window.addEventListener('filter:reset', () => {
+    const onReset = () => {
       clearRules();
       dataset.clear();
       dataset.add(mapped);
 
       requestAnimationFrame(() => safeApplyStyles());
-    });
+    };
+    on(window, 'filter:reset', onReset);
 
-    window.addEventListener('filter:remove-rule', (e) => {
+    const onRemoveRule = (e) => {
       const key = e?.detail?.key;
       if (key) removeRule(key);
 
@@ -1553,18 +1354,19 @@ export async function mountTimeline(container, overrides = {}) {
       dataset.add(next);
 
       requestAnimationFrame(() => safeApplyStyles());
-    });
+    };
+    on(window, 'filter:remove-rule', onRemoveRule);
 
-    // vis 发生变化时（例如 range changed）也可重新应用样式
     timeline.on('changed', () => requestAnimationFrame(() => safeApplyStyles()));
 
     return {
       timeline,
       items: dataset,
       destroy() {
-        try {
-          timeline.destroy();
-        } catch {}
+        // A2：集中清理
+        cleanups.forEach((fn) => {
+          try { fn(); } catch {}
+        });
       },
     };
   } catch (err) {
