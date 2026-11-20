@@ -1,21 +1,21 @@
 
-/* public/src/matrix/matrix.css
-   ==========================================================================
-   世界电子游戏史二维矩阵 - 第一阶段样式
+/* ==========================================================================
+   世界电子游戏史二维矩阵 - 基础样式
 
-   职责：
-   - 日期横轴、年份纵轴
-   - 366 列网格
-   - 事件标题卡片
-   - 双向原生滚动
+   功能：
+   1. 日期横轴（固定366列）
+   2. 年份纵轴
+   3. 事件标题卡片
+   4. 双向原生滚动
+   5. 日期表头和年份标签固定
+   6. 隐藏矩阵网格线，保留事件卡片边框
 
    暂不包括：
    - 过滤器
    - 自定义格式
    - 缩放
    - 日期跳转
-   ==========================================================================
-*/
+   ========================================================================== */
 
 :root {
   --matrix-cell-width: 220px;
@@ -32,6 +32,8 @@
   --matrix-text: #1e293b;
   --matrix-muted: #64748b;
 }
+
+/* 全局基础样式 */
 
 * {
   box-sizing: border-box;
@@ -50,12 +52,16 @@ body {
   background: #f8fafc;
 }
 
+/* 页面整体 */
+
 .matrix-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
   min-height: 400px;
 }
+
+/* 顶部标题和状态信息 */
 
 .matrix-topbar {
   flex: 0 0 auto;
@@ -91,6 +97,8 @@ body {
   padding: 12px;
 }
 
+/* 双向滚动容器 */
+
 .matrix-scroll {
   width: 100%;
   height: 100%;
@@ -101,7 +109,7 @@ body {
   border-radius: 8px;
 }
 
-/* 整个矩阵使用一套统一的列坐标 */
+/* 整个二维矩阵使用统一的列坐标 */
 
 .matrix-grid {
   display: grid;
@@ -112,9 +120,13 @@ body {
   width: max-content;
   min-width: 100%;
   align-content: start;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
-/* 日期标题行：包含年份角标 + 366 个日期 */
+/* 日期标题行 */
 
 .matrix-header-row {
   display: grid;
@@ -123,7 +135,13 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
+
+/* 左上角标签 */
 
 .matrix-corner {
   position: sticky;
@@ -133,12 +151,17 @@ body {
   align-items: center;
   justify-content: center;
   min-height: var(--matrix-header-height);
+
   background: #e2e8f0;
-  border-right: 1px solid var(--matrix-border);
-  border-bottom: 1px solid var(--matrix-border);
   font-weight: 700;
   font-size: 13px;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
+
+/* 横轴日期标签 */
 
 .matrix-day-header {
   display: flex;
@@ -146,12 +169,15 @@ body {
   justify-content: center;
   min-height: var(--matrix-header-height);
   padding: 6px;
-  border-right: 1px solid var(--matrix-border);
-  border-bottom: 1px solid var(--matrix-border);
+
   background: var(--matrix-header-background);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 /* 年份行 */
@@ -160,7 +186,13 @@ body {
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
+
+/* 左侧年份标签 */
 
 .matrix-year-label {
   position: sticky;
@@ -170,11 +202,14 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding: 15px 6px;
+
   background: #e2e8f0;
-  border-right: 1px solid var(--matrix-border);
-  border-bottom: 1px solid var(--matrix-border);
   font-size: 15px;
   font-weight: 700;
+
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 /* 日期与年份的交叉单元格 */
@@ -187,22 +222,30 @@ body {
   align-items: stretch;
   gap: 7px;
   padding: 8px;
+
   background: var(--matrix-cell-background);
-  border-right: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+
+  /* 不显示横向或纵向网格线 */
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
-/* 多张事件卡片纵向排列 */
+/* 事件卡片 */
 
 .matrix-card {
   width: 100%;
   min-width: 0;
   padding: 10px;
+
   border: 1px solid var(--matrix-card-border);
   border-radius: 6px;
   background: var(--matrix-card-background);
+
   overflow-wrap: anywhere;
 }
+
+/* 事件标题 */
 
 .matrix-card .event-title {
   margin: 0;
@@ -220,7 +263,7 @@ body {
   font-size: 14px;
 }
 
-/* 小屏幕保持双向滚动，不压缩 366 列 */
+/* 小屏幕适配 */
 
 @media (max-width: 640px) {
   .matrix-topbar {
@@ -231,12 +274,4 @@ body {
   .matrix-main {
     padding: 6px;
   }
-   /* 隐藏二维矩阵的网格线，保留事件卡片边框 */
-.matrix-day-header,
-.matrix-year-label,
-.matrix-cell,
-.matrix-corner {
-  border-right: none;
-  border-bottom: none;
-}
 }
