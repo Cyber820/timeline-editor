@@ -231,4 +231,12 @@ body {
   .matrix-main {
     padding: 6px;
   }
+   /* 隐藏二维矩阵的网格线，保留事件卡片边框 */
+.matrix-day-header,
+.matrix-year-label,
+.matrix-cell,
+.matrix-corner {
+  border-right: none;
+  border-bottom: none;
+}
 }
