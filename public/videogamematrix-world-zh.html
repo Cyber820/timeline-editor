@@ -1,0 +1,61 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+
+  <title>世界电子游戏史二维矩阵（中文）</title>
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
+  <!-- 二维矩阵独立样式 -->
+  <link
+    rel="stylesheet"
+    href="./src/matrix/matrix.css"
+  />
+</head>
+
+<body>
+  <div class="matrix-page">
+
+    <header class="matrix-topbar">
+      <h1 class="matrix-page-title">
+        世界电子游戏史二维矩阵
+      </h1>
+
+      <div
+        id="matrix-status"
+        class="matrix-status"
+        role="status"
+        aria-live="polite"
+      >
+        准备加载……
+      </div>
+    </header>
+
+    <main class="matrix-main">
+      <div
+        id="matrix"
+        class="matrix-scroll"
+        aria-label="世界电子游戏史日期与年份矩阵"
+      ></div>
+    </main>
+
+  </div>
+
+  <!-- 与现有世界中文版时间轴保持一致 -->
+  <script>
+    window.TIMELINE_REGION = 'world';
+    window.TIMELINE_LANG = 'zh';
+  </script>
+
+  <!-- 独立矩阵入口，不加载旧版 app.js -->
+  <script
+    type="module"
+    src="./src/matrix/matrix.js"
+  ></script>
+</body>
+</html>
