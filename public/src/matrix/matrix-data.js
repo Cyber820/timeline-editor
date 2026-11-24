@@ -1,47 +1,33 @@
 
-// public/src/matrix/matrix-data.js
-// =============================================================================
-// 二维时间矩阵：日期解析及数据分组
-//
-// 职责：
-// 1. 将确定的年月日映射到固定的 366 天坐标。
-// 2. 根据年份和日期位置对事件分组。
-// 3. 排除无法确定完整日期的记录。
-// 4. 不修改原始事件对象，也不依赖 vis.js。
-//
-// 横轴：1 月 1 日至 12 月 31 日（固定包含 2 月 29 日）
-// 纵轴：年份，默认从新到旧
-// =============================================================================
-
 /**
- * 判断某年是否为公历闰年。
+ * public/src/matrix/matrix-data.js
  *
- * @param {number} year - 完整年份
- * @returns {boolean}
+ * 二维时间矩阵的数据处理模块。
+ *
+ * 横轴：378列
+ * - 366个真实日期
+ * - 12个月度日期（每月00日）
+ *
+ * 纵轴：年份（从新到旧）
+ *
+ * 不负责读取Google Sheets，也不负责页面绘制。
  */
+
 export function isLeapYear(year) {
-  return (
-    Number.isInteger(year) &&
+  return Number.isInteger(year) &&
     (year % 400 === 0 ||
-      (year % 4 === 0 && year % 100 !== 0))
-  );
+      (year % 4 === 0 && year % 100 !== 0));
 }
 
-/**
- * 返回某年某月的实际天数。
- *
- * @param {number} year
- * @param {number} month - 1 至 12
- * @returns {number} 无效月份返回 0
- */
 export function getDaysInMonth(year, month) {
-  if (!Number.isInteger(month) || month < 1 || month > 12) {
+  if (!Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      month < 1 || month > 12) {
     return 0;
   }
 
   const days = [
-    31,
-    isLeapYear(year) ? 29 : 28,
+    31, isLeapYear(year) ? 29 : 28,
     31, 30, 31, 30,
     31, 31, 30, 31, 30, 31
   ];
@@ -50,28 +36,19 @@ export function getDaysInMonth(year, month) {
 }
 
 /**
- * 解析确定日期。
+ * 解析普通的确定日期。
  *
  * 支持：
- * - YYYY-MM-DD
- * - YYYY/MM/DD
- * - YYYY.MM.DD
- * - YYYY年M月D日
- * - 上述纯数字日期之后带有时间部分的字符串
- * - 有效 Date 对象
+ * YYYY-MM-DD
+ * YYYY/MM/DD
+ * YYYY.MM.DD
+ * YYYY年M月D日
+ * Date对象
  *
- * 不支持：
- * - 只有年份或年月
- * - 日期范围、模糊日期
- * - 无法识别的日期表达方式
- *
- * @param {string|Date} value
- * @returns {{year:number, month:number, day:number}|null}
+ * 不接受00日及其他非法日期。
  */
 export function parseExactDate(value) {
-  let year;
-  let month;
-  let day;
+  let year, month, day;
 
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
@@ -82,10 +59,8 @@ export function parseExactDate(value) {
   } else {
     const raw = String(value ?? '').trim();
 
-    if (!raw) return null;
-
     const match = raw.match(
-      /^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})(?:日)?(?=$|[T\s])/ 
+      /^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})(?:日)?(?=$|[T\s])/
     );
 
     if (!match) return null;
@@ -95,13 +70,8 @@ export function parseExactDate(value) {
     day = Number(match[3]);
   }
 
-  if (
-    !Number.isInteger(year) ||
-    year < 1 ||
-    year > 9999 ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day)
-  ) {
+  if (!Number.isInteger(year) ||
+      year < 1 || year > 9999) {
     return null;
   }
 
@@ -115,26 +85,70 @@ export function parseExactDate(value) {
 }
 
 /**
- * 将月、日映射为固定的横轴列索引。
+ * 解析矩阵日期。
  *
- * 使用闰年作为基准，因此：
- * 1 月 1 日 → 0
- * 2 月 29 日 → 59
- * 3 月 1 日 → 60
- * 12 月 31 日 → 365
+ * 普通日期返回 precision: "day"。
+ * YYYY-MM-00 返回 precision: "month"。
+ * 无效日期返回 null。
+ */
+export function parseMatrixDate(value) {
+  if (typeof value === 'string') {
+    const raw = value.trim();
+
+    const match = raw.match(
+      /^(\d{4})-(\d{2})-00$/
+    );
+
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+
+      if (year >= 1 && year <= 9999 &&
+          month >= 1 && month <= 12) {
+        return {
+          year,
+          month,
+          day: 0,
+          precision: 'month'
+        };
+      }
+
+      return null;
+    }
+  }
+
+  const date = parseExactDate(value);
+
+  if (!date) return null;
+
+  return {
+    ...date,
+    precision: 'day'
+  };
+}
+
+/**
+ * 将月、日转换成378列横轴索引。
  *
- * @param {number} month - 1 至 12
- * @param {number} day
- * @returns {number} 0 至 365；无效日期返回 -1
+ * 每月00日位于当月1日之前。
+ *
+ * 1月00日 -> 0
+ * 1月1日  -> 1
+ * 2月00日 -> 32
+ * 2月29日 -> 61
+ * 3月00日 -> 62
+ * 12月31日 -> 377
  */
 export function getDayIndex(month, day) {
+  if (!Number.isInteger(month) ||
+      !Number.isInteger(day) ||
+      month < 1 || month > 12) {
+    return -1;
+  }
+
   const maxDay = getDaysInMonth(2000, month);
 
-  if (
-    !Number.isInteger(day) ||
-    day < 1 ||
-    day > maxDay
-  ) {
+  if (day < 0 || day > maxDay) {
     return -1;
   }
 
@@ -143,31 +157,29 @@ export function getDayIndex(month, day) {
     182, 213, 244, 274, 305, 335
   ];
 
-  return daysBeforeMonth[month - 1] + day - 1;
+  // 前面每个月都增加一个00日。
+  return daysBeforeMonth[month - 1] +
+    (month - 1) + day;
 }
 
 /**
- * 生成横轴的 366 个日期标签。
- *
- * @returns {Array<{
- *   index:number,
- *   month:number,
- *   day:number,
- *   label:string
- * }>}
+ * 建立378个横轴日期对象。
  */
 export function buildDayColumns() {
   const columns = [];
 
   for (let month = 1; month <= 12; month++) {
-    const days = getDaysInMonth(2000, month);
+    const maxDay = getDaysInMonth(2000, month);
 
-    for (let day = 1; day <= days; day++) {
+    for (let day = 0; day <= maxDay; day++) {
       columns.push({
         index: getDayIndex(month, day),
         month,
         day,
-        label: `${month}月${day}日`
+        label: day === 0
+          ? `${month}月（日期未知）`
+          : `${month}月${day}日`,
+        precision: day === 0 ? 'month' : 'day'
       });
     }
   }
@@ -176,25 +188,19 @@ export function buildDayColumns() {
 }
 
 /**
- * 将事件数组转换为二维矩阵数据。
+ * 将标准化事件分配到年份和日期单元格。
  *
- * 输入使用现有 fetchAndNormalize() 的输出结构：
- * - Start
- * - Title
- * - id
- * - 其他事件元数据原样保留
+ * 输入：
+ * [{ Start: "...", Title: "..." }, ...]
  *
- * 年份只包含实际存在有效事件的年份。
- * 如果同一年、同一天有多个事件，存入同一数组。
- *
- * @param {Array<object>} events - 标准化事件数组
- * @returns {{
- *   columns:Array<object>,
- *   years:number[],
- *   cells:Map<number, Map<number, object[]>>,
- *   total:number,
- *   skipped:number
- * }}
+ * 输出：
+ * {
+ *   columns,
+ *   years,
+ *   cells,
+ *   total,
+ *   skipped
+ * }
  */
 export function buildMatrixData(events = []) {
   const columns = buildDayColumns();
@@ -204,16 +210,16 @@ export function buildMatrixData(events = []) {
   let skipped = 0;
 
   for (const event of events) {
-    const date = parseExactDate(event?.Start);
+    const date = parseMatrixDate(event?.Start);
 
     if (!date) {
       skipped++;
       continue;
     }
 
-    const columnIndex = getDayIndex(date.month, date.day);
+    const index = getDayIndex(date.month, date.day);
 
-    if (columnIndex < 0) {
+    if (index < 0) {
       skipped++;
       continue;
     }
@@ -224,15 +230,16 @@ export function buildMatrixData(events = []) {
 
     const yearCells = cells.get(date.year);
 
-    if (!yearCells.has(columnIndex)) {
-      yearCells.set(columnIndex, []);
+    if (!yearCells.has(index)) {
+      yearCells.set(index, []);
     }
 
-    yearCells.get(columnIndex).push(event);
+    yearCells.get(index).push(event);
     total++;
   }
 
-  const years = [...cells.keys()].sort((a, b) => b - a);
+  const years = [...cells.keys()]
+    .sort((a, b) => b - a);
 
   return {
     columns,
