@@ -2,30 +2,41 @@
 /* ==========================================================================
    世界电子游戏史二维矩阵 - 基础样式
 
-   功能：
-   1. 日期横轴（固定366列）
-   2. 年份纵轴
-   3. 事件标题卡片
-   4. 双向原生滚动
-   5. 日期表头和年份标签固定
-   6. 隐藏矩阵网格线，保留事件卡片边框
+   横轴：
+   - 366个真实日期
+   - 12个月度日期未知位置
+   - 合计378列
 
-   暂不包括：
+   纵轴：
+   - 年份，从新到旧
+
+   功能：
+   - 事件标题卡片
+   - 双向原生滚动
+   - 固定日期表头及年份标签
+   - 不显示矩阵网格线
+   - 保留事件卡片边框
+
+   暂不支持：
    - 过滤器
    - 自定义格式
-   - 缩放
-   - 日期跳转
+   - 单轴缩放
+   - 时间点跳转
    ========================================================================== */
 
 :root {
+  --matrix-column-count: 378;
+
   --matrix-cell-width: 220px;
   --matrix-year-width: 88px;
   --matrix-header-height: 58px;
 
   --matrix-border: #dbe2ea;
+
   --matrix-background: #ffffff;
   --matrix-header-background: #f1f5f9;
   --matrix-cell-background: #ffffff;
+
   --matrix-card-background: #eff6ff;
   --matrix-card-border: #93c5fd;
 
@@ -33,7 +44,9 @@
   --matrix-muted: #64748b;
 }
 
-/* 全局基础样式 */
+/* ==========================================================================
+   1. 全局基础样式
+   ========================================================================== */
 
 * {
   box-sizing: border-box;
@@ -41,6 +54,7 @@
 
 body {
   margin: 0;
+
   font-family:
     system-ui,
     -apple-system,
@@ -48,34 +62,42 @@ body {
     "Microsoft YaHei",
     "PingFang SC",
     sans-serif;
+
   color: var(--matrix-text);
   background: #f8fafc;
 }
 
-/* 页面整体 */
+/* ==========================================================================
+   2. 页面整体
+   ========================================================================== */
 
 .matrix-page {
   display: flex;
   flex-direction: column;
+
   height: 100vh;
   min-height: 400px;
 }
 
-/* 顶部标题和状态信息 */
+/* 页面顶部标题和状态 */
 
 .matrix-topbar {
   flex: 0 0 auto;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
   padding: 14px 20px;
+
   background: #ffffff;
   border-bottom: 1px solid var(--matrix-border);
 }
 
 .matrix-page-title {
   margin: 0;
+
   font-size: 20px;
   font-weight: 700;
 }
@@ -89,11 +111,14 @@ body {
   color: #b91c1c;
 }
 
-/* 页面主区域 */
+/* ==========================================================================
+   3. 矩阵主区域
+   ========================================================================== */
 
 .matrix-main {
   flex: 1 1 auto;
   min-height: 0;
+
   padding: 12px;
 }
 
@@ -102,23 +127,41 @@ body {
 .matrix-scroll {
   width: 100%;
   height: 100%;
+
   overflow: auto;
   position: relative;
+
   background: var(--matrix-background);
+
   border: 1px solid var(--matrix-border);
   border-radius: 8px;
 }
 
-/* 整个二维矩阵使用统一的列坐标 */
+/* ==========================================================================
+   4. 二维矩阵网格
+   ========================================================================== */
+
+/*
+ * 第一列：年份标签
+ * 后续378列：日期坐标
+ *
+ * 使用统一的CSS Grid坐标，
+ * 保证不同年份的同一日期严格对齐。
+ */
 
 .matrix-grid {
   display: grid;
+
   grid-template-columns:
     var(--matrix-year-width)
-    repeat(366, var(--matrix-cell-width));
+    repeat(
+      var(--matrix-column-count),
+      var(--matrix-cell-width)
+    );
 
   width: max-content;
   min-width: 100%;
+
   align-content: start;
 
   border: none;
@@ -126,12 +169,16 @@ body {
   box-shadow: none;
 }
 
-/* 日期标题行 */
+/* ==========================================================================
+   5. 日期标题行
+   ========================================================================== */
 
 .matrix-header-row {
   display: grid;
+
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
+
   position: sticky;
   top: 0;
   z-index: 10;
@@ -147,12 +194,15 @@ body {
   position: sticky;
   left: 0;
   z-index: 12;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   min-height: var(--matrix-header-height);
 
   background: #e2e8f0;
+
   font-weight: 700;
   font-size: 13px;
 
@@ -161,16 +211,18 @@ body {
   box-shadow: none;
 }
 
-/* 横轴日期标签 */
+/* 普通日期标签 */
 
 .matrix-day-header {
   display: flex;
   align-items: center;
   justify-content: center;
+
   min-height: var(--matrix-header-height);
   padding: 6px;
 
   background: var(--matrix-header-background);
+
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -180,10 +232,25 @@ body {
   box-shadow: none;
 }
 
-/* 年份行 */
+/*
+ * 月度日期未知标签。
+ *
+ * 仅调整表头背景与字体颜色，
+ * 不改变网格宽度或事件卡片。
+ */
+
+.matrix-day-header.matrix-month-header {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ==========================================================================
+   6. 年份行
+   ========================================================================== */
 
 .matrix-year-row {
   display: grid;
+
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
 
@@ -198,12 +265,15 @@ body {
   position: sticky;
   left: 0;
   z-index: 5;
+
   display: flex;
   align-items: flex-start;
   justify-content: center;
+
   padding: 15px 6px;
 
   background: #e2e8f0;
+
   font-size: 15px;
   font-weight: 700;
 
@@ -212,34 +282,53 @@ body {
   box-shadow: none;
 }
 
-/* 日期与年份的交叉单元格 */
+/* ==========================================================================
+   7. 日期与年份的交叉单元格
+   ========================================================================== */
 
 .matrix-cell {
   min-height: 80px;
   min-width: 0;
+
   display: flex;
   flex-direction: column;
   align-items: stretch;
+
   gap: 7px;
   padding: 8px;
 
   background: var(--matrix-cell-background);
 
-  /* 不显示横向或纵向网格线 */
+  /* 不显示矩阵网格线 */
   border: none;
   outline: none;
   box-shadow: none;
 }
 
-/* 事件卡片 */
+/*
+ * 月度日期未知单元格。
+ *
+ * 第一阶段不使用特殊背景，
+ * 保持所有事件卡片视觉一致。
+ */
+
+.matrix-cell.matrix-month-cell {
+  background: var(--matrix-cell-background);
+}
+
+/* ==========================================================================
+   8. 事件卡片
+   ========================================================================== */
 
 .matrix-card {
   width: 100%;
   min-width: 0;
+
   padding: 10px;
 
   border: 1px solid var(--matrix-card-border);
   border-radius: 6px;
+
   background: var(--matrix-card-background);
 
   overflow-wrap: anywhere;
@@ -249,21 +338,28 @@ body {
 
 .matrix-card .event-title {
   margin: 0;
+
   font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
+
   white-space: normal;
 }
 
-/* 空数据、异常状态 */
+/* ==========================================================================
+   9. 空数据与异常信息
+   ========================================================================== */
 
 .matrix-message {
   padding: 24px;
+
   color: var(--matrix-muted);
   font-size: 14px;
 }
 
-/* 小屏幕适配 */
+/* ==========================================================================
+   10. 小屏幕适配
+   ========================================================================== */
 
 @media (max-width: 640px) {
   .matrix-topbar {
