@@ -1,0 +1,407 @@
+
+/* ==========================================================================
+   Matrix Style UI
+   仅负责样式编辑界面，不改变事件卡片样式。
+   ========================================================================== */
+
+.mx-style-dialog-open {
+  overflow: hidden;
+}
+
+/* 五个样式按钮 */
+
+.mx-style-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: .35rem .6rem;
+  margin-left: 8px;
+
+  border: 1px solid #dadde1;
+  border-radius: .5rem;
+
+  background: #ffffff;
+  color: #222222;
+
+  font: inherit;
+  font-size: .9rem;
+  cursor: pointer;
+}
+
+.mx-style-trigger:hover {
+  background: #f6f7f9;
+}
+
+/* 弹窗基础 */
+
+.mx-style-overlay[hidden],
+.mx-style-picker-overlay[hidden],
+.mx-style-panel [hidden] {
+  display: none !important;
+}
+
+.mx-style-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.mx-style-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .35);
+}
+
+.mx-style-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  display: flex;
+  flex-direction: column;
+
+  width: min(980px, 94vw);
+  max-height: 80vh;
+
+  overflow: hidden;
+
+  background: #ffffff;
+  color: #222222;
+
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25);
+
+  font-family:
+    system-ui,
+    "Microsoft YaHei",
+    "PingFang SC",
+    sans-serif;
+  font-size: 14px;
+}
+
+/* 弹窗顶部 */
+
+.mx-style-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  flex: 0 0 auto;
+  gap: 20px;
+
+  padding: 14px 18px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.mx-style-panel-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.mx-style-muted {
+  margin: 4px 0 0;
+  color: #666666;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mx-style-close {
+  border: none;
+  background: transparent;
+
+  font-size: 24px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+/* 编辑区域 */
+
+.mx-style-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  padding: 16px 18px;
+  overflow: auto;
+}
+
+.mx-style-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  margin-bottom: 12px;
+}
+
+.mx-style-actions label {
+  white-space: nowrap;
+}
+
+.mx-style-actions select,
+.mx-style-actions button,
+.mx-style-panel button,
+.mx-style-picker button {
+  font: inherit;
+}
+
+.mx-style-actions select,
+.mx-style-input {
+  max-width: 100%;
+
+  padding: 6px 8px;
+
+  border: 1px solid #cccccc;
+  border-radius: 5px;
+
+  background: #ffffff;
+  color: #222222;
+}
+
+.mx-style-panel button:not(.mx-style-close),
+.mx-style-picker button {
+  padding: 6px 10px;
+
+  border: 1px solid #cccccc;
+  border-radius: 5px;
+
+  background: #ffffff;
+  color: #222222;
+
+  cursor: pointer;
+}
+
+.mx-style-panel button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.mx-style-panel button:hover:not(:disabled),
+.mx-style-picker button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+/* 样式规则表格 */
+
+.mx-style-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mx-style-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.mx-style-table thead {
+  border-bottom: 1px solid #eeeeee;
+}
+
+.mx-style-table th,
+.mx-style-table td {
+  padding: 10px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.mx-style-table th:nth-child(1) {
+  width: 36%;
+}
+
+.mx-style-table th:nth-child(3) {
+  width: 72px;
+}
+
+.mx-style-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* 字体或颜色控件 */
+
+.mx-style-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mx-style-color {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+
+  cursor: pointer;
+}
+
+.mx-style-hex {
+  width: 115px;
+  max-width: 100%;
+
+  padding: 6px;
+
+  border: 1px solid #cccccc;
+  border-radius: 5px;
+
+  font: inherit;
+}
+
+/* 已选属性值 */
+
+.mx-style-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  min-height: 28px;
+  margin-bottom: 6px;
+}
+
+.mx-style-chip {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 2px 7px;
+
+  border: 1px solid #cccccc;
+  border-radius: 12px;
+
+  font-size: 12px;
+}
+
+/* 底部 */
+
+.mx-style-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+
+  flex: 0 0 auto;
+  gap: 12px;
+
+  padding: 12px 18px;
+  border-top: 1px solid #eeeeee;
+}
+
+.mx-style-primary,
+.mx-style-panel button.mx-style-primary,
+.mx-style-picker button.mx-style-primary {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+
+.mx-style-panel button.mx-style-primary:hover,
+.mx-style-picker button.mx-style-primary:hover {
+  background: #333333;
+}
+
+/* 属性值选择窗口 */
+
+.mx-style-picker-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 10000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 16px;
+  background: rgba(0, 0, 0, .35);
+}
+
+.mx-style-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  width: min(720px, 92vw);
+  max-height: 75vh;
+
+  padding: 16px;
+
+  overflow: hidden;
+
+  background: #ffffff;
+  color: #222222;
+
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .3);
+}
+
+.mx-style-picker h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.mx-style-value-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fill, minmax(160px, 1fr));
+
+  gap: 8px;
+
+  min-height: 50px;
+  overflow-y: auto;
+}
+
+.mx-style-value-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 7px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.mx-style-value-item.is-taken {
+  opacity: .55;
+}
+
+.mx-style-value-item input {
+  flex: 0 0 auto;
+}
+
+.mx-style-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 窄屏幕 */
+
+@media (max-width: 640px) {
+  .mx-style-panel {
+    width: 96vw;
+    max-height: 90vh;
+  }
+
+  .mx-style-panel-header,
+  .mx-style-panel-body,
+  .mx-style-panel-footer {
+    padding: 12px;
+  }
+
+  .mx-style-table {
+    min-width: 550px;
+  }
+
+  .mx-style-value-grid {
+    grid-template-columns: 1fr;
+  }
+}
