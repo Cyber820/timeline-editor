@@ -1,20 +1,34 @@
 
 // public/src/matrix/matrix.js
 // =============================================================================
-// 世界电子游戏史二维矩阵 - 页面主程序
+// 世界电子游戏史二维矩阵 - 主程序
+//
+// 数据：world-zh Google Apps Script
+// 接口：/exec?action=matrix
+//
+// 横轴：378列（366个确定日期 + 12个月度日期未知位置）
+// 纵轴：年份，从新到旧
 //
 // 当前功能：
-// - 读取 world-zh 的 action=matrix 接口
-// - 378列日期坐标
-// - 年份纵轴
-// - 事件标题卡片
-// - 过滤/筛选 UI（尚未连接实际过滤）
+// - 读取并标准化事件
+// - 二维卡片矩阵
+// - 无网格线布局
+// - 复用原有过滤/筛选界面
+// - 实际 AND/OR 过滤
+// - 删除规则与 Reset
+// - 保留筛选前后的滚动位置
 //
-// 原时间轴 app.js、mount.js 不受影响。
+// 尚未实现：
+// - 自定义事件格式
+// - 日期跳转
+// - 独立单轴缩放
 // =============================================================================
 
 import { getVariant } from '../variant/variant.js';
-import { fetchAndNormalize } from '../timeline/fetch.js';
+
+import {
+  fetchAndNormalize
+} from '../timeline/fetch.js';
 
 import {
   buildMatrixData,
@@ -22,13 +36,26 @@ import {
 } from './matrix-data.js';
 
 import {
+  applyFilters
+} from '../filter/filter-engine.js';
+
+import {
   initMatrixFilterUI
 } from './matrix-filter-ui.js';
+
 
 // =============================================================================
 // 1. DOM辅助函数
 // =============================================================================
 
+/**
+ * 创建HTML元素。
+ *
+ * @param {string} tag
+ * @param {string} className
+ * @param {string} text
+ * @returns {HTMLElement}
+ */
 function createElement(tag, className, text = '') {
   const element = document.createElement(tag);
 
@@ -43,10 +70,17 @@ function createElement(tag, className, text = '') {
   return element;
 }
 
+
 // =============================================================================
 // 2. 事件卡片
 // =============================================================================
 
+/**
+ * 创建事件标题卡片。
+ *
+ * @param {object} event
+ * @returns {HTMLElement}
+ */
 function createEventCard(event) {
   const card = createElement(
     'article',
@@ -64,10 +98,17 @@ function createEventCard(event) {
   return card;
 }
 
+
 // =============================================================================
-// 3. 日期标题行
+// 3. 横轴日期标题
 // =============================================================================
 
+/**
+ * 生成完整日期标题行。
+ *
+ * @param {Array<object>} columns
+ * @returns {HTMLElement}
+ */
 function createHeaderRow(columns) {
   const row = createElement(
     'div',
@@ -105,10 +146,19 @@ function createHeaderRow(columns) {
   return row;
 }
 
+
 // =============================================================================
-// 4. 年份行
+// 4. 纵轴年份行
 // =============================================================================
 
+/**
+ * 生成某个年份的完整行。
+ *
+ * @param {number} year
+ * @param {Array<object>} columns
+ * @param {Map<number,object[]>} yearCells
+ * @returns {HTMLElement}
+ */
 function createYearRow(year, columns, yearCells) {
   const row = createElement(
     'div',
@@ -126,11 +176,10 @@ function createYearRow(year, columns, yearCells) {
   const fragment = document.createDocumentFragment();
 
   for (const column of columns) {
-    const isMonth = column.precision === 'month';
-
-    const className = isMonth
-      ? 'matrix-cell matrix-month-cell'
-      : 'matrix-cell';
+    const className =
+      column.precision === 'month'
+        ? 'matrix-cell matrix-month-cell'
+        : 'matrix-cell';
 
     const cell = createElement(
       'div',
@@ -139,16 +188,10 @@ function createYearRow(year, columns, yearCells) {
 
     const events = yearCells.get(column.index) || [];
 
-    if (events.length > 0) {
-      const cards = document.createDocumentFragment();
-
-      for (const event of events) {
-        cards.appendChild(
-          createEventCard(event)
-        );
-      }
-
-      cell.appendChild(cards);
+    for (const event of events) {
+      cell.appendChild(
+        createEventCard(event)
+      );
     }
 
     fragment.appendChild(cell);
@@ -159,13 +202,23 @@ function createYearRow(year, columns, yearCells) {
   return row;
 }
 
+
 // =============================================================================
-// 5. 矩阵绘制
+// 5. 矩阵渲染
 // =============================================================================
 
+/**
+ * 渲染二维矩阵。
+ *
+ * @param {HTMLElement} container
+ * @param {object} matrixData
+ * @returns {void}
+ */
 export function renderMatrix(container, matrixData) {
   if (!(container instanceof HTMLElement)) {
-    throw new Error('[matrix] invalid container');
+    throw new Error(
+      '[matrix] Invalid container.'
+    );
   }
 
   const { columns, years, cells } = matrixData;
@@ -177,10 +230,9 @@ export function renderMatrix(container, matrixData) {
       createElement(
         'div',
         'matrix-message',
-        '未找到包含有效日期的事件。'
+        '当前筛选条件下没有符合要求的事件。'
       )
     );
-
     return;
   }
 
@@ -199,20 +251,33 @@ export function renderMatrix(container, matrixData) {
   );
 
   for (const year of years) {
-    const yearCells = cells.get(year) || new Map();
+    const yearCells =
+      cells.get(year) || new Map();
 
     grid.appendChild(
-      createYearRow(year, columns, yearCells)
+      createYearRow(
+        year,
+        columns,
+        yearCells
+      )
     );
   }
 
   container.appendChild(grid);
 }
 
+
 // =============================================================================
 // 6. 页面状态
 // =============================================================================
 
+/**
+ * 更新顶部状态信息。
+ *
+ * @param {string} message
+ * @param {boolean} isError
+ * @returns {void}
+ */
 function setStatus(message, isError = false) {
   const status = document.getElementById(
     'matrix-status'
@@ -224,17 +289,25 @@ function setStatus(message, isError = false) {
   status.dataset.error = String(isError);
 }
 
+
 // =============================================================================
 // 7. 月度事件统计
 // =============================================================================
 
+/**
+ * 统计事件数组中的月度日期事件。
+ *
+ * @param {Array<object>} events
+ * @returns {number}
+ */
 function countMonthlyEvents(events) {
   let count = 0;
 
   for (const event of events) {
-    const date = parseMatrixDate(event?.Start);
-
-    if (date?.precision === 'month') {
+    if (
+      parseMatrixDate(event?.Start)?.precision
+      === 'month'
+    ) {
       count++;
     }
   }
@@ -242,10 +315,16 @@ function countMonthlyEvents(events) {
   return count;
 }
 
+
 // =============================================================================
-// 8. 矩阵初始化
+// 8. 初始化和过滤管理
 // =============================================================================
 
+/**
+ * 初始化二维矩阵页面。
+ *
+ * @returns {Promise<void>}
+ */
 export async function initMatrix() {
   const container = document.getElementById(
     'matrix'
@@ -253,25 +332,121 @@ export async function initMatrix() {
 
   if (!container) {
     throw new Error(
-      '[matrix] #matrix container not found'
+      '[matrix] #matrix container not found.'
     );
   }
 
-  // 保存全部原始事件。
-  // 过滤界面可以读取，但本阶段不能修改显示结果。
-  let allEvents = [];
-
-  // ------------------------------------------------------------
-  // 新增：初始化过滤界面。
+  // ---------------------------------------------------------------------------
+  // 数据状态
   //
-  // 这里只连接 UI 与规则状态。
-  // 不调用 applyFilters()。
-  // 不重新绘制矩阵。
-  // ------------------------------------------------------------
+  // allEvents：
+  //   保存全部原始标准化事件。
+  //
+  // currentEvents：
+  //   当前实际显示的事件。
+  //
+  // dataReady：
+  //   是否完成首次数据加载。
+  // ---------------------------------------------------------------------------
+
+  let allEvents = [];
+  let currentEvents = [];
+  let dataReady = false;
+
+  // ---------------------------------------------------------------------------
+  // 更新状态栏
+  //
+  // 只统计进入当前矩阵的数据。
+  // Apps Script端已跳过的数据不在统计范围内。
+  // ---------------------------------------------------------------------------
+
+  function updateMatrixStatus(matrixData) {
+    const monthlyCount =
+      countMonthlyEvents(currentEvents);
+
+    const totalOriginal = allEvents.length;
+
+    setStatus(
+      `已展示 ${matrixData.total} / ${totalOriginal} 条事件，` +
+      `其中月度日期事件 ${monthlyCount} 条；` +
+      `涉及 ${matrixData.years.length} 个年份；` +
+      `跳过 ${matrixData.skipped} 条无法解析日期的记录。`
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 重新绘制当前事件
+  //
+  // 保留目前的滚动位置。
+  //
+  // 当筛选结果减少时，浏览器可能自动限制滚动范围。
+  // 这是正常行为。
+  // ---------------------------------------------------------------------------
+
+  function redrawCurrentEvents() {
+    const oldScrollLeft = container.scrollLeft;
+    const oldScrollTop = container.scrollTop;
+
+    const matrixData =
+      buildMatrixData(currentEvents);
+
+    renderMatrix(
+      container,
+      matrixData
+    );
+
+    container.scrollLeft = oldScrollLeft;
+    container.scrollTop = oldScrollTop;
+
+    updateMatrixStatus(matrixData);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 应用过滤规则
+  //
+  // 由过滤UI在以下情况下调用：
+  // - 选择AND
+  // - 选择OR
+  // - 删除规则
+  // - Reset
+  //
+  // 新增规则时不会调用。
+  // ---------------------------------------------------------------------------
+
+  function applyMatrixFilter(state) {
+    if (!dataReady) {
+      return;
+    }
+
+    currentEvents = applyFilters(
+      allEvents,
+      state
+    );
+
+    redrawCurrentEvents();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 初始化过滤界面
+  //
+  // getItems():
+  //   始终返回全部事件，保证候选项完整。
+  //
+  // onApply():
+  //   只有需要实际筛选时才调用。
+  // ---------------------------------------------------------------------------
 
   initMatrixFilterUI({
-    getItems: () => allEvents
+    getItems: () => allEvents,
+
+    onApply: (state) => {
+      applyMatrixFilter(state);
+    }
   });
+
+  // ---------------------------------------------------------------------------
+  // 读取事件数据
+  // ---------------------------------------------------------------------------
 
   try {
     setStatus('正在读取事件数据……');
@@ -280,18 +455,21 @@ export async function initMatrix() {
 
     if (variant.key !== 'world-zh') {
       console.warn(
-        '[matrix] 当前页面不是world-zh配置：',
+        '[matrix] Current variant:',
         variant.key
       );
     }
 
-    const eventsEndpoint = variant?.endpoints?.events;
+    const eventsEndpoint =
+      variant?.endpoints?.events;
 
     if (!eventsEndpoint) {
-      throw new Error('未找到事件数据接口');
+      throw new Error(
+        '未找到world-zh事件数据接口。'
+      );
     }
 
-    // 请求矩阵专用接口。
+    // 添加矩阵专用接口参数。
     const endpoint = new URL(eventsEndpoint);
 
     endpoint.searchParams.set(
@@ -299,28 +477,36 @@ export async function initMatrix() {
       'matrix'
     );
 
-    globalThis.TIMELINE_ENDPOINT = endpoint.toString();
+    globalThis.TIMELINE_ENDPOINT =
+      endpoint.toString();
 
-    // 读取并保存完整事件数组。
-    const events = await fetchAndNormalize();
+    // 使用原有数据读取与标准化模块。
+    const events =
+      await fetchAndNormalize();
 
     if (!Array.isArray(events)) {
       throw new Error(
-        '事件接口返回的数据不是数组'
+        '事件接口返回的数据不是数组。'
       );
     }
 
     allEvents = events;
+    currentEvents = events.slice();
 
     setStatus('正在生成二维矩阵……');
 
-    // 不进行任何过滤。
-    const matrixData = buildMatrixData(allEvents);
+    // -------------------------------------------------------------------------
+    // 初次绘制：默认显示所有事件。
+    // 不应用过滤规则。
+    // -------------------------------------------------------------------------
+
+    const matrixData =
+      buildMatrixData(currentEvents);
 
     if (matrixData.columns.length !== 378) {
       throw new Error(
-        `日期坐标数量异常：` +
-        `${matrixData.columns.length}列，预期378列`
+        '矩阵日期坐标数量不正确：' +
+        matrixData.columns.length
       );
     }
 
@@ -329,20 +515,21 @@ export async function initMatrix() {
       matrixData
     );
 
-    const monthlyCount = countMonthlyEvents(
-      allEvents
-    );
+    dataReady = true;
 
-    setStatus(
-      `已展示 ${matrixData.total} 条事件，` +
-      `其中月度日期事件 ${monthlyCount} 条；` +
-      `涉及 ${matrixData.years.length} 个年份；` +
-      `跳过 ${matrixData.skipped} 条无法解析日期的记录。`
+    updateMatrixStatus(matrixData);
+
+    console.info(
+      '[matrix] Loaded:',
+      allEvents.length,
+      'events.'
     );
 
   } catch (error) {
+    dataReady = false;
+
     console.error(
-      '[matrix] initialization failed:',
+      '[matrix] Initialization failed:',
       error
     );
 
@@ -356,12 +543,16 @@ export async function initMatrix() {
       )
     );
 
-    setStatus('数据加载失败', true);
+    setStatus(
+      '数据加载失败',
+      true
+    );
   }
 }
 
+
 // =============================================================================
-// 9. 页面自动启动
+// 9. 自动启动
 // =============================================================================
 
 if (document.readyState === 'loading') {
