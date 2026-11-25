@@ -1,53 +1,67 @@
 
 ### matrix-filter-ui.js
 
-定位：二维矩阵过滤/筛选界面接入模块。
+定位：二维矩阵过滤界面及事件桥接模块。
 
 依赖：
 - ../filter/filter-ui.js
 - ../filter/filter-state.js
 
-#### initMatrixFilterUI({ getItems })
-
-初始化二维矩阵的过滤界面。
+#### initMatrixFilterUI({ getItems, onApply })
 
 参数：
 - getItems：Function
-- 返回未经筛选的标准化事件数组
-- 默认返回空数组
+  返回全部未经筛选的标准化事件数组。
+- onApply：Function
+  在需要实际执行筛选时调用，参数为当前过滤状态快照。
 
 返回：
 - void
 
+交互规则：
+- 新增规则：仅更新规则状态，不立即筛选。
+- AND/OR：立即应用全部规则。
+- 删除规则：立即重新筛选。
+- Reset：清空规则并恢复全部事件。
+
+### matrix.js：过滤功能
+
+新增依赖：
+- ../filter/filter-engine.js
+- ./matrix-filter-ui.js
+
+新增内部函数：
+
+#### applyMatrixFilter(state)
+
+参数：
+- state：过滤状态对象，包含logic和rules。
+
 功能：
-- 调用现有 initFilterUI() 创建过滤工具栏与面板
-- 将过滤界面挂载在 #matrix 容器之前
-- 复用现有的过滤字段、选项及搜索界面
-- 登记和删除过滤规则
-- 更新 AND/OR 状态
-- 重置过滤规则
+- 调用现有applyFilters()。
+- 保存筛选结果。
+- 重新绘制矩阵。
 
-当前限制：
-- 不调用 applyFilters()
-- 不更新矩阵显示的事件
-- 不保存规则到浏览器持久存储
-- 每个页面生命周期只初始化一次
+#### redrawCurrentEvents()
 
-### matrix.js：本阶段新增依赖
+参数：无。
 
-新增：
-- import initMatrixFilterUI()
+功能：
+- 使用当前事件数组重建矩阵。
+- 尽可能保留原有滚动位置。
+- 更新事件数量统计。
 
-initMatrix() 新增行为：
-- 保存完整的标准化事件数组 allEvents
-- 初始化过滤界面
-- 将 getItems 回调提供给过滤面板
-- 保持原矩阵渲染流程不变
+#### updateMatrixStatus(matrixData)
 
-### matrix.css：本阶段布局变更
+参数：
+- matrixData：buildMatrixData()返回的数据。
 
-- .matrix-main 使用纵向 Flex 布局
-- .tl-toolbar 位于矩阵滚动区域上方
-- .matrix-scroll 占用剩余高度
-- 过滤面板的视觉样式仍由原有 filter-ui.js 提供
-- 保留378列、无网格线及事件卡片样式
+功能：
+- 显示当前事件数量及原始事件数量。
+- 显示月度事件数量、年份数量和跳过记录数。
+
+过滤状态由原有filter-state.js管理。
+过滤判断由原有filter-engine.js执行。
+
+当前默认显示全部事件，不预设重要性过滤。
+```
