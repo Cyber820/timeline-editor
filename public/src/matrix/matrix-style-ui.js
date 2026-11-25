@@ -1,26 +1,40 @@
 
 /**
- * public/src/matrix/matrix-style-ui.js
+ * 文件路径：public/src/matrix/matrix-style-ui.js
  *
- * 二维矩阵样式编辑 UI（未接样式引擎）
+ * 功能：
+ * - 五个事件样式编辑窗口
+ * - 属性与样式类型绑定
+ * - 属性值搜索、多选及冲突检查
+ * - 颜色、字体编辑
+ * - 样式行新增、删除、重置
+ * - 调用原样式引擎编译并应用CSS
  *
- * 参照原时间轴 timeline/mount.js 中的样式编辑器。
+ * 依赖：
+ * - ../timeline/fetch.js
+ * - ../_staging/constants.js
+ * - ../style/engine.js
+ * - matrix-style-ui.css
  *
- * 当前支持：
- * - 五个样式按钮
- * - 样式类型绑定与互斥
- * - 新增、删除样式行
- * - 颜色与字体设置
- * - 属性值多选、占用检查
- * - 重置、保存、关闭
- *
- * 当前不支持：
- * - 将样式应用到矩阵事件
- * - localStorage 持久化
- * - 原时间轴 styleState 写入
+ * 样式只作用于当前矩阵页面。
+ * 状态保存在页面内存中，不使用localStorage。
  */
 
 import { fetchAndNormalize } from '../timeline/fetch.js';
+
+import {
+  ENGINE_KEY_MAP,
+  buildEngineStyleState
+} from '../_staging/constants.js';
+
+import {
+  compileStyleRules,
+  injectUserStyle
+} from '../style/engine.js';
+
+// =============================================================================
+// 1. 属性与样式类型
+// =============================================================================
 
 const ATTRIBUTES = [
   { key: 'EventType', label: '事件样式', name: '事件类型' },
@@ -40,8 +54,10 @@ const STYLE_TYPES = [
 
 const FONTS = [
   ['', '（默认字体）'],
-  ['Microsoft YaHei, PingFang SC, Noto Sans SC, system-ui',
-    'Microsoft YaHei / PingFang / Noto Sans SC'],
+  [
+    'Microsoft YaHei, PingFang SC, Noto Sans SC, system-ui',
+    'Microsoft YaHei / PingFang / Noto Sans SC'
+  ],
   ['SimHei', 'SimHei'],
   ['SimSun', 'SimSun'],
   ['KaiTi', 'KaiTi'],
@@ -51,7 +67,10 @@ const FONTS = [
   ['FZShuTi', 'FZShuTi']
 ];
 
-// UI 本地状态；不与原 styleState 连接。
+// =============================================================================
+// 2. 模块状态
+// =============================================================================
+
 const uiState = {
   boundTypes: {},
   rules: {}
@@ -64,17 +83,30 @@ let initialized = false;
 let dialog = null;
 let previousFocus = null;
 
+// =============================================================================
+// 3. DOM辅助函数
+// =============================================================================
+
 function el(tag, className = '', text = '') {
   const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== '') node.textContent = text;
+
+  if (className) {
+    node.className = className;
+  }
+
+  if (text !== '') {
+    node.textContent = text;
+  }
+
   return node;
 }
 
 function button(text, handler, className = '') {
   const node = el('button', className, text);
+
   node.type = 'button';
   node.addEventListener('click', handler);
+
   return node;
 }
 
@@ -91,7 +123,10 @@ function getBoundType(key) {
 }
 
 function getRules(key) {
-  if (!uiState.rules[key]) uiState.rules[key] = [];
+  if (!uiState.rules[key]) {
+    uiState.rules[key] = [];
+  }
+
   return uiState.rules[key];
 }
 
@@ -100,6 +135,10 @@ function getOwner(type) {
     key => uiState.boundTypes[key] === type
   );
 }
+
+// =============================================================================
+// 4. 样式规则对象
+// =============================================================================
 
 function createRule(type) {
   return {
@@ -116,11 +155,15 @@ function normalizeHex(input) {
   let value = String(input || '').trim();
 
   if (!value) return null;
-  if (!value.startsWith('#')) value = '#' + value;
+
+  if (!value.startsWith('#')) {
+    value = '#' + value;
+  }
 
   if (/^#[0-9a-f]{3}$/i.test(value)) {
     value = '#' + [...value.slice(1)]
-      .map(char => char + char).join('');
+      .map(char => char + char)
+      .join('');
   }
 
   return /^#[0-9a-f]{6}$/i.test(value)
@@ -135,15 +178,89 @@ function splitValues(value) {
 
   return String(value ?? '')
     .split(/[,，;；]/)
-    .map(x => x.trim())
+    .map(value => value.trim())
     .filter(Boolean);
 }
 
+// =============================================================================
+// 5. 样式引擎接线
+// =============================================================================
+
 /**
- * 读取真实候选属性值。
+ * 将当前UI规则转换为原有样式引擎的状态。
  *
- * 首次打开样式窗口时才读取。
- * 使用现有矩阵接口，不修改数据。
+ * UI字段：
+ * fontColor、backgroundColor
+ *
+ * 引擎字段：
+ * textColor、bgColor
+ *
+ * 使用原项目已有的ENGINE_KEY_MAP转换。
+ *
+ * @returns {Object} EngineStyleState
+ */
+export function getMatrixEngineStyleState() {
+  const rules = {};
+
+  for (const [attribute, rows] of Object.entries(uiState.rules)) {
+    // 去除没有属性值或没有有效样式值的规则。
+    rules[attribute] = rows.filter(rule => {
+      const hasValues =
+        Array.isArray(rule.values) &&
+        rule.values.length > 0;
+
+      const styleValue = rule.style?.[rule.type];
+
+      const hasStyle =
+        typeof styleValue === 'string' &&
+        styleValue.trim() !== '';
+
+      return hasValues && hasStyle;
+    });
+  }
+
+  return buildEngineStyleState(
+    uiState.boundTypes,
+    rules,
+    ENGINE_KEY_MAP
+  );
+}
+
+/**
+ * 编译并应用当前样式。
+ *
+ * 只对.matrix-card.event生效。
+ * 不调用原时间轴的mount.js。
+ * 不写入共享styleState或localStorage。
+ *
+ * @returns {void}
+ */
+export function applyMatrixStyles() {
+  const state = getMatrixEngineStyleState();
+
+  const css = compileStyleRules(state, {
+    selectorBase: '.matrix-card.event',
+    titleSelector: '.event-title',
+    borderWidthPx: 2
+  });
+
+  injectUserStyle(css);
+
+  console.info(
+    '[matrix-style-ui] Style rules applied.',
+    state
+  );
+}
+
+// =============================================================================
+// 6. 读取候选事件
+// =============================================================================
+
+/**
+ * 读取矩阵使用的标准化事件。
+ *
+ * 当前页面已经将TIMELINE_ENDPOINT设置为
+ * action=matrix，因此可以复用现有fetch.js。
  *
  * @returns {Promise<Array<object>>}
  */
@@ -156,6 +273,7 @@ async function getEvents() {
       if (!Array.isArray(items)) {
         throw new Error('事件接口未返回数组');
       }
+
       eventsCache = items;
       return items;
     })
@@ -167,25 +285,28 @@ async function getEvents() {
 }
 
 function collectOptions(key) {
-  const result = new Set();
+  const values = new Set();
 
   for (const event of eventsCache || []) {
     for (const value of splitValues(event[key])) {
-      result.add(value);
+      values.add(value);
     }
   }
 
-  // 同时保留已在 UI 中选择的值。
   for (const rule of getRules(key)) {
     for (const value of rule.values) {
-      result.add(value);
+      values.add(value);
     }
   }
 
-  return [...result].sort((a, b) =>
-    a.localeCompare(b, 'zh-CN')
+  return [...values].sort(
+    (a, b) => a.localeCompare(b, 'zh-CN')
   );
 }
+
+// =============================================================================
+// 7. 颜色与字体控件
+// =============================================================================
 
 function createStyleControl(rule) {
   const wrap = el('div', 'mx-style-control');
@@ -194,11 +315,11 @@ function createStyleControl(rule) {
     const select = el('select', 'mx-style-input');
 
     for (const [value, label] of FONTS) {
-      const option = new Option(label, value);
-      select.add(option);
+      select.add(new Option(label, value));
     }
 
     select.value = rule.style.fontFamily || '';
+
     select.addEventListener('change', () => {
       rule.style.fontFamily = select.value;
     });
@@ -214,8 +335,9 @@ function createStyleControl(rule) {
   hex.type = 'text';
   hex.placeholder = '#RRGGBB';
 
-  const initial = normalizeHex(rule.style[rule.type])
-    || '#000000';
+  const initial =
+    normalizeHex(rule.style[rule.type]) ||
+    '#000000';
 
   color.value = initial;
   hex.value = initial;
@@ -242,11 +364,17 @@ function createStyleControl(rule) {
   return wrap;
 }
 
+// =============================================================================
+// 8. 属性值标签与多选窗口
+// =============================================================================
+
 function createValueChips(rule) {
   const chips = el('div', 'mx-style-chips');
 
   if (!rule.values.length) {
-    chips.appendChild(el('span', 'mx-style-muted', '（空）'));
+    chips.appendChild(
+      el('span', 'mx-style-muted', '（空）')
+    );
     return chips;
   }
 
@@ -260,15 +388,20 @@ function createValueChips(rule) {
 }
 
 /**
- * 打开属性值多选对话框。
+ * 打开属性值多选窗口。
  *
- * 其他规则已经占用的值不能再次选择。
+ * 同一属性下已经由其他规则占用的值不能重复选择。
  *
  * @param {string} attributeKey
- * @param {object} rule
+ * @param {Object} rule
+ * @returns {void}
  */
 function openValuePicker(attributeKey, rule) {
-  const overlay = el('div', 'mx-style-picker-overlay');
+  const overlay = el(
+    'div',
+    'mx-style-picker-overlay'
+  );
+
   const panel = el('div', 'mx-style-picker');
 
   panel.setAttribute('role', 'dialog');
@@ -282,6 +415,7 @@ function openValuePicker(attributeKey, rule) {
   const search = el('input', 'mx-style-input');
   search.type = 'search';
   search.placeholder = '输入关键字检索';
+
   panel.appendChild(search);
 
   const grid = el('div', 'mx-style-value-grid');
@@ -300,7 +434,8 @@ function openValuePicker(attributeKey, rule) {
   function renderOptions() {
     grid.replaceChildren();
 
-    const keyword = search.value.trim().toLowerCase();
+    const keyword =
+      search.value.trim().toLowerCase();
 
     const visible = allOptions.filter(value =>
       value.toLowerCase().includes(keyword)
@@ -308,22 +443,32 @@ function openValuePicker(attributeKey, rule) {
 
     if (!visible.length) {
       grid.appendChild(
-        el('p', 'mx-style-muted', '没有符合条件的属性值')
+        el(
+          'p',
+          'mx-style-muted',
+          '没有符合条件的属性值'
+        )
       );
       return;
     }
 
     for (const value of visible) {
-      const label = el('label', 'mx-style-value-item');
-      const checkbox = el('input');
+      const label = el(
+        'label',
+        'mx-style-value-item'
+      );
 
+      const checkbox = el('input');
       checkbox.type = 'checkbox';
       checkbox.checked = selected.has(value);
       checkbox.disabled = taken.has(value);
 
       checkbox.addEventListener('change', () => {
-        if (checkbox.checked) selected.add(value);
-        else selected.delete(value);
+        if (checkbox.checked) {
+          selected.add(value);
+        } else {
+          selected.delete(value);
+        }
       });
 
       const text = el(
@@ -347,21 +492,31 @@ function openValuePicker(attributeKey, rule) {
     overlay.remove();
   }
 
-  const footer = el('div', 'mx-style-picker-footer');
+  const footer = el(
+    'div',
+    'mx-style-picker-footer'
+  );
 
   footer.append(
     button('取消', close),
+
     button('确定', () => {
-      const conflict = [...selected].find(x => taken.has(x));
+      const conflict = [...selected].find(
+        value => taken.has(value)
+      );
 
       if (conflict) {
-        alert(`“${conflict}”已被同属性的其他样式行占用。`);
+        alert(
+          `“${conflict}”已被同属性的其他样式行占用。`
+        );
         return;
       }
 
       rule.values = [...selected];
+
       close();
       renderEditor();
+
     }, 'mx-style-primary')
   );
 
@@ -370,14 +525,23 @@ function openValuePicker(attributeKey, rule) {
   document.body.appendChild(overlay);
 
   overlay.addEventListener('click', event => {
-    if (event.target === overlay) close();
+    if (event.target === overlay) {
+      close();
+    }
   });
 
-  search.addEventListener('input', renderOptions);
+  search.addEventListener(
+    'input',
+    renderOptions
+  );
 
   renderOptions();
   search.focus();
 }
+
+// =============================================================================
+// 9. 样式规则表格
+// =============================================================================
 
 function renderRules(attributeKey, tbody) {
   tbody.replaceChildren();
@@ -386,83 +550,123 @@ function renderRules(attributeKey, tbody) {
     const tr = el('tr');
 
     const tdStyle = el('td');
-    tdStyle.appendChild(createStyleControl(rule));
+    tdStyle.appendChild(
+      createStyleControl(rule)
+    );
 
     const tdValues = el('td');
-    tdValues.appendChild(createValueChips(rule));
+    tdValues.appendChild(
+      createValueChips(rule)
+    );
 
     tdValues.appendChild(
-      button('添加/修改属性', () =>
-        openValuePicker(attributeKey, rule)
-      )
+      button('添加/修改属性', () => {
+        openValuePicker(attributeKey, rule);
+      })
     );
 
     const tdAction = el('td');
 
     const remove = button('×', () => {
       const rules = getRules(attributeKey);
-      const index = rules.findIndex(r => r.id === rule.id);
 
-      if (index !== -1) rules.splice(index, 1);
+      const index = rules.findIndex(
+        item => item.id === rule.id
+      );
+
+      if (index !== -1) {
+        rules.splice(index, 1);
+      }
+
       renderEditor();
     });
 
     remove.title = '删除该样式行';
+
     tdAction.appendChild(remove);
 
-    tr.append(tdStyle, tdValues, tdAction);
+    tr.append(
+      tdStyle,
+      tdValues,
+      tdAction
+    );
+
     tbody.appendChild(tr);
   }
 }
 
-/**
- * 重新渲染当前样式编辑窗口。
- * 不应用任何样式到事件卡片。
- */
+// =============================================================================
+// 10. 编辑窗口渲染
+// =============================================================================
+
 function renderEditor() {
   if (!dialog || !currentAttribute) return;
 
   const attr = getAttribute(currentAttribute);
   const bound = getBoundType(currentAttribute);
 
-  dialog.querySelector('[data-role="title"]').textContent =
-    `${attr.name} 样式`;
+  dialog.querySelector(
+    '[data-role="title"]'
+  ).textContent = `${attr.name} 样式`;
 
-  const hint = dialog.querySelector('[data-role="hint"]');
-
-  hint.textContent = bound
+  dialog.querySelector(
+    '[data-role="hint"]'
+  ).textContent = bound
     ? `当前样式：${getType(bound).label}`
     : '当前样式：无';
 
-  const select = dialog.querySelector('[data-role="type"]');
-  const confirm = dialog.querySelector('[data-role="confirm"]');
-  const reset = dialog.querySelector('[data-role="reset"]');
-  const add = dialog.querySelector('[data-role="add"]');
+  const select = dialog.querySelector(
+    '[data-role="type"]'
+  );
 
-  select.replaceChildren(new Option('（未选择）', 'none'));
+  const confirm = dialog.querySelector(
+    '[data-role="confirm"]'
+  );
+
+  const reset = dialog.querySelector(
+    '[data-role="reset"]'
+  );
+
+  const add = dialog.querySelector(
+    '[data-role="add"]'
+  );
+
+  select.replaceChildren(
+    new Option('（未选择）', 'none')
+  );
 
   for (const type of STYLE_TYPES) {
     const owner = getOwner(type.key);
 
-    const label = owner && owner !== currentAttribute
-      ? `${type.label}（${getAttribute(owner).name}）`
-      : type.label;
+    const label =
+      owner && owner !== currentAttribute
+        ? `${type.label}（${getAttribute(owner).name}）`
+        : type.label;
 
-    const option = new Option(label, type.key);
-    option.disabled = !!(owner && owner !== currentAttribute);
+    const option = new Option(
+      label,
+      type.key
+    );
+
+    option.disabled = Boolean(
+      owner && owner !== currentAttribute
+    );
+
     select.add(option);
   }
 
   select.value = 'none';
-  select.disabled = !!bound;
+  select.disabled = Boolean(bound);
 
   confirm.disabled = true;
 
   reset.hidden = !bound;
   add.disabled = !bound;
 
-  const tbody = dialog.querySelector('tbody');
-  renderRules(currentAttribute, tbody);
+  renderRules(
+    currentAttribute,
+    dialog.querySelector('tbody')
+  );
 }
 
 function closeEditor() {
@@ -471,7 +675,10 @@ function closeEditor() {
   dialog.hidden = true;
   currentAttribute = null;
 
-  document.body.classList.remove('mx-style-dialog-open');
+  document.body.classList.remove(
+    'mx-style-dialog-open'
+  );
+
   previousFocus?.focus?.();
 }
 
@@ -479,6 +686,7 @@ function closeEditor() {
  * 打开指定属性的样式编辑窗口。
  *
  * @param {string} attributeKey
+ * @returns {Promise<void>}
  */
 async function openEditor(attributeKey) {
   if (!getAttribute(attributeKey)) return;
@@ -487,20 +695,31 @@ async function openEditor(attributeKey) {
   previousFocus = document.activeElement;
 
   dialog.hidden = false;
-  document.body.classList.add('mx-style-dialog-open');
+
+  document.body.classList.add(
+    'mx-style-dialog-open'
+  );
 
   renderEditor();
 
-  const hint = dialog.querySelector('[data-role="loading"]');
+  const hint = dialog.querySelector(
+    '[data-role="loading"]'
+  );
 
   if (!eventsCache) {
     hint.textContent = '正在读取属性候选项……';
 
     try {
       await getEvents();
+
       hint.textContent = '';
+
     } catch (error) {
-      console.error('[matrix-style-ui]', error);
+      console.error(
+        '[matrix-style-ui]',
+        error
+      );
+
       hint.textContent =
         '候选项读取失败，请检查数据接口后重新打开。';
     }
@@ -508,23 +727,34 @@ async function openEditor(attributeKey) {
     hint.textContent = '';
   }
 
-  if (currentAttribute === attributeKey && !dialog.hidden) {
+  if (
+    currentAttribute === attributeKey &&
+    !dialog.hidden
+  ) {
     renderEditor();
   }
 
-  dialog.querySelector('[data-role="close"]').focus();
+  dialog.querySelector(
+    '[data-role="close"]'
+  ).focus();
 }
 
-/**
- * 创建共用的样式窗口。
- * 五个按钮分别打开自己的属性状态。
- */
+// =============================================================================
+// 11. 样式编辑窗口
+// =============================================================================
+
 function createDialog() {
-  const overlay = el('div', 'mx-style-overlay');
+  const overlay = el(
+    'div',
+    'mx-style-overlay'
+  );
+
   overlay.hidden = true;
 
   overlay.innerHTML = `
-    <div class="mx-style-backdrop" data-role="backdrop"></div>
+    <div class="mx-style-backdrop"
+         data-role="backdrop"></div>
+
     <div class="mx-style-panel"
          role="dialog"
          aria-modal="true"
@@ -533,33 +763,53 @@ function createDialog() {
       <header class="mx-style-panel-header">
         <div>
           <h2 id="mx-style-dialog-title"
-              data-role="title">样式设置</h2>
+              data-role="title">
+            样式设置
+          </h2>
+
           <p data-role="hint"
-             class="mx-style-muted">当前样式：无</p>
+             class="mx-style-muted">
+            当前样式：无
+          </p>
         </div>
+
         <button type="button"
                 data-role="close"
                 class="mx-style-close"
-                aria-label="关闭">×</button>
+                aria-label="关闭">
+          ×
+        </button>
       </header>
 
       <section class="mx-style-panel-body">
+
         <div class="mx-style-actions">
-          <label for="mx-style-type">样式类型：</label>
+
+          <label for="mx-style-type">
+            样式类型：
+          </label>
+
           <select id="mx-style-type"
                   data-role="type"></select>
 
           <button type="button"
                   data-role="confirm"
-                  disabled>确认绑定</button>
+                  disabled>
+            确认绑定
+          </button>
 
           <button type="button"
                   data-role="reset"
-                  hidden>重置</button>
+                  hidden>
+            重置
+          </button>
 
           <button type="button"
                   data-role="add"
-                  disabled>新增样式行</button>
+                  disabled>
+            新增样式行
+          </button>
+
         </div>
 
         <p data-role="loading"
@@ -574,104 +824,189 @@ function createDialog() {
                 <th>操作</th>
               </tr>
             </thead>
+
             <tbody></tbody>
           </table>
         </div>
+
       </section>
 
       <footer class="mx-style-panel-footer">
         <span class="mx-style-muted">
-          当前为UI测试阶段，尚不改变事件显示。
+          样式仅作用于当前矩阵页面，刷新后恢复默认。
         </span>
+
         <button type="button"
                 data-role="save"
-                class="mx-style-primary">保存并应用</button>
+                class="mx-style-primary">
+          保存并应用
+        </button>
       </footer>
+
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  overlay.querySelector('[data-role="close"]')
-    .addEventListener('click', closeEditor);
+  overlay.querySelector(
+    '[data-role="close"]'
+  ).addEventListener(
+    'click',
+    closeEditor
+  );
 
-  overlay.querySelector('[data-role="backdrop"]')
-    .addEventListener('click', closeEditor);
+  overlay.querySelector(
+    '[data-role="backdrop"]'
+  ).addEventListener(
+    'click',
+    closeEditor
+  );
 
-  overlay.querySelector('[data-role="type"]')
-    .addEventListener('change', event => {
-      const type = event.target.value;
-      const confirm = overlay.querySelector(
-        '[data-role="confirm"]'
-      );
+  // ---------------------------------------------------------------------------
+  // 选择样式类型
+  // ---------------------------------------------------------------------------
 
-      confirm.disabled =
-        type === 'none' ||
-        !!getBoundType(currentAttribute) ||
-        !!getOwner(type);
-    });
+  overlay.querySelector(
+    '[data-role="type"]'
+  ).addEventListener('change', event => {
+    const type = event.target.value;
 
-  overlay.querySelector('[data-role="confirm"]')
-    .addEventListener('click', () => {
-      const select = overlay.querySelector('[data-role="type"]');
-      const type = select.value;
+    const confirmButton = overlay.querySelector(
+      '[data-role="confirm"]'
+    );
 
-      if (
-        !currentAttribute ||
-        type === 'none' ||
-        getBoundType(currentAttribute) ||
-        getOwner(type)
-      ) return;
+    confirmButton.disabled =
+      type === 'none' ||
+      Boolean(getBoundType(currentAttribute)) ||
+      Boolean(getOwner(type));
+  });
 
-      uiState.boundTypes[currentAttribute] = type;
+  // ---------------------------------------------------------------------------
+  // 确认绑定
+  // ---------------------------------------------------------------------------
 
-      getRules(currentAttribute).push(createRule(type));
-      renderEditor();
-    });
+  overlay.querySelector(
+    '[data-role="confirm"]'
+  ).addEventListener('click', () => {
+    const select = overlay.querySelector(
+      '[data-role="type"]'
+    );
 
-  overlay.querySelector('[data-role="reset"]')
-    .addEventListener('click', () => {
-      if (!currentAttribute) return;
+    const type = select.value;
 
-      if (
-        getRules(currentAttribute).length &&
-        !confirm('重置将清空该属性下所有样式行，是否继续？')
-      ) return;
+    if (
+      !currentAttribute ||
+      type === 'none' ||
+      getBoundType(currentAttribute) ||
+      getOwner(type)
+    ) {
+      return;
+    }
 
-      delete uiState.boundTypes[currentAttribute];
-      uiState.rules[currentAttribute] = [];
+    uiState.boundTypes[currentAttribute] = type;
 
-      renderEditor();
-    });
+    getRules(currentAttribute).push(
+      createRule(type)
+    );
 
-  overlay.querySelector('[data-role="add"]')
-    .addEventListener('click', () => {
-      const type = getBoundType(currentAttribute);
+    renderEditor();
+  });
 
-      if (!type) {
-        alert('请先绑定样式类型');
-        return;
-      }
+  // ---------------------------------------------------------------------------
+  // 重置当前属性的样式
+  // ---------------------------------------------------------------------------
 
-      getRules(currentAttribute).push(createRule(type));
-      renderEditor();
-    });
+  overlay.querySelector(
+    '[data-role="reset"]'
+  ).addEventListener('click', () => {
+    if (!currentAttribute) return;
 
-  overlay.querySelector('[data-role="save"]')
-    .addEventListener('click', () => {
-      // UI-only：保留内存状态，关闭窗口。
-      // 不调用 applyStyleState() 或 setStyleState()。
-      closeEditor();
-    });
+    if (
+      getRules(currentAttribute).length &&
+      !window.confirm(
+        '重置将清空该属性下所有样式行，是否继续？'
+      )
+    ) {
+      return;
+    }
+
+    delete uiState.boundTypes[currentAttribute];
+
+    uiState.rules[currentAttribute] = [];
+
+    // 与原时间轴一致：
+    // 重置时立即更新实际显示。
+    applyMatrixStyles();
+
+    renderEditor();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 新增样式行
+  // ---------------------------------------------------------------------------
+
+  overlay.querySelector(
+    '[data-role="add"]'
+  ).addEventListener('click', () => {
+    const type = getBoundType(currentAttribute);
+
+    if (!type) {
+      alert('请先绑定样式类型');
+      return;
+    }
+
+    getRules(currentAttribute).push(
+      createRule(type)
+    );
+
+    renderEditor();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 保存并应用
+  // ---------------------------------------------------------------------------
+
+  overlay.querySelector(
+    '[data-role="save"]'
+  ).addEventListener('click', () => {
+    // 移除未完成的规则行。
+    for (const [attribute, rules] of Object.entries(uiState.rules)) {
+      uiState.rules[attribute] = rules.filter(rule => {
+        const hasValues =
+          Array.isArray(rule.values) &&
+          rule.values.length > 0;
+
+        const value = rule.style?.[rule.type];
+
+        const hasStyle =
+          typeof value === 'string' &&
+          value.trim() !== '';
+
+        return hasValues && hasStyle;
+      });
+    }
+
+    applyMatrixStyles();
+
+    closeEditor();
+  });
+
+  // ---------------------------------------------------------------------------
+  // ESC关闭
+  // ---------------------------------------------------------------------------
 
   document.addEventListener('keydown', event => {
     if (overlay.hidden) return;
 
     if (event.key === 'Escape') {
-      // 属性值选择弹窗在上层时由其自身关闭。
-      if (document.querySelector('.mx-style-picker-overlay')) {
+      if (
+        document.querySelector(
+          '.mx-style-picker-overlay'
+        )
+      ) {
         return;
       }
+
       closeEditor();
     }
   });
@@ -679,11 +1014,12 @@ function createDialog() {
   return overlay;
 }
 
+// =============================================================================
+// 12. 初始化样式按钮
+// =============================================================================
+
 /**
- * 初始化五个样式按钮。
- *
- * 将按钮插在原过滤按钮右侧。
- * 不修改原过滤UI模块。
+ * 在现有过滤按钮右侧插入五个样式按钮。
  *
  * @returns {void}
  */
@@ -691,7 +1027,7 @@ export function initMatrixStyleUI() {
   if (initialized) return;
 
   const filterButton = document.querySelector(
-    '[data-role="filter-toggle"]'
+    '[data-role="filter-toggle"], [data-te-filter-toggle]'
   );
 
   if (!filterButton) {
@@ -702,6 +1038,7 @@ export function initMatrixStyleUI() {
   }
 
   initialized = true;
+
   dialog = createDialog();
 
   const fragment = document.createDocumentFragment();
@@ -714,22 +1051,33 @@ export function initMatrixStyleUI() {
     );
 
     btn.dataset.styleAttribute = attr.key;
+
     fragment.appendChild(btn);
   }
 
   filterButton.after(fragment);
 }
 
-// 现有 matrix.js 会先初始化过滤按钮。
-// 若模块执行顺序不同，则等待过滤按钮出现。
+// =============================================================================
+// 13. 自动启动
+// =============================================================================
+
 function start() {
-  if (document.querySelector('[data-role="filter-toggle"]')) {
+  if (
+    document.querySelector(
+      '[data-role="filter-toggle"], [data-te-filter-toggle]'
+    )
+  ) {
     initMatrixStyleUI();
     return;
   }
 
   const observer = new MutationObserver(() => {
-    if (document.querySelector('[data-role="filter-toggle"]')) {
+    if (
+      document.querySelector(
+        '[data-role="filter-toggle"], [data-te-filter-toggle]'
+      )
+    ) {
       observer.disconnect();
       initMatrixStyleUI();
     }
@@ -742,9 +1090,11 @@ function start() {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', start, {
-    once: true
-  });
+  document.addEventListener(
+    'DOMContentLoaded',
+    start,
+    { once: true }
+  );
 } else {
   start();
 }
