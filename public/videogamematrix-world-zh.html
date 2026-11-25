@@ -2,97 +2,43 @@
 <!doctype html>
 <!--
   文件路径：public/videogamematrix-world-zh.html
-
-  功能：
-  - 世界电子游戏史中文版二维矩阵入口
-  - 378列日期与年份矩阵
-  - 过滤/筛选功能
-  - 五个自定义样式窗口
-  - 日期跳转（横轴）
-
-  数据：
-  - world-zh
-  - Google Apps Script action=matrix
+  世界电子游戏史中文版二维矩阵入口。
+  功能：378列日期、连续年份、过滤、五种样式、日期及年份跳转。
+  数据源：world-zh Google Apps Script /exec?action=matrix。
 -->
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-
   <title>世界电子游戏史二维矩阵（中文）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  />
-
-  <!-- 矩阵基础样式 -->
-  <link
-    rel="stylesheet"
-    href="./src/matrix/matrix.css"
-  />
-
-  <!-- 五个样式窗口 -->
-  <link
-    rel="stylesheet"
-    href="./src/matrix/matrix-style-ui.css"
-  />
-
-  <!-- 日期跳转 -->
-  <link
-    rel="stylesheet"
-    href="./src/matrix/matrix-date-jump.css"
-  />
+  <link rel="stylesheet" href="./src/matrix/matrix.css" />
+  <link rel="stylesheet" href="./src/matrix/matrix-style-ui.css" />
+  <link rel="stylesheet" href="./src/matrix/matrix-date-jump.css" />
+  <link rel="stylesheet" href="./src/matrix/matrix-year-jump.css" />
 </head>
-
 <body>
   <div class="matrix-page">
-
     <header class="matrix-topbar">
-      <h1 class="matrix-page-title">
-        世界电子游戏史二维矩阵
-      </h1>
-
-      <div
-        id="matrix-status"
-        class="matrix-status"
-        role="status"
-        aria-live="polite"
-      >
+      <h1 class="matrix-page-title">世界电子游戏史二维矩阵</h1>
+      <div id="matrix-status" class="matrix-status" role="status" aria-live="polite">
         准备加载……
       </div>
     </header>
 
     <main class="matrix-main">
-      <div
-        id="matrix"
-        class="matrix-scroll"
-        aria-label="世界电子游戏史日期与年份矩阵"
-      ></div>
+      <div id="matrix" class="matrix-scroll"
+           aria-label="世界电子游戏史日期与年份矩阵"></div>
     </main>
-
   </div>
 
   <script>
     window.TIMELINE_REGION = 'world';
     window.TIMELINE_LANG = 'zh';
   </script>
-
-  <!-- 已接线的矩阵及过滤器 -->
-  <script
-    type="module"
-    src="./src/matrix/matrix.js"
-  ></script>
-
-  <!-- 已接线的五个样式窗口 -->
-  <script
-    type="module"
-    src="./src/matrix/matrix-style-ui.js"
-  ></script>
-
-  <!-- 日期跳转，独立于矩阵数据与事件过滤 -->
-  <script
-    type="module"
-    src="./src/matrix/matrix-date-jump.js"
-  ></script>
+  <script type="module" src="./src/matrix/matrix.js"></script>
+  <script type="module" src="./src/matrix/matrix-style-ui.js"></script>
+  <script type="module" src="./src/matrix/matrix-date-jump.js"></script>
+  <script type="module" src="./src/matrix/matrix-year-jump.js"></script>
 </body>
 </html>
