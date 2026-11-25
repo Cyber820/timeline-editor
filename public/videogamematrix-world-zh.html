@@ -11,10 +11,16 @@
     content="width=device-width, initial-scale=1"
   />
 
-  <!-- 二维矩阵独立样式 -->
+  <!-- 二维矩阵基础样式 -->
   <link
     rel="stylesheet"
     href="./src/matrix/matrix.css"
+  />
+
+  <!-- 五个样式编辑窗口的专用样式 -->
+  <link
+    rel="stylesheet"
+    href="./src/matrix/matrix-style-ui.css"
   />
 </head>
 
@@ -46,16 +52,22 @@
 
   </div>
 
-  <!-- 与现有世界中文版时间轴保持一致 -->
+  <!-- 使用现有世界中文版数据源 -->
   <script>
     window.TIMELINE_REGION = 'world';
     window.TIMELINE_LANG = 'zh';
   </script>
 
-  <!-- 独立矩阵入口，不加载旧版 app.js -->
+  <!-- 已完成过滤接线的矩阵主程序 -->
   <script
     type="module"
     src="./src/matrix/matrix.js"
+  ></script>
+
+  <!-- 样式编辑UI：独立加载，暂不接样式引擎 -->
+  <script
+    type="module"
+    src="./src/matrix/matrix-style-ui.js"
   ></script>
 </body>
 </html>
